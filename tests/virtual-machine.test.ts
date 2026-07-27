@@ -123,4 +123,22 @@ describe('virtual machine lifecycle', () => {
     expect(vm.errorMessage.value).toContain('仍未就绪')
     expect(controller?.stopCount).toBe(1)
   })
+
+  it('重置关卡前先回到 HOME，避免停留在被重建的子目录', async () => {
+    let controller: FakeController | undefined
+    const vm = createVirtualMachine({
+      createController: (onStageChange) => {
+        controller = new FakeController(onStageChange)
+        return controller
+      },
+    })
+
+    await vm.boot()
+    controller?.emit('@@HASHTEAM:{"type":"ready","version":1}\n')
+    vm.resetCurrentLevel()
+
+    expect(controller?.sent).toContain('\x03')
+    expect(controller?.sent).toContain('cd "$HOME" && reset-level\n')
+    await vm.dispose()
+  })
 })

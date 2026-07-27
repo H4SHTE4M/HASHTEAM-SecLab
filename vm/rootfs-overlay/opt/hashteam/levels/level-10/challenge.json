@@ -1,0 +1,65 @@
+{
+  "$schema": "../challenge.schema.json",
+  "schemaVersion": 1,
+  "id": 10,
+  "slug": "secure-configuration",
+  "name": "发现漏洞之后",
+  "tagline": "修复问题：安全的完整闭环",
+  "story": "你在前几关发现了信息泄露问题。真正的安全工作不止是「找到问题」，还要验证、修复、再复查。现在，一份存在多个安全隐患的配置文件 server.conf 摆在你面前：调试模式开着、访客访问开着、还监听在所有网卡上。请把它修复为安全配置。",
+  "goals": [
+    "阅读 server.conf，找出其中的不安全配置项",
+    "将 debug 和 allow_guest 改为 false",
+    "将 listen 改为只监听本机 127.0.0.1",
+    "运行 check 复查修复结果"
+  ],
+  "suggestedCommands": [
+    "cat server.conf",
+    "grep -n . server.conf",
+    "sed -i 's/debug=true/debug=false/' server.conf",
+    "vi server.conf"
+  ],
+  "guide": [
+    {
+      "command": "cat server.conf",
+      "note": "先把整份配置读一遍。三处隐患都很直白：debug=true、allow_guest=true、listen=0.0.0.0——它们各自为什么危险，见下方「核心概念」。"
+    },
+    {
+      "command": "grep -n . server.conf",
+      "note": "grep -n 给每一行加上行号，方便你看清一共有几行配置、要改的是哪几行。"
+    },
+    {
+      "command": "sed -i 's/debug=true/debug=false/' server.conf",
+      "note": "sed -i 直接在文件里做替换：s/旧内容/新内容/。这条把 debug=true 改成 debug=false。命令虽长，拆开就是「找到 debug=true，换成 debug=false」。"
+    },
+    {
+      "command": "sed -i 's/allow_guest=true/allow_guest=false/' server.conf",
+      "note": "同样地，关掉访客访问。"
+    },
+    {
+      "command": "sed -i 's/listen=0.0.0.0/listen=127.0.0.1/' server.conf",
+      "note": "把监听地址从「所有网卡」收紧为「仅本机」。改完运行 check 复查——它会逐项验证最终配置。"
+    }
+  ],
+  "concepts": [
+    {
+      "term": "调试模式",
+      "explanation": "debug=true 让程序输出详尽的内部信息，方便开发排错。但这些信息（堆栈、路径、内部数据）对攻击者同样是宝藏。生产环境开调试，等于把系统的「内部构造图」贴在门口。"
+    },
+    {
+      "term": "监听地址",
+      "explanation": "listen=0.0.0.0 表示接受来自任意网络接口的连接，等于对全世界开门；listen=127.0.0.1 只接受本机连接。把内部服务的监听地址收紧到本机，是缩小攻击面最直接的手段之一。"
+    },
+    {
+      "term": "安全的完整闭环",
+      "explanation": "真正的安全工作不是「找到漏洞」就结束，而是要走完发现、修复、复查验证的完整流程。这也是为什么安全团队里既有挖漏洞的人，也有负责加固和复核的人——两端缺一不可。"
+    }
+  ],
+  "takeaway": "你刚刚走完了安全工作的完整闭环：发现三处不安全配置、逐一修复、再用工具验证修复确实生效。这是新手最容易忽略的一步——很多人以为「改了」就等于「修好了」，但真实世界里的安全事故，常常源于一处「以为改了其实没生效」的配置。验证，永远比相信更可靠。",
+  "hints": [
+    "先用 cat 或 grep -n 看清每一行配置，共有三处需要修改。",
+    "sed -i 可以直接在文件里做替换，例如把 debug=true 替换成 debug=false。",
+    "listen=0.0.0.0 表示对所有网卡开放，改成 listen=127.0.0.1 就只允许本机访问。改完后运行 check 复查。"
+  ],
+  "teaches": ["安全不仅是发现问题", "验证、修复与复查的闭环", "引出实验室的真实工作方向"],
+  "checkUsage": "check（自动检查配置文件最终状态）"
+}

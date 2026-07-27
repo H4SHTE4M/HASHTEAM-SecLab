@@ -22,6 +22,8 @@ const allowedFields = new Set([
   ...requiredStrings,
   ...requiredLists,
   'guide',
+  'concepts',
+  'takeaway',
 ])
 const errors = []
 
@@ -65,6 +67,29 @@ function validateGuide(value, source) {
   })
 }
 
+function validateConcepts(value, source) {
+  if (value === undefined) return
+  if (!Array.isArray(value) || value.length === 0) {
+    report(source, 'concepts 存在时必须是非空数组')
+    return
+  }
+  value.forEach((concept, index) => {
+    const conceptSource = `${source}#concepts[${index}]`
+    if (!isRecord(concept)) {
+      report(conceptSource, '必须是对象')
+      return
+    }
+    const unknown = Object.keys(concept).filter(
+      (field) => field !== 'term' && field !== 'explanation',
+    )
+    if (unknown.length > 0) report(conceptSource, `未知字段：${unknown.join(', ')}`)
+    if (!isNonEmptyString(concept.term)) report(conceptSource, 'term 必须是非空字符串')
+    if (!isNonEmptyString(concept.explanation)) {
+      report(conceptSource, 'explanation 必须是非空字符串')
+    }
+  })
+}
+
 function validateManifest(manifest, directoryId, source) {
   if (!isRecord(manifest)) {
     report(source, '顶层必须是对象')
@@ -91,6 +116,10 @@ function validateManifest(manifest, directoryId, source) {
   }
   requiredLists.forEach((field) => validateStringList(manifest, field, source))
   validateGuide(manifest.guide, source)
+  validateConcepts(manifest.concepts, source)
+  if (manifest.takeaway !== undefined && !isNonEmptyString(manifest.takeaway)) {
+    report(source, 'takeaway 存在时必须是非空字符串')
+  }
   return manifest
 }
 

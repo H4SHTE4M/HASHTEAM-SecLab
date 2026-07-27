@@ -1,11 +1,45 @@
 #!/bin/sh
-# 第 3 关：异常登录分析
+# 第 3 关：搬家与整理（cd / mkdir / mv）
 set -eu
 cd "$HOME"
-LEVEL_DIR="${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}/level-3"
-cp "$LEVEL_DIR/auth.log" ./auth.log
+rm -f .message notes.txt
+mkdir -p inbox
+rm -rf inbox/logs inbox/scripts inbox/secrets
+rm -f inbox/app.log inbox/backup.sh inbox/deploy.sh inbox/api.key
+
+cat > todo.txt <<'T_EOF'
+待整理的文件都在 inbox/ 里。请先进入这个目录，再完成整理：
+
+  logs/       放 app.log
+  scripts/    放 backup.sh 和 deploy.sh
+  secrets/    放 api.key
+
+先用 cd inbox 进入目录，再用 pwd 确认位置。
+整理完成后可在任何目录运行 check 复查。
+T_EOF
+
+cat > inbox/app.log <<'A_EOF'
+2024-07-12 08:00:01 INFO  服务启动
+2024-07-12 08:00:02 INFO  加载配置完成
+2024-07-12 08:01:40 WARN  磁盘使用率超过 80%
+A_EOF
+
+cat > inbox/backup.sh <<'B_EOF'
+#!/bin/sh
+echo "正在备份数据目录 ..."
+B_EOF
+
+cat > inbox/deploy.sh <<'D_EOF'
+#!/bin/sh
+echo "正在部署 ..."
+D_EOF
+
+cat > inbox/api.key <<'K_EOF'
+API_KEY=sk-training-9f3c7a2e
+K_EOF
+
 echo "──────────────────────────────────────────────"
-echo " 第 3 关 · 谁在攻击服务器"
+echo " 第 3 关 · 搬家与整理"
 echo "──────────────────────────────────────────────"
-echo "auth.log 已放在你的主目录。找出失败登录次数最多的来源 IP，"
-echo "然后运行 check <IP>。"
+echo "待整理文件都在 inbox/（任务见 todo.txt）。"
+echo "进入 inbox，把日志、脚本和密钥分类放好，然后运行 check。"

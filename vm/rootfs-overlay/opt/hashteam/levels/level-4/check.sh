@@ -1,16 +1,30 @@
 #!/bin/sh
-# 第 4 关验证：完整暗号
+# 第 4 关验证：只检查文件最终权限位，不限制修改方式
 set -u
-expected=$(cat "${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}/level-4"/answer)
-given=${1:-}
-if [ -z "$given" ]; then
-    echo "用法: check <完整暗号>"
-    exit 2
-fi
-if [ "$given" = "$expected" ]; then
-    echo "✓ 验证通过！记住：编码（Base64）只是为了传输，不等于加密。"
+
+errors=0
+check_perm() { # 文件 期望权限
+    if [ ! -f "$1" ]; then
+        echo "  ✗ 找不到 $1，试试 reset-level 重置本关。"
+        errors=$((errors + 1))
+        return
+    fi
+    mode=$(stat -c %a "$1")
+    if [ "$mode" = "$2" ]; then
+        echo "  ✓ $1 权限为 $mode"
+    else
+        echo "  ✗ $1 应为 $2（当前：$mode）"
+        errors=$((errors + 1))
+    fi
+}
+
+echo "正在复查文件权限 ..."
+check_perm "$HOME/deploy.sh" 700
+check_perm "$HOME/secret.txt" 600
+
+if [ "$errors" -eq 0 ]; then
+    echo "✓ 权限收紧完成！最小权限原则：只给完成工作所必需的权限，多一点都不行。"
     exit 0
 fi
-echo "✗ 暗号不对。提示：message.b64 用 base64 -d 还原，"
-echo "  secret.bin 里的可读字符串用 strings 挑出来，两块碎片用 - 拼接。"
+echo "还有 $errors 处权限过宽，继续加油。"
 exit 1

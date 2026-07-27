@@ -244,7 +244,9 @@ export class V86Controller implements VirtualMachineController {
    * 后续可替换为 v86 save_state/restore_state 快照实现，接口保持不变。
    */
   async restoreLevel(level: number): Promise<void> {
-    this.sendSerial(`hashteamctl goto ${level}\n`)
+    // 学生可能在上一关通过 cd 进入了子目录。切关前统一回到 HOME，
+    // 避免新关卡的相对路径命令错误地作用于旧目录。
+    this.sendSerial(`cd "$HOME" && hashteamctl goto ${level}\n`)
   }
 
   sendSerial(input: string): void {

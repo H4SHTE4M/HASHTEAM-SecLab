@@ -67,10 +67,12 @@ onMounted(() => {
     if (event.type !== 'keydown' || terminal === null) return true
     const key = event.key.toLowerCase()
     if (event.ctrlKey && key === 'c' && terminal.hasSelection()) {
+      event.preventDefault()
       navigator.clipboard.writeText(terminal.getSelection()).catch(() => undefined)
       return false
     }
     if (event.ctrlKey && key === 'v') {
+      event.preventDefault()
       navigator.clipboard
         .readText()
         .then((text) => terminal?.paste(text))

@@ -1,18 +1,11 @@
 #!/bin/sh
-# 第 6 关：修复问题
+# 第 6 关：异常登录分析
 set -eu
 cd "$HOME"
-cat > server.conf <<'C_EOF'
-# HASHTEAM 内部服务配置
-# 评审意见：以下配置存在安全风险，请修复后运行 check 复查
-debug=true
-allow_guest=true
-listen=0.0.0.0
-max_connections=100
-C_EOF
+LEVEL_DIR="${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}/level-6"
+cp "$LEVEL_DIR/auth.log" ./auth.log
 echo "──────────────────────────────────────────────"
-echo " 第 6 关 · 发现漏洞之后"
+echo " 第 6 关 · 谁在攻击服务器"
 echo "──────────────────────────────────────────────"
-echo "server.conf 里有 3 处不安全配置："
-echo "  debug=true / allow_guest=true / listen=0.0.0.0"
-echo "修复为安全配置后运行 check 复查（不限修改方式）。"
+echo "auth.log 已放在你的主目录。找出失败登录次数最多的来源 IP，"
+echo "然后运行 check <IP>。"

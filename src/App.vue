@@ -6,20 +6,36 @@ import MissionPanel from './components/MissionPanel.vue'
 import LoadingScreen from './components/LoadingScreen.vue'
 import CompletionPage from './components/CompletionPage.vue'
 import AboutModal from './components/AboutModal.vue'
+import OnboardingDialog from './components/OnboardingDialog.vue'
 import { useVirtualMachine } from './composables/useVirtualMachine'
 import { useLabProgress } from './composables/useLabProgress'
+import { useLabPreferences } from './composables/useLabPreferences'
 import { getLevel, TOTAL_LEVELS } from './data/levels'
 
 const vm = useVirtualMachine()
 const progress = useLabProgress()
+const preferences = useLabPreferences()
 
 const terminalRef = ref<InstanceType<typeof LabTerminal> | null>(null)
 const showAbout = ref(false)
+const showOnboarding = ref(
+  !preferences.state.onboardingComplete ||
+    preferences.state.mode === null ||
+    progress.progressResetNotice.value,
+)
+const showCompletion = ref(progress.allCompleted.value)
 
 const currentLevelDef = computed(() => getLevel(progress.state.currentLevel) ?? getLevel(1)!)
 const currentCompleted = computed(() => progress.state.completedLevels.includes(progress.state.currentLevel))
 const currentHintsUsed = computed(() => progress.hintsUsedFor(progress.state.currentLevel))
 const isLastLevel = computed(() => progress.state.currentLevel >= TOTAL_LEVELS)
+const currentMode = computed(() => preferences.state.mode ?? 'guided')
+const currentGuideStep = computed(() =>
+  progress.guideStepFor(
+    progress.state.currentLevel,
+    currentLevelDef.value.guide?.length ?? 0,
+  ),
+)
 
 let unsubscribeDisplay: (() => void) | null = null
 
@@ -47,8 +63,21 @@ function handleRunCommand(command: string): void {
   terminalRef.value?.focus()
 }
 
+function handleRunDemo(): void {
+  handleRunCommand('echo "hello, HASHTEAM"')
+}
+
 function handleNextLevel(): void {
+  if (isLastLevel.value) {
+    showCompletion.value = true
+    return
+  }
   vm.gotoLevel(progress.state.currentLevel + 1)
+}
+
+function handleResetLevel(): void {
+  progress.resetGuide(progress.state.currentLevel)
+  vm.resetCurrentLevel()
 }
 
 function handleResetAll(): void {
@@ -57,6 +86,13 @@ function handleResetAll(): void {
   progress.resetAll()
   window.location.reload()
 }
+
+function handleCompleteOnboarding(): void {
+  preferences.completeOnboarding()
+  progress.dismissProgressResetNotice()
+  showOnboarding.value = false
+  terminalRef.value?.focus()
+}
 </script>
 
 <template>
@@ -64,12 +100,15 @@ function handleResetAll(): void {
     <TopBar
       :completed-count="progress.state.completedLevels.length"
       :total="TOTAL_LEVELS"
-      @reset-level="vm.resetCurrentLevel"
+      :mode="currentMode"
+      @reset-level="handleResetLevel"
       @reset-all="handleResetAll"
       @about="showAbout = true"
+      @help="showOnboarding = true"
+      @change-mode="preferences.setMode"
     />
 
-    <main v-if="!progress.allCompleted.value" class="layout">
+    <main v-if="!showCompletion" class="layout">
       <section class="terminal-pane">
         <LabTerminal ref="terminalRef" @input="handleTerminalInput" />
       </section>
@@ -78,9 +117,13 @@ function handleResetAll(): void {
         :completed="currentCompleted"
         :hints-used="currentHintsUsed"
         :is-last="isLastLevel"
+        :mode="currentMode"
+        :guide-step="currentGuideStep"
         @next="handleNextLevel"
         @use-hint="progress.useHint"
         @run-command="handleRunCommand"
+        @advance-guide="progress.advanceGuide"
+        @change-mode="preferences.setMode"
       />
     </main>
     <CompletionPage v-else @restart="handleResetAll" />
@@ -92,6 +135,14 @@ function handleResetAll(): void {
       @retry="vm.boot"
     />
     <AboutModal v-if="showAbout" @close="showAbout = false" />
+    <OnboardingDialog
+      v-if="vm.stage.value === 'ready' && showOnboarding"
+      :mode="preferences.state.mode"
+      :progress-reset-notice="progress.progressResetNotice.value"
+      @select-mode="preferences.setMode"
+      @run-demo="handleRunDemo"
+      @complete="handleCompleteOnboarding"
+    />
   </div>
 </template>
 

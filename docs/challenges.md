@@ -6,7 +6,7 @@
 ```text
 vm/rootfs-overlay/opt/hashteam/levels/
 ├── challenge.schema.json
-└── level-7/
+└── level-1/
     ├── challenge.json   # 前端任务卡 manifest
     ├── init.sh          # 每次进入或重置关卡时运行
     ├── check.sh         # check 命令调用，只验证最终状态
@@ -31,7 +31,7 @@ vm/rootfs-overlay/opt/hashteam/levels/
 {
   "$schema": "../challenge.schema.json",
   "schemaVersion": 1,
-  "id": 7,
+  "id": 1,
   "slug": "process-investigation",
   "name": "可疑进程",
   "tagline": "进程排查：找到异常行为",
@@ -50,7 +50,14 @@ vm/rootfs-overlay/opt/hashteam/levels/
 - `id`：必须与 `level-N` 目录一致，所有关卡从 1 开始连续编号。
 - `slug`：稳定标识，只能包含小写字母、数字和连字符，并且全局唯一。
 - `goals`、`suggestedCommands`、`hints`、`teaches`：至少包含一项。
-- `guide`：可选的分步讲解数组；每项必须有 `note`，可以带可点击的 `command`。
+  `suggestedCommands` 在挑战模式中只作为静态命令备忘，不会直接运行。
+- `guide`：可选的分步讲解数组；每项必须有 `note`，可以带 `command`。
+  引导模式一次只揭示一步；完整命令可点击运行，包含 `<PID>` 一类尖括号占位符的
+  命令会自动显示为不可运行的模板，必须由学生替换后手动输入。
+- `concepts`：可选的核心概念数组；每项必须有 `term` 和 `explanation`，用于解释本关
+  操作在现实安全中的意义。
+- `takeaway`：可选的通关回顾；关卡通过后在任务面板展示，帮助学生理解
+  这一关的意义。
 - `checkUsage`：任务面板展示的验证命令说明。
 
 `$schema` 能让支持 JSON Schema 的编辑器直接提示字段和格式错误；构建脚本还会
@@ -68,7 +75,7 @@ vm/rootfs-overlay/opt/hashteam/levels/
 关卡目录内可通过以下写法定位只读素材，宿主机测试和 VM 内都能工作：
 
 ```sh
-LEVEL_DIR="${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}/level-7"
+LEVEL_DIR="${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}/level-1"
 cp "$LEVEL_DIR/example.log" "$HOME/example.log"
 ```
 

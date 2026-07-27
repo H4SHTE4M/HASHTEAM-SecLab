@@ -24,12 +24,16 @@ function manifest(id = 1, slug = `level-${id}`): Record<string, unknown> {
 
 describe('challenge manifest', () => {
   it('自动发现仓库中的全部关卡配置', () => {
-    expect(TOTAL_LEVELS).toBe(6)
+    expect(TOTAL_LEVELS).toBe(10)
     expect(LEVELS.map((level) => level.slug)).toEqual([
       'welcome-terminal',
       'hidden-file',
+      'tidy-up',
+      'file-permissions',
+      'reading-logs',
       'auth-log-analysis',
       'encoding-forensics',
+      'backdoor-process',
       'debug-endpoint',
       'secure-configuration',
     ])
@@ -44,6 +48,42 @@ describe('challenge manifest', () => {
     const parsed = parseChallengeManifest(raw, '/levels/level-1/challenge.json')
     expect(parsed.slug).toBe('level-1')
     expect(parsed.guide).toEqual(raw.guide)
+  })
+
+  it('解析核心概念与通关回顾（可选字段）', () => {
+    const raw = {
+      ...manifest(),
+      concepts: [
+        { term: '最小权限原则', explanation: '只授予完成工作所必需的权限' },
+        { term: '日志审计', explanation: '从日志中还原事件真相' },
+      ],
+      takeaway: '这一关教会你读日志',
+    }
+
+    const parsed = parseChallengeManifest(raw, '/levels/level-1/challenge.json')
+    expect(parsed.concepts).toEqual(raw.concepts)
+    expect(parsed.takeaway).toBe('这一关教会你读日志')
+  })
+
+  it('拒绝非法的核心概念与通关回顾', () => {
+    expect(() =>
+      parseChallengeManifest(
+        { ...manifest(), concepts: [] },
+        '/levels/level-1/challenge.json',
+      ),
+    ).toThrow('concepts 存在时必须是非空数组')
+    expect(() =>
+      parseChallengeManifest(
+        { ...manifest(), concepts: [{ term: '只给 term' }] },
+        '/levels/level-1/challenge.json',
+      ),
+    ).toThrow('explanation 必须是非空字符串')
+    expect(() =>
+      parseChallengeManifest(
+        { ...manifest(), takeaway: '   ' },
+        '/levels/level-1/challenge.json',
+      ),
+    ).toThrow('takeaway 存在时必须是非空字符串')
   })
 
   it('拒绝空数组与不支持的 schema 版本', () => {

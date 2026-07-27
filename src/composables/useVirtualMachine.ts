@@ -207,7 +207,8 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
 
   function resetCurrentLevel(): void {
     interruptForeground()
-    sendSerial('reset-level\n')
+    // 与切关保持一致：重建环境前离开可能会被 init.sh 清理的子目录。
+    sendSerial('cd "$HOME" && reset-level\n')
   }
 
   function runCommand(command: string): void {

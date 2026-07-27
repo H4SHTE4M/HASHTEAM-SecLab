@@ -2,52 +2,80 @@
   "$schema": "../challenge.schema.json",
   "schemaVersion": 1,
   "id": 3,
-  "slug": "auth-log-analysis",
-  "name": "谁在攻击服务器",
-  "tagline": "异常登录分析：日志会说实话",
-  "story": "值班同学发现服务器最近总有人尝试暴力破解登录。你面前是一份认证日志 auth.log，里面混杂着正常登录和大量失败尝试。作为安全运维新人，你的第一个任务是：找出失败登录次数最多的那个 IP。",
+  "slug": "tidy-up",
+  "name": "搬家与整理",
+  "tagline": "目录与文件：先把这台机器收拾干净",
+  "story": "你发现服务器的 inbox 里堆着日志、脚本和接口密钥。老管理员留下了 todo.txt，请你先进入这个待整理目录，再给三类文件各建一个位置。一台连自己的文件都找不到的服务器，很难谈安全。",
   "goals": [
-    "浏览 auth.log，了解日志的大致结构",
-    "筛选出所有失败的登录记录",
-    "统计每个来源 IP 的失败次数",
-    "找出失败次数最多的 IP 并完成验证"
+    "进入 inbox 目录并确认当前位置",
+    "新建 logs、scripts、secrets 三个目录",
+    "把日志、脚本和密钥移动到对应目录",
+    "运行 check 复查最终目录结构"
   ],
   "suggestedCommands": [
-    "grep \"Failed password\" auth.log",
-    "grep \"Failed password\" auth.log | awk '{print $11}'",
-    "grep \"Failed password\" auth.log | awk '{print $11}' | sort | uniq -c | sort -nr | head"
+    "cat todo.txt",
+    "cd inbox",
+    "pwd",
+    "ls",
+    "mkdir logs scripts secrets",
+    "mv app.log logs/",
+    "mv backup.sh deploy.sh scripts/",
+    "mv api.key secrets/"
   ],
   "guide": [
     {
-      "command": "grep \"Failed password\" auth.log",
-      "note": "先认识管道 |：它把左边命令的输出，当作右边命令的输入。第一步只用 grep，把所有含「Failed password」的失败登录行筛出来，看看长什么样。"
+      "command": "cat todo.txt",
+      "note": "先读管理员留下的待办，确认现场在 inbox 目录，以及每一类文件应该放到哪里。"
     },
     {
-      "command": "grep \"Failed password\" auth.log | head -n 1",
-      "note": "不确定 IP 在第几列？在管道中段接一个 head -n 1 只看第一行，按空格数一数 IP 是第几个字段（这关里是第 11 列）。"
+      "command": "cd inbox",
+      "note": "cd 用来进入目录。运行后，后续命令就会默认作用在 inbox 里面。"
     },
     {
-      "command": "grep \"Failed password\" auth.log | awk '{print $11}'",
-      "note": "awk 按空格切分每一行，{print $11} 打印第 11 列——也就是来源 IP。现在输出里每行都是一个 IP 地址了。"
+      "command": "pwd",
+      "note": "用 pwd 确认当前位置。输出应以 /inbox 结尾；养成操作前确认位置的习惯能减少误操作。"
     },
     {
-      "command": "grep \"Failed password\" auth.log | awk '{print $11}' | sort",
-      "note": "sort 给 IP 排序，相同的 IP 会排到一起。这一步是为下一步做准备：uniq 只会合并「相邻」的重复行，所以必须先 sort。"
+      "command": "ls",
+      "note": "查看 inbox 的现状：日志、两个脚本和密钥现在混在一起。"
     },
     {
-      "command": "grep \"Failed password\" auth.log | awk '{print $11}' | sort | uniq -c",
-      "note": "uniq -c 把相邻的重复 IP 合并，并在行首标出出现次数。现在每个 IP 出现几次一目了然，只是还没排序。"
+      "command": "mkdir logs scripts secrets",
+      "note": "mkdir 创建目录，一次可以创建多个。这里建立三个「抽屉」，分别存放日志、脚本和机密。"
     },
     {
-      "command": "grep \"Failed password\" auth.log | awk '{print $11}' | sort | uniq -c | sort -nr | head",
-      "note": "最后再接 sort -nr 按次数从大到小排，head 取最前面的几行。排在第一的那个 IP 就是失败次数最多的攻击者，交给 check 完成验证。"
+      "command": "mv app.log logs/",
+      "note": "mv 是移动：把 app.log 搬进 logs/，移动后原位置不再保留。"
+    },
+    {
+      "command": "mv backup.sh deploy.sh scripts/",
+      "note": "mv 可以一次移动多个文件，最后一个参数 scripts/ 是共同的目标目录。"
+    },
+    {
+      "command": "mv api.key secrets/",
+      "note": "最后把接口密钥移入 secrets/。完成后用 check 复查，check 在任何目录中都可以运行。"
     }
   ],
-  "hints": [
-    "失败的登录记录里都包含固定字样 Failed password，先用 grep 把它们捞出来。",
-    "awk 可以按空格切分每一行，IP 地址就在其中一列，数一数是第几列。",
-    "把 IP 提取出来后，sort | uniq -c 可以统计每个 IP 出现几次，再 sort -nr 按次数从大到小排序。"
+  "concepts": [
+    {
+      "term": "当前目录",
+      "explanation": "cd 改变当前目录，pwd 确认当前位置。命令默认作用于当前目录，知道自己在哪里是避免删错、改错文件的基本习惯。"
+    },
+    {
+      "term": "目录结构",
+      "explanation": "Linux 用树状目录组织文件。把同类资源放在清晰的位置，既方便设置权限，也让突然多出来的异常文件更容易被发现。"
+    },
+    {
+      "term": "运维的条理",
+      "explanation": "安全运维不只是处理告警，也包括持续知道每类文件在哪里、谁在使用。环境越清晰，异常越难藏在杂物中。"
+    }
   ],
-  "teaches": ["日志分析", "管道", "文本筛选与统计", "基础安全运维"],
-  "checkUsage": "check <IP地址>"
+  "takeaway": "你刚刚使用 cd、pwd、mkdir 和 mv 整理了一次真实目录：先确认位置，再建立结构、移动文件并复查。清晰的目录结构是权限管控和异常发现的前提；机器越乱，后门越容易藏进不起眼的角落。",
+  "hints": [
+    "先读 todo.txt，再用 cd inbox 进入待整理目录；pwd 可以确认当前位置。",
+    "在 inbox 中运行 mkdir logs scripts secrets，一次建好三个目录。",
+    "用 mv 文件名 目标目录/ 移动文件。整理完直接运行 check。"
+  ],
+  "teaches": ["cd 与当前目录", "mkdir / mv", "目录结构", "运维的条理意识"],
+  "checkUsage": "check（自动检查目录结构）"
 }

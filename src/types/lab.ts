@@ -10,6 +10,17 @@ export interface GuideStep {
   note: string
 }
 
+/** 核心概念讲解：一个安全术语/原理 + 它在现实安全工作中的意义 */
+export interface Concept {
+  /** 术语或原理名称，例如「最小权限原则」 */
+  term: string
+  /** 这个概念是什么、为什么它在真实安全工作中重要 */
+  explanation: string
+}
+
+/** 学习界面的提示密度；不影响关卡环境与判题。 */
+export type LabMode = 'guided' | 'challenge'
+
 /** 关卡展示定义，由每关目录中的 challenge.json 提供。 */
 export interface LevelDef {
   /** 关卡编号，从 1 开始 */
@@ -26,6 +37,10 @@ export interface LevelDef {
   suggestedCommands: string[]
   /** 命令讲解：分步骤常驻引导，用于命令密度突然增大的关卡（如管道组合） */
   guide?: GuideStep[]
+  /** 核心概念：把本关技能对应到现实安全原理与意义，供想跳脱操作看本质的学生阅读 */
+  concepts?: Concept[]
+  /** 通关后展示的意义回顾：你刚做的事在真实安全工作里叫什么、有什么用 */
+  takeaway?: string
   /** 逐步展开的提示 */
   hints: string[]
   /** 教学目标 */
@@ -56,8 +71,17 @@ export interface LabProgress {
   currentLevel: number
   completedLevels: number[]
   hintsUsed: Record<number, number>
+  /** 每关当前已揭示到的 guide 步骤索引（从 0 开始）。 */
+  guideSteps: Record<number, number>
   startedAt: number
   updatedAt: number
+}
+
+/** 独立于通关进度的界面偏好；「重新开始」不会清除这些设置。 */
+export interface LabUiPreferences {
+  /** null 表示首次进入，尚未明确选择模式。 */
+  mode: LabMode | null
+  onboardingComplete: boolean
 }
 
 /** 虚拟机启动阶段（用于加载界面展示真实阶段，不伪造百分比） */

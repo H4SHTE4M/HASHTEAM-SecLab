@@ -1,6 +1,8 @@
 import type { LabProgress } from '../types/lab'
 
-export const PROGRESS_STORAGE_KEY = 'hashteam-lab-progress-v1'
+export const PROGRESS_STORAGE_KEY = 'hashteam-lab-progress-v2'
+export const LEGACY_PROGRESS_STORAGE_KEY = 'hashteam-lab-progress-v1'
+const MIGRATION_NOTICE_STORAGE_KEY = 'hashteam-lab-progress-v2-reset-notice'
 
 /** 可注入的存储接口，便于在测试中使用内存实现 */
 export interface StorageLike {
@@ -92,6 +94,7 @@ export function createDefaultProgress(now: number = Date.now()): LabProgress {
     currentLevel: 1,
     completedLevels: [],
     hintsUsed: {},
+    guideSteps: {},
     startedAt: now,
     updatedAt: now,
   }
@@ -113,6 +116,15 @@ function isValidProgress(value: unknown, totalLevels: number): value is LabProgr
   ) {
     return false
   }
+  if (typeof p.guideSteps !== 'object' || p.guideSteps === null) return false
+  if (
+    Object.entries(p.guideSteps).some(([rawLevel, step]) => {
+      const level = Number(rawLevel)
+      return !isLevelNumber(level, totalLevels) || !Number.isInteger(step) || step < 0
+    })
+  ) {
+    return false
+  }
   if (!isValidTimestamp(p.startedAt) || !isValidTimestamp(p.updatedAt)) return false
   return true
 }
@@ -128,7 +140,13 @@ function isValidTimestamp(value: unknown): value is number {
 /** 从存储中读取进度；数据缺失或损坏时返回全新进度 */
 export function loadProgress(storage: StorageLike, totalLevels: number): LabProgress {
   const raw = storage.getItem(PROGRESS_STORAGE_KEY)
-  if (raw === null) return createDefaultProgress()
+  if (raw === null) {
+    if (storage.getItem(LEGACY_PROGRESS_STORAGE_KEY) !== null) {
+      storage.removeItem(LEGACY_PROGRESS_STORAGE_KEY)
+      storage.setItem(MIGRATION_NOTICE_STORAGE_KEY, '1')
+    }
+    return createDefaultProgress()
+  }
   try {
     const parsed: unknown = JSON.parse(raw)
     if (isValidProgress(parsed, totalLevels)) return parsed
@@ -136,6 +154,13 @@ export function loadProgress(storage: StorageLike, totalLevels: number): LabProg
     // 损坏的存档：从头开始
   }
   return createDefaultProgress()
+}
+
+/** 返回并消费一次性迁移提示，确保刷新后不会重复显示。 */
+export function consumeProgressResetNotice(storage: StorageLike): boolean {
+  const shouldShow = storage.getItem(MIGRATION_NOTICE_STORAGE_KEY) === '1'
+  if (shouldShow) storage.removeItem(MIGRATION_NOTICE_STORAGE_KEY)
+  return shouldShow
 }
 
 export function saveProgress(storage: StorageLike, progress: LabProgress): void {
@@ -161,6 +186,30 @@ export function recordHint(storage: StorageLike, progress: LabProgress, level: n
   progress.hintsUsed[level] = used
   saveProgress(storage, progress)
   return used
+}
+
+/** 揭示下一条 guide；返回钳制后的当前步骤索引。 */
+export function advanceGuideStep(
+  storage: StorageLike,
+  progress: LabProgress,
+  level: number,
+  totalSteps: number,
+): number {
+  if (totalSteps <= 0) return 0
+  const current = Math.min(progress.guideSteps[level] ?? 0, totalSteps - 1)
+  const next = Math.min(current + 1, totalSteps - 1)
+  progress.guideSteps[level] = next
+  saveProgress(storage, progress)
+  return next
+}
+
+export function resetGuideStep(
+  storage: StorageLike,
+  progress: LabProgress,
+  level: number,
+): void {
+  progress.guideSteps[level] = 0
+  saveProgress(storage, progress)
 }
 
 export function setCurrentLevel(storage: StorageLike, progress: LabProgress, level: number): void {

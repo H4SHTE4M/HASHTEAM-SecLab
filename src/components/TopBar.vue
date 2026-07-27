@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref } from 'vue'
+import type { LabMode } from '../types/lab'
 
 defineProps<{
   completedCount: number
   total: number
+  mode: LabMode
 }>()
 
 const emit = defineEmits<{
   (e: 'reset-level'): void
   (e: 'reset-all'): void
   (e: 'about'): void
+  (e: 'help'): void
+  (e: 'change-mode', mode: LabMode): void
 }>()
 
 /** 「重新开始」需要二次确认：第一次点击后按钮进入确认态 */
@@ -31,6 +35,14 @@ function handleResetAll(): void {
   }
   confirming.value = false
   emit('reset-all')
+}
+
+function handleModeChange(event: Event): void {
+  const target = event.target
+  if (!(target instanceof HTMLSelectElement)) return
+  if (target.value === 'guided' || target.value === 'challenge') {
+    emit('change-mode', target.value)
+  }
 }
 
 onBeforeUnmount(() => {
@@ -58,6 +70,18 @@ onBeforeUnmount(() => {
       <span class="progress-value">{{ completedCount }} / {{ total }}</span>
     </div>
     <nav class="actions">
+      <label class="mode-picker">
+        <span>模式</span>
+        <select
+          :value="mode"
+          aria-label="学习模式"
+          @change="handleModeChange"
+        >
+          <option value="guided">引导</option>
+          <option value="challenge">挑战</option>
+        </select>
+      </label>
+      <button type="button" class="btn btn-ghost" @click="emit('help')">操作帮助</button>
       <button type="button" class="btn" @click="emit('reset-level')">重置本关</button>
       <button
         type="button"
@@ -135,6 +159,24 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
+.mode-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 8px;
+  color: #7d8aa5;
+  font-size: 12px;
+}
+
+.mode-picker select {
+  padding: 5px 24px 5px 8px;
+  color: #c7d3e8;
+  font: inherit;
+  background: #111c33;
+  border: 1px solid #27375a;
+  border-radius: 6px;
+}
+
 .btn {
   padding: 6px 14px;
   font-size: 13px;
@@ -196,10 +238,15 @@ onBeforeUnmount(() => {
     margin-left: 0;
   }
 
-  .btn {
+  .btn,
+  .mode-picker {
     flex: 1;
     padding-inline: 8px;
     white-space: nowrap;
+  }
+
+  .mode-picker {
+    justify-content: center;
   }
 }
 </style>

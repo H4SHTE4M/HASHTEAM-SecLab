@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # 构建浏览器内 Linux 虚拟机所需的全部静态资源：
-#   1. 32 位精简 Linux 内核（bzImage，基于 tinyconfig 定制，无网卡驱动）
+#   1. 32 位精简 Linux 内核（bzImage，基于 tinyconfig 定制，无网卡驱动；
+#      额外开启 dmesg 时间戳、可加载模块、ptrace 调试、capabilities 提权，
+#      为调试/逆向/提权方向的关卡预留能力）
 #   2. busybox 静态用户态 + 关卡系统 → initramfs（rootfs.cpio.gz）
 #   3. v86 运行时（libv86.js / v86.wasm）与 SeaBIOS
 #
@@ -69,7 +71,11 @@ if [ "$SKIP_KERNEL" -eq 0 ]; then
         --enable EPOLL --enable FUTEX --enable EVENTFD --enable TIMERFD \
         --enable SIGNALFD --enable INOTIFY_USER --enable PROC_SYSCTL \
         --enable SYSVIPC --enable MULTIUSER \
-        --enable IKCONFIG --enable IKCONFIG_PROC
+        --enable IKCONFIG --enable IKCONFIG_PROC \
+        --enable PRINTK_TIME \
+        --enable MODULES \
+        --enable PTRACE --enable CHECKPOINT_RESTORE \
+        --enable COMMONCAP --enable SECURITYFS
     make ARCH=i386 olddefconfig
     log "编译内核（需要 gcc make flex bison bc，约 5-15 分钟）"
     make ARCH=i386 -j"$(nproc)" bzImage

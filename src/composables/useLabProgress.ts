@@ -1,11 +1,14 @@
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import type { LabProgress } from '../types/lab'
 import { TOTAL_LEVELS } from '../data/levels'
 import {
   completeLevel,
+  consumeProgressResetNotice,
   createSafeStorage,
+  advanceGuideStep,
   loadProgress,
   recordHint,
+  resetGuideStep,
   resetAllProgress,
   setCurrentLevel,
 } from '../services/progress-store'
@@ -17,6 +20,7 @@ import {
 const storage = createSafeStorage()
 const initial = loadProgress(storage, TOTAL_LEVELS)
 const state = reactive<LabProgress>(initial)
+const progressResetNotice = ref(consumeProgressResetNotice(storage))
 
 export function useLabProgress() {
   const allCompleted = computed(() => state.completedLevels.length >= TOTAL_LEVELS)
@@ -42,6 +46,7 @@ export function useLabProgress() {
     state.currentLevel = fresh.currentLevel
     state.completedLevels = fresh.completedLevels
     state.hintsUsed = fresh.hintsUsed
+    state.guideSteps = fresh.guideSteps
     state.startedAt = fresh.startedAt
     state.updatedAt = fresh.updatedAt
   }
@@ -50,13 +55,35 @@ export function useLabProgress() {
     return state.hintsUsed[level] ?? 0
   }
 
+  function guideStepFor(level: number, totalSteps: number): number {
+    if (totalSteps <= 0) return 0
+    return Math.min(state.guideSteps[level] ?? 0, totalSteps - 1)
+  }
+
+  function advanceGuide(level: number, totalSteps: number): number {
+    return advanceGuideStep(storage, state, level, totalSteps)
+  }
+
+  function resetGuide(level: number): void {
+    resetGuideStep(storage, state, level)
+  }
+
+  function dismissProgressResetNotice(): void {
+    progressResetNotice.value = false
+  }
+
   return {
     state,
     allCompleted,
+    progressResetNotice,
     complete,
     useHint,
     setLevel,
     resetAll,
     hintsUsedFor,
+    guideStepFor,
+    advanceGuide,
+    resetGuide,
+    dismissProgressResetNotice,
   }
 }

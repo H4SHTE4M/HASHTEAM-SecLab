@@ -2,23 +2,24 @@
 # 第 2 关：隐藏的信息
 set -eu
 cd "$HOME"
-cat > notes.txt <<'N_EOF'
-值班笔记：
-- 最近总有人尝试登录服务器，日志放在后面关卡再分析。
-- 管理员说给新人留了条消息……可这个文件我怎么都看不到？
-N_EOF
-cat > .message <<'M_EOF'
-你找到我了！
+rm -rf inbox logs scripts secrets
+rm -f todo.txt app.log backup.sh deploy.sh api.key
 
-在 Linux 里，以点（.）开头的是隐藏文件，普通的 ls 不会显示它们，
-但它们真实存在。「看不见」和「不存在」是两回事——这一点在安全
-工作里会反复用到。
+cat > notes.txt <<'N_EOF'
+这是一个普通的备忘录。
+管理员说的消息不在这里。
+N_EOF
+
+cat > .message <<'M_EOF'
+你找到了隐藏消息！
 
 验证信息：dotfile-42
+
 把验证信息交给 check 即可过关。
 M_EOF
+
 echo "──────────────────────────────────────────────"
 echo " 第 2 关 · 消失的文件"
 echo "──────────────────────────────────────────────"
-echo "管理员说主目录里有条消息，但 ls 看不到它……"
+echo "管理员说主目录里有条消息，但普通的 ls 看不到它。"
 echo "找到它、读出来，把验证信息交给 check。"

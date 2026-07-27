@@ -12,8 +12,9 @@ const emit = defineEmits<{
       <p class="congrats-badge">🎉 全部关卡完成</p>
       <h1 class="title">欢迎加入 HASHTEAM 的世界</h1>
       <p class="intro">
-        你已经在真实的 Linux 终端里完成了身份确认、文件探索、日志分析、
-        编码还原、Web 信息收集和配置修复——这正是安全工作的日常缩影。
+        你已经在真实的 Linux 终端里完成了身份确认、文件整理、隐藏信息探索、
+        权限收紧、日志分析、编码还原、进程排查、Web 信息收集和配置修复——
+        这正是安全工作的日常缩影。
       </p>
 
       <section class="directions">

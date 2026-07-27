@@ -1,4 +1,4 @@
-import type { ChallengeManifest, GuideStep } from '../types/lab'
+import type { ChallengeManifest, Concept, GuideStep } from '../types/lab'
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const ALLOWED_FIELDS = new Set([
@@ -12,6 +12,8 @@ const ALLOWED_FIELDS = new Set([
   'goals',
   'suggestedCommands',
   'guide',
+  'concepts',
+  'takeaway',
   'hints',
   'teaches',
   'checkUsage',
@@ -66,6 +68,36 @@ function readGuide(record: UnknownRecord, source: string): GuideStep[] | undefin
   })
 }
 
+function readConcepts(record: UnknownRecord, source: string): Concept[] | undefined {
+  const value = record.concepts
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.length === 0) {
+    fail(source, 'concepts 存在时必须是非空数组')
+  }
+
+  return value.map((item, index) => {
+    const itemSource = `${source}#concepts[${index}]`
+    if (!isRecord(item)) fail(itemSource, '每个概念必须是对象')
+    return {
+      term: readNonEmptyString(item, 'term', itemSource),
+      explanation: readNonEmptyString(item, 'explanation', itemSource),
+    }
+  })
+}
+
+function readOptionalString(
+  record: UnknownRecord,
+  field: string,
+  source: string,
+): string | undefined {
+  const value = record[field]
+  if (value === undefined) return undefined
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    fail(source, `${field} 存在时必须是非空字符串`)
+  }
+  return value
+}
+
 /** 把不可信 JSON 转换为前端可以安全消费的关卡定义。 */
 export function parseChallengeManifest(raw: unknown, source = 'unknown'): ChallengeManifest {
   if (!isRecord(raw)) fail(source, '顶层必须是对象')
@@ -99,6 +131,8 @@ export function parseChallengeManifest(raw: unknown, source = 'unknown'): Challe
     goals: readStringList(raw, 'goals', source),
     suggestedCommands: readStringList(raw, 'suggestedCommands', source),
     guide: readGuide(raw, source),
+    concepts: readConcepts(raw, source),
+    takeaway: readOptionalString(raw, 'takeaway', source),
     hints: readStringList(raw, 'hints', source),
     teaches: readStringList(raw, 'teaches', source),
     checkUsage: readNonEmptyString(raw, 'checkUsage', source),
