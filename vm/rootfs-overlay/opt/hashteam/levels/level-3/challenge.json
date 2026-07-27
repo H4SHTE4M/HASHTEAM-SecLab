@@ -1,0 +1,53 @@
+{
+  "$schema": "../challenge.schema.json",
+  "schemaVersion": 1,
+  "id": 3,
+  "slug": "auth-log-analysis",
+  "name": "谁在攻击服务器",
+  "tagline": "异常登录分析：日志会说实话",
+  "story": "值班同学发现服务器最近总有人尝试暴力破解登录。你面前是一份认证日志 auth.log，里面混杂着正常登录和大量失败尝试。作为安全运维新人，你的第一个任务是：找出失败登录次数最多的那个 IP。",
+  "goals": [
+    "浏览 auth.log，了解日志的大致结构",
+    "筛选出所有失败的登录记录",
+    "统计每个来源 IP 的失败次数",
+    "找出失败次数最多的 IP 并完成验证"
+  ],
+  "suggestedCommands": [
+    "grep \"Failed password\" auth.log",
+    "grep \"Failed password\" auth.log | awk '{print $11}'",
+    "grep \"Failed password\" auth.log | awk '{print $11}' | sort | uniq -c | sort -nr | head"
+  ],
+  "guide": [
+    {
+      "command": "grep \"Failed password\" auth.log",
+      "note": "先认识管道 |：它把左边命令的输出，当作右边命令的输入。第一步只用 grep，把所有含「Failed password」的失败登录行筛出来，看看长什么样。"
+    },
+    {
+      "command": "grep \"Failed password\" auth.log | head -n 1",
+      "note": "不确定 IP 在第几列？在管道中段接一个 head -n 1 只看第一行，按空格数一数 IP 是第几个字段（这关里是第 11 列）。"
+    },
+    {
+      "command": "grep \"Failed password\" auth.log | awk '{print $11}'",
+      "note": "awk 按空格切分每一行，{print $11} 打印第 11 列——也就是来源 IP。现在输出里每行都是一个 IP 地址了。"
+    },
+    {
+      "command": "grep \"Failed password\" auth.log | awk '{print $11}' | sort",
+      "note": "sort 给 IP 排序，相同的 IP 会排到一起。这一步是为下一步做准备：uniq 只会合并「相邻」的重复行，所以必须先 sort。"
+    },
+    {
+      "command": "grep \"Failed password\" auth.log | awk '{print $11}' | sort | uniq -c",
+      "note": "uniq -c 把相邻的重复 IP 合并，并在行首标出出现次数。现在每个 IP 出现几次一目了然，只是还没排序。"
+    },
+    {
+      "command": "grep \"Failed password\" auth.log | awk '{print $11}' | sort | uniq -c | sort -nr | head",
+      "note": "最后再接 sort -nr 按次数从大到小排，head 取最前面的几行。排在第一的那个 IP 就是失败次数最多的攻击者，交给 check 完成验证。"
+    }
+  ],
+  "hints": [
+    "失败的登录记录里都包含固定字样 Failed password，先用 grep 把它们捞出来。",
+    "awk 可以按空格切分每一行，IP 地址就在其中一列，数一数是第几列。",
+    "把 IP 提取出来后，sort | uniq -c 可以统计每个 IP 出现几次，再 sort -nr 按次数从大到小排序。"
+  ],
+  "teaches": ["日志分析", "管道", "文本筛选与统计", "基础安全运维"],
+  "checkUsage": "check <IP地址>"
+}

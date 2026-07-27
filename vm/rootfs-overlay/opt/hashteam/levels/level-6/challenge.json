@@ -1,0 +1,28 @@
+{
+  "$schema": "../challenge.schema.json",
+  "schemaVersion": 1,
+  "id": 6,
+  "slug": "secure-configuration",
+  "name": "发现漏洞之后",
+  "tagline": "修复问题：安全的完整闭环",
+  "story": "你在前几关发现了信息泄露问题。真正的安全工作不止是「找到问题」，还要验证、修复、再复查。现在，一份存在多个安全隐患的配置文件 server.conf 摆在你面前：调试模式开着、访客访问开着、还监听在所有网卡上。请把它修复为安全配置。",
+  "goals": [
+    "阅读 server.conf，找出其中的不安全配置项",
+    "将 debug 和 allow_guest 改为 false",
+    "将 listen 改为只监听本机 127.0.0.1",
+    "运行 check 复查修复结果"
+  ],
+  "suggestedCommands": [
+    "cat server.conf",
+    "grep -n . server.conf",
+    "sed -i 's/debug=true/debug=false/' server.conf",
+    "vi server.conf"
+  ],
+  "hints": [
+    "先用 cat 或 grep -n 看清每一行配置，共有三处需要修改。",
+    "sed -i 可以直接在文件里做替换，例如把 debug=true 替换成 debug=false。",
+    "listen=0.0.0.0 表示对所有网卡开放，改成 listen=127.0.0.1 就只允许本机访问。改完后运行 check 复查。"
+  ],
+  "teaches": ["安全不仅是发现问题", "验证、修复与复查的闭环", "引出实验室的真实工作方向"],
+  "checkUsage": "check（自动检查配置文件最终状态）"
+}

@@ -32,6 +32,8 @@ SEABIOS_DEB="${SEABIOS_DEB:-seabios_1.16.3-2_all.deb}"
 SKIP_KERNEL=0
 [ "${1:-}" = "--skip-kernel" ] && SKIP_KERNEL=1
 
+node "$ROOT/scripts/validate-challenges.mjs"
+
 mkdir -p "$WORK" "$OUT_VM" "$OUT_V86/bios"
 cd "$WORK"
 

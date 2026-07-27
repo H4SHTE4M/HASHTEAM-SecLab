@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HASHTEAM Security Lab Challenge",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "slug",
+    "name",
+    "tagline",
+    "story",
+    "goals",
+    "suggestedCommands",
+    "hints",
+    "teaches",
+    "checkUsage"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tagline": {
+      "type": "string",
+      "minLength": 1
+    },
+    "story": {
+      "type": "string",
+      "minLength": 1
+    },
+    "goals": {
+      "$ref": "#/$defs/nonEmptyStringList"
+    },
+    "suggestedCommands": {
+      "$ref": "#/$defs/nonEmptyStringList"
+    },
+    "guide": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["note"],
+        "properties": {
+          "command": {
+            "type": "string",
+            "minLength": 1
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "hints": {
+      "$ref": "#/$defs/nonEmptyStringList"
+    },
+    "teaches": {
+      "$ref": "#/$defs/nonEmptyStringList"
+    },
+    "checkUsage": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "$defs": {
+    "nonEmptyStringList": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

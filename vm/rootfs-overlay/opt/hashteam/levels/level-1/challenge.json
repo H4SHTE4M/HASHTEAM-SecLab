@@ -1,0 +1,23 @@
+{
+  "$schema": "../challenge.schema.json",
+  "schemaVersion": 1,
+  "id": 1,
+  "slug": "welcome-terminal",
+  "name": "欢迎来到服务器",
+  "tagline": "初次登录：认识你的终端",
+  "story": "你刚刚拿到了 HASHTEAM 实验室测试服务器的最低权限账号。管理员在系统里留下了一份说明文件，里面写着你的「通行证」。先确认一下自己的身份和位置，然后读一读这份说明。",
+  "goals": [
+    "确认当前登录的用户身份",
+    "查看当前所在的目录",
+    "阅读管理员留下的 README 文件",
+    "找到通行证并完成验证"
+  ],
+  "suggestedCommands": ["whoami", "pwd", "ls", "cat README"],
+  "hints": [
+    "先试试 whoami 和 pwd，弄清楚「我是谁、我在哪」。",
+    "用 ls 看看目录里有什么文件，再用 cat 把 README 的内容读出来。",
+    "README 里有一行写着通行证，把它作为参数传给 check，例如：check <通行证>"
+  ],
+  "teaches": ["认识 Shell", "文件与目录", "当前用户与当前路径"],
+  "checkUsage": "check <通行证>"
+}

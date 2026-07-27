@@ -10,7 +10,7 @@ export interface GuideStep {
   note: string
 }
 
-/** 关卡静态定义（数据与组件分离，见 src/data/levels.ts） */
+/** 关卡展示定义，由每关目录中的 challenge.json 提供。 */
 export interface LevelDef {
   /** 关卡编号，从 1 开始 */
   id: number
@@ -32,6 +32,14 @@ export interface LevelDef {
   teaches: string[]
   /** check 命令用法说明 */
   checkUsage: string
+}
+
+/** 可加载的关卡 manifest；schemaVersion 用于后续平滑升级配置格式。 */
+export interface ChallengeManifest extends LevelDef {
+  /** 当前只支持第 1 版 manifest。 */
+  schemaVersion: 1
+  /** 稳定、可读的关卡标识，不随展示标题变化。 */
+  slug: string
 }
 
 /** 串口控制协议消息（@@HASHTEAM:{...}） */

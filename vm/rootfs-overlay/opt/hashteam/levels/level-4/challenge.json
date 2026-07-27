@@ -1,0 +1,28 @@
+{
+  "$schema": "../challenge.schema.json",
+  "schemaVersion": 1,
+  "id": 4,
+  "slug": "encoding-forensics",
+  "name": "看不懂的消息",
+  "tagline": "可疑数据：编码不是加密",
+  "story": "你在服务器上发现了两个可疑文件：message.b64 看起来像一堆乱码，secret.bin 更是一个打不开的「二进制」。别急——它们只是经过了「编码」，而编码从来都不是加密。两块碎片拼起来，才是完整的暗号。",
+  "goals": [
+    "查看 message.b64 的内容并还原它",
+    "用合适的工具从 secret.bin 中提取可读字符串",
+    "把两块碎片按提示拼成完整暗号"
+  ],
+  "suggestedCommands": [
+    "cat message.b64",
+    "base64 -d message.b64",
+    "file secret.bin",
+    "strings secret.bin",
+    "xxd secret.bin | head"
+  ],
+  "hints": [
+    "message.b64 是 Base64 编码的文本，base64 -d 可以把它还原出来。",
+    "二进制文件里往往藏着可读字符串，strings 命令能把它们挑出来；xxd 可以看到文件的十六进制全貌。",
+    "两块碎片各自是暗号的一半，用连字符（-）按顺序拼接，就是最终答案。"
+  ],
+  "teaches": ["编码不等于加密", "文本与二进制", "基础取证思维"],
+  "checkUsage": "check <完整暗号>"
+}

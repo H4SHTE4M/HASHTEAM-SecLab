@@ -15,7 +15,7 @@ export HASHTEAM_LEVELS_DIR="$OVERLAY/opt/hashteam/levels"
 
 BUSYBOX="${BUSYBOX:-}"
 if [ -z "$BUSYBOX" ]; then
-    for cand in /tmp/busybox "$(command -v busybox || true)"; do
+    for cand in "$ROOT/vm/.cache/busybox" /tmp/busybox "$(command -v busybox || true)"; do
         if [ -n "$cand" ] && [ -x "$cand" ]; then
             BUSYBOX="$cand"
             break

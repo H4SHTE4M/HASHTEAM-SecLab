@@ -7,12 +7,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "validate:challenges": "node scripts/validate-challenges.mjs",
+    "build": "pnpm validate:challenges && vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "pnpm validate:challenges && vitest run",
     "test:watch": "vitest",
-    "test:vm": "sh scripts/test-vm-checks.sh",
-    "test:integration": "node scripts/integration-test.mjs",
+    "test:vm": "pnpm validate:challenges && sh scripts/test-vm-checks.sh",
+    "test:integration": "pnpm validate:challenges && node scripts/integration-test.mjs",
     "build:vm": "sh vm/build.sh"
   },
   "dependencies": {

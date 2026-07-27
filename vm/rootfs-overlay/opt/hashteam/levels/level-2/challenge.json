@@ -1,0 +1,22 @@
+{
+  "$schema": "../challenge.schema.json",
+  "schemaVersion": 1,
+  "id": 2,
+  "slug": "hidden-file",
+  "name": "消失的文件",
+  "tagline": "隐藏的信息：看不见 ≠ 不存在",
+  "story": "管理员信誓旦旦地说，你的主目录里放着一条给你的消息，可不管怎么 ls 都看不到它。文件真的不存在吗？在 Linux 里，有些文件只是「低调」而已。",
+  "goals": [
+    "列出目录中的全部文件（包括隐藏的）",
+    "找到那个「消失」的文件",
+    "确认它的类型并读取其中的验证信息"
+  ],
+  "suggestedCommands": ["ls -la", "file .message", "cat .message"],
+  "hints": [
+    "以点（.）开头的文件在默认的 ls 中是看不见的，试试给 ls 加上 -a 或 -la 参数。",
+    "找到隐藏文件后，可以用 file 看看它是什么类型，再用 cat 读出来。",
+    "文件里有一行「验证信息」，把冒号后面的内容交给 check。"
+  ],
+  "teaches": ["隐藏文件", "文件类型识别", "「不可见」不等于「不存在」"],
+  "checkUsage": "check <验证信息>"
+}

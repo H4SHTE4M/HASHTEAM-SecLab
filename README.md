@@ -25,7 +25,7 @@
 ```text
 ┌────────────────────────────── 浏览器（纯静态页面）──────────────────────────────┐
 │  Vue 3 应用                                                                    │
-│  ├─ TopBar / MissionPanel / CompletionPage   （任务文案来自 src/data/levels.ts）│
+│  ├─ TopBar / MissionPanel / CompletionPage   （任务文案来自每关 challenge.json）│
 │  ├─ LabTerminal (xterm.js) ◄── 显示文本                                       │
 │  │                              ▲                                            │
 │  ├─ useSerialProtocol           │  SerialProtocolParser：按行拆分，           │
@@ -38,7 +38,7 @@
 │       ├─ 自动登录 guest@hashteam（cttyhack + su）                             │
 │       ├─ /usr/local/bin：check / hint / status / help / reset-level /         │
 │       │   hashteamctl / curl(兼容层) / file(简化实现)                          │
-│       └─ /opt/hashteam/levels/level-N/{init.sh, check.sh, ...}                │
+│       └─ /opt/hashteam/levels/level-N/{challenge.json, init.sh, check.sh, ...}│
 │            串口输出 @@HASHTEAM:{"type":"level-result","level":3,...}          │
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -98,6 +98,7 @@ pnpm dev            # 启动开发服务器（默认 http://localhost:5173）
 ```bash
 pnpm test               # 前端单元测试（协议解析、进度持久化）
 pnpm test:watch         # Vitest 监听模式，适合本地迭代
+pnpm validate:challenges # 校验关卡 manifest、连续编号与必要脚本
 pnpm test:vm            # Linux 检查脚本测试（需要 busybox，见下）
 pnpm test:integration   # 端到端测试：Node 无头启动真实虚拟机通关全部 6 关
 pnpm build              # vue-tsc 严格类型检查 + 生产构建（输出 dist/）
@@ -152,18 +153,21 @@ pnpm build              # vue-tsc 严格类型检查 + 生产构建（输出 dis
 
 ## 8. 添加新关卡的方法
 
-1. **写关卡文案**：在 `src/data/levels.ts` 的 `LEVELS` 数组中追加一项
-   （剧情 / 目标 / 建议命令 / 提示 / 教学目标 / check 用法）。
-2. **写关卡脚本**：新建
-   `vm/rootfs-overlay/opt/hashteam/levels/level-7/`，包含：
-   - `init.sh`：幂等的关卡环境初始化（创建挑战文件、启动服务等），
-     每次进入或重置本关都会执行；
-   - `check.sh`：验证逻辑。**只检查最终状态**，成功 `exit 0`，
-     失败打印人类可读的 ✗ 提示并 `exit 1`；
-   - 需要答案时放 `answer` 文件。
-3. **重打包**：`./vm/build.sh --skip-kernel`。
-4. **补测试**：在 `scripts/test-vm-checks.sh` 与
-   `scripts/integration-test.mjs` 中增加对应关卡用例。
+关卡已经配置化。每个 `level-N/` 都是一个自包含关卡包：
+
+- `challenge.json`：剧情、目标、建议命令、分步讲解、提示、教学目标和
+  `check` 用法；前端在构建时自动发现并加载。
+- `init.sh`：幂等的关卡环境初始化，每次进入或重置本关都会执行。
+- `check.sh`：只检查最终状态；成功 `exit 0`，失败输出可读提示并退出非零。
+- `answer`、日志或二进制等文件：本关需要的只读素材。
+
+新增关卡时只需建立下一个连续编号的目录，不再修改前端关卡数组或总关卡数。
+运行 `pnpm validate:challenges` 会校验 manifest 字段、目录编号、唯一 slug 以及
+`init.sh` / `check.sh` 是否完整。然后补充 VM 测试并运行
+`./vm/build.sh --skip-kernel` 重打包。
+
+完整字段说明、最小模板和脚本约定见
+[关卡开发指南](docs/challenges.md)。
 
 判题协议（`passed` / `error` 消息）由 `/usr/local/bin/check` 包装器
 自动发出，关卡脚本无需关心协议格式。
@@ -277,15 +281,17 @@ hashteam-web-lab/
 │   ├── components/     # TopBar / LabTerminal / MissionPanel /
 │   │                   # LoadingScreen / CompletionPage / AboutModal
 │   ├── composables/    # useVirtualMachine / useLabProgress / useSerialProtocol
-│   ├── services/       # vm-controller / protocol-parser / progress-store
-│   ├── data/levels.ts  # 全部关卡文案与实验室方向
+│   ├── services/       # VM、协议、存储与 challenge manifest 校验
+│   ├── data/levels.ts  # 自动发现并加载全部 challenge.json
 │   ├── types/lab.ts
 │   └── styles/global.css
+├── docs/challenges.md  # 新增关卡的配置、脚本与测试指南
 ├── tests/              # vitest 单元测试（协议解析、进度持久化）
 ├── vm/
 │   ├── build.sh        # 虚拟机资源构建（内核 + initramfs + v86 资源）
-│   └── rootfs-overlay/ # initramfs 内容：init、账号、辅助命令、6 个关卡
+│   └── rootfs-overlay/ # initramfs 内容；每关目录含 manifest、脚本和素材
 └── scripts/
+    ├── validate-challenges.mjs # 构建前校验关卡配置和目录完整性
     ├── pack-initramfs.py    # 确定性 cpio 打包（显式权限位）
     ├── test-vm-checks.sh    # Linux 检查脚本测试（30 项断言）
     ├── integration-test.mjs # 端到端：Node 无头启动真实 VM 通关 6 关
