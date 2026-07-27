@@ -39,7 +39,7 @@ def owner_for(rel: str) -> tuple[int, int]:
 
 
 class Entry:
-    def __init__(self, name: str, mode: int, uid: int, gid: int, data: bytes, linkname: str = ""):
+    def __init__(self, name: str, mode: int, uid: int, gid: int, data: bytes = b"", linkname: str = ""):
         self.name = name
         self.mode = mode
         self.uid = uid
@@ -50,11 +50,34 @@ class Entry:
 
 def collect_entries(root: str, busybox_path: str | None) -> list[Entry]:
     entries: list[Entry] = []
+    dir_added: set[str] = set()
+
+    def ensure_dir(rel: str) -> None:
+        """确保 rel 及其所有祖先目录都有目录条目。
+
+        内核解包 initramfs 时不会自动创建父目录：若 bin/ 没有目录条目，
+        bin/busybox 文件就无法落地，init 的 shebang #!/bin/busybox sh 会失败，
+        内核报 "No working init found"。
+        """
+        if rel == "." or rel == "" or rel in dir_added:
+            return
+        parent = rel.rsplit("/", 1)[0] if "/" in rel else "."
+        ensure_dir(parent)
+        uid, gid = owner_for(rel)
+        entries.append(Entry(rel, mode_for(rel, True), uid, gid))
+        dir_added.add(rel)
 
     def add(rel: str, mode: int, uid: int, gid: int, data: bytes = b"", linkname: str = "") -> None:
+        parent = rel.rsplit("/", 1)[0] if "/" in rel else "."
+        ensure_dir(parent)
+        if (mode & 0o170000) == stat.S_IFDIR:
+            dir_added.add(rel)
         entries.append(Entry(rel, mode, uid, gid, data, linkname))
 
-    # 目录与文件（按字典序，保证可重现）
+    # 根目录必须最先出现
+    add(".", stat.S_IFDIR | 0o755, 0, 0)
+
+    # overlay 上的目录与文件（按字典序，保证可重现）
     items: list[tuple[str, str]] = []  # (abs, rel)
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames.sort()
@@ -66,8 +89,6 @@ def collect_entries(root: str, busybox_path: str | None) -> list[Entry]:
             ap = os.path.join(dirpath, f)
             items.append((ap, os.path.relpath(ap, root)))
 
-    # 先写入根下的顶层目录
-    add(".", stat.S_IFDIR | 0o755, 0, 0)
     for ap, rel in items:
         rel = rel.replace(os.sep, "/")
         if os.path.isdir(ap):
@@ -78,11 +99,19 @@ def collect_entries(root: str, busybox_path: str | None) -> list[Entry]:
             with open(ap, "rb") as fh:
                 add(rel, mode_for(rel, False), uid, gid, fh.read())
 
-    # busybox 二进制与 /bin/sh 链接
+    # busybox 二进制与 /bin/sh 链接（bin/ 目录由 ensure_dir 自动补齐）
     if busybox_path is not None:
         with open(busybox_path, "rb") as fh:
             add("bin/busybox", stat.S_IFREG | 0o755, 0, 0, fh.read())
     add("bin/sh", stat.S_IFLNK | 0o777, 0, 0, b"busybox", "")
+
+    # 空的挂载点/系统目录：没有文件所以 os.walk 看不到、git 也不跟踪空目录，
+    # 但 init 需要 /dev /proc /sys /tmp /root 存在才能 mount 成功。
+    for empty_dir in ("dev", "proc", "root", "sys", "tmp"):
+        if empty_dir not in dir_added:
+            uid, gid = owner_for(empty_dir)
+            add(empty_dir, mode_for(empty_dir, True), uid, gid)
+
     return entries
 
 

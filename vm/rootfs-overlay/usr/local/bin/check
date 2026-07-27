@@ -13,6 +13,8 @@ if [ ! -f "$script" ]; then
 fi
 
 if sh "$script" "$@"; then
+    # 记录完成状态，供 hashteamctl goto 的解锁校验使用
+    hashteamctl mark-completed "$level" 2>/dev/null || true
     printf '@@HASHTEAM:{"type":"level-result","level":%s,"status":"passed"}\n' "$level"
     exit 0
 else

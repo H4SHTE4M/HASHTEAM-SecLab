@@ -29,6 +29,10 @@ export function useVirtualMachine() {
         // Linux 启动并完成自动登录，进入已保存的关卡
         log('stage', `ready 到达，进入关卡 ${progress.state.currentLevel}`)
         stage.value = 'ready'
+        // VM 是内存环境，每次启动都是全新状态，不记得任何关卡完成记录。
+        // 把前端持久化的完成进度同步过去，否则 hashteamctl goto 的解锁校验
+        // 会拒绝恢复到尚未在本次启动中完成的关卡（例如刷新页面续关）。
+        syncCompletionToVm(progress.state.completedLevels)
         controller?.restoreLevel(progress.state.currentLevel)
         break
       case 'level-ready':
@@ -92,27 +96,59 @@ export function useVirtualMachine() {
     controller?.sendSerial(input)
   }
 
-  /** 切换到指定关卡（更新前端进度并通知虚拟机重建关卡环境） */
+  /**
+   * 把前端记录的已完成关卡同步到 VM。关卡是顺序解锁的，只需回放最大已完成关卡号。
+   * 仅在开机 ready 后调用一次，让 VM 的解锁校验放行到用户上次抵达的关卡。
+   */
+  function syncCompletionToVm(completedLevels: number[]): void {
+    if (completedLevels.length === 0) return
+    const maxCompleted = completedLevels.reduce((a, b) => (a > b ? a : b), 0)
+    sendSerial(`hashteamctl mark-completed ${maxCompleted}\n`)
+  }
+
+  /**
+   * 静默清除终端当前未提交的输入行（发送 Ctrl+U）。
+   * 用于在送入新命令前清掉用户正在输入的内容，避免两条命令拼在同一行。
+   * Ctrl+U 不会产生可见的 ^C 噪声，空行时也无副作用。
+   */
+  function clearLine(): void {
+    sendSerial('\x15')
+  }
+
+  /**
+   * 中断当前正在运行的命令并放弃未提交输入（发送 Ctrl+C）。
+   * 用于「重置本关」等需要从任意状态（含卡住的命令）恢复的场景。
+   */
+  function interruptForeground(): void {
+    sendSerial('\x03')
+  }
+
+  /**
+   * 切换到指定关卡（更新前端进度并通知虚拟机重建关卡环境）。
+   * 不允许跳关：只能进入已解锁的关卡——第 1 关默认解锁，
+   * 其余关卡需上一关已完成。
+   */
   function gotoLevel(level: number): void {
     if (level < 1 || level > TOTAL_LEVELS) return
+    const unlocked = level === 1 || progress.state.completedLevels.includes(level - 1)
+    if (!unlocked) return
+    // 清除用户可能正在输入的内容，避免与 hashteamctl goto 命令拼接
+    clearLine()
     progress.setLevel(level)
     controller?.restoreLevel(level)
   }
 
   /** 重置本关：只重建当前关卡的实验环境，不影响完成状态 */
   function resetCurrentLevel(): void {
+    // 中断可能正在运行的命令，确保 reset-level 在干净的提示符下执行
+    interruptForeground()
     sendSerial('reset-level\n')
   }
 
-  /** 重新开始：清空进度并整机重启（回到全新 Linux 环境） */
-  async function resetAll(): Promise<void> {
-    progress.resetAll()
-    if (controller === null) {
-      await boot()
-      return
-    }
-    stage.value = 'starting-linux'
-    await controller.reset()
+  /** 以干净的输入行运行一条命令：先清除未提交输入，再回车执行 */
+  function runCommand(command: string): void {
+    clearLine()
+    sendSerial(`${command}\n`)
   }
 
   return {
@@ -123,6 +159,6 @@ export function useVirtualMachine() {
     sendSerial,
     gotoLevel,
     resetCurrentLevel,
-    resetAll,
+    runCommand,
   }
 }

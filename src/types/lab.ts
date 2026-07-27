@@ -2,6 +2,14 @@
  * HASHTEAM Security Lab 核心类型定义
  */
 
+/** 命令讲解中的一个步骤：可点击运行的命令 + 这一步在做什么 */
+export interface GuideStep {
+  /** 可点击送入终端运行的命令；留空则只展示说明文字 */
+  command?: string
+  /** 这一步在做什么、为什么这样做 */
+  note: string
+}
+
 /** 关卡静态定义（数据与组件分离，见 src/data/levels.ts） */
 export interface LevelDef {
   /** 关卡编号，从 1 开始 */
@@ -16,6 +24,8 @@ export interface LevelDef {
   goals: string[]
   /** 建议尝试的命令（仅提示，不作为判题依据） */
   suggestedCommands: string[]
+  /** 命令讲解：分步骤常驻引导，用于命令密度突然增大的关卡（如管道组合） */
+  guide?: GuideStep[]
   /** 逐步展开的提示 */
   hints: string[]
   /** 教学目标 */

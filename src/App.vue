@@ -41,7 +41,8 @@ function handleTerminalInput(data: string): void {
 }
 
 function handleRunCommand(command: string): void {
-  vm.sendSerial(`${command}\n`)
+  // runCommand 会先清空终端未提交的输入，避免与已有内容拼接
+  vm.runCommand(command)
   terminalRef.value?.focus()
 }
 
@@ -49,8 +50,11 @@ function handleNextLevel(): void {
   vm.gotoLevel(progress.state.currentLevel + 1)
 }
 
-async function handleResetAll(): Promise<void> {
-  await vm.resetAll()
+function handleResetAll(): void {
+  // 先同步清空 LocalStorage 中的进度（resetAllProgress 是同步的），
+  // 再刷新网页：刷新后 loadProgress 读到全新空进度，VM 也从全新 Linux 环境启动。
+  progress.resetAll()
+  window.location.reload()
 }
 </script>
 

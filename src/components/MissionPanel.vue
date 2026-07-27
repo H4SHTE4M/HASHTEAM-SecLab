@@ -41,6 +41,24 @@ const hasMoreHints = computed(() => props.hintsUsed < props.level.hints.length)
         </ul>
       </section>
 
+      <section v-if="level.guide && level.guide.length > 0" class="block">
+        <h3>命令讲解 <span class="hint-note">分步引导，点击命令即可运行</span></h3>
+        <ol class="guide">
+          <li v-for="(step, i) in level.guide" :key="i" class="guide-step">
+            <button
+              v-if="step.command"
+              type="button"
+              class="cmd-chip"
+              :title="`在终端中运行：${step.command}`"
+              @click="emit('run-command', step.command)"
+            >
+              {{ step.command }}
+            </button>
+            <p class="guide-note">{{ step.note }}</p>
+          </li>
+        </ol>
+      </section>
+
       <section class="block">
         <h3>建议命令 <span class="hint-note">点击即可送入终端运行</span></h3>
         <div class="commands">
@@ -175,6 +193,27 @@ const hasMoreHints = computed(() => props.hintsUsed < props.level.hints.length)
   font-size: 14px;
   line-height: 1.8;
   color: #c7d3e8;
+}
+
+.guide {
+  margin: 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.guide-step {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.guide-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #b8c5dd;
 }
 
 .commands {

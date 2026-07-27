@@ -5,3 +5,9 @@ vm/.cache/
 .DS_Store
 # Playwright MCP 调试产物（截图/控制台日志）
 .playwright-mcp/
+
+# 部署相关（远端配置/计划/发布脚本，含可能的本地凭据与邮箱）
+.deploy/
+
+# Claude Code 项目本地配置（权限/技能，含个人邮箱与部署目标，不进仓库）
+.claude/
