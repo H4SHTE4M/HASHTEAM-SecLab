@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   PROGRESS_STORAGE_KEY,
   completeLevel,
+  createSafeStorage,
   createDefaultProgress,
   loadProgress,
   recordHint,
@@ -81,6 +82,21 @@ describe('lab-progress（基于 localStorage）', () => {
     expect(p.completedLevels).toEqual([])
   })
 
+  it('拒绝重复关卡、非法提示次数和非有限时间戳', () => {
+    const invalidRecords = [
+      { currentLevel: 1, completedLevels: [1, 1], hintsUsed: {}, startedAt: 1, updatedAt: 1 },
+      { currentLevel: 1, completedLevels: [], hintsUsed: { 2: -1 }, startedAt: 1, updatedAt: 1 },
+      { currentLevel: 1, completedLevels: [], hintsUsed: { 99: 1 }, startedAt: 1, updatedAt: 1 },
+      { currentLevel: 1, completedLevels: [], hintsUsed: {}, startedAt: 'now', updatedAt: 1 },
+    ]
+
+    for (const record of invalidRecords) {
+      window.localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(record))
+      expect(loadProgress(window.localStorage, TOTAL).completedLevels).toEqual([])
+      expect(loadProgress(window.localStorage, TOTAL).startedAt).not.toBe(record.startedAt)
+    }
+  })
+
   it('resetAllProgress 清空全部进度', () => {
     const p = loadProgress(window.localStorage, TOTAL)
     completeLevel(window.localStorage, p, 1)
@@ -109,5 +125,17 @@ describe('lab-progress（基于 localStorage）', () => {
     const p = loadProgress(mem, TOTAL)
     completeLevel(mem, p, 6)
     expect(loadProgress(mem, TOTAL).completedLevels).toEqual([6])
+  })
+
+  it('localStorage 在运行中失效时自动降级到内存副本', () => {
+    const storage = createSafeStorage()
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('quota exceeded', 'QuotaExceededError')
+    })
+
+    storage.setItem('runtime-fallback', 'saved')
+    expect(storage.getItem('runtime-fallback')).toBe('saved')
+
+    setItem.mockRestore()
   })
 })

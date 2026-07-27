@@ -1,50 +1,112 @@
 import { ref } from 'vue'
-import type { BootStage, ProtocolMessage } from '../types/lab'
+import type { BootStage, ProtocolMessage, VirtualMachineController } from '../types/lab'
 import { V86Controller } from '../services/vm-controller'
 import { useSerialProtocol } from './useSerialProtocol'
 import { useLabProgress } from './useLabProgress'
 import { TOTAL_LEVELS } from '../data/levels'
 import { log, clear as clearBootLog } from '../services/boot-logger'
 
+const DEFAULT_READY_TIMEOUT_MS = 60_000
+
+export interface VirtualMachineOptions {
+  /** 控制器工厂可注入，便于验证失败重试、监听释放等生命周期行为。 */
+  createController?: (onStageChange: (stage: BootStage) => void) => VirtualMachineController
+  /** Linux 发出 ready 协议前的最长等待时间。 */
+  readyTimeoutMs?: number
+}
+
+function isKnownLevel(level: number): boolean {
+  return Number.isInteger(level) && level >= 1 && level <= TOTAL_LEVELS
+}
+
 /**
- * 虚拟机生命周期 + 协议消息路由（模块级单例）。
- * 组件只消费这里的 ref 与方法，不直接接触 v86。
+ * 创建一套独立的虚拟机状态与协议路由。
+ *
+ * 应用通过 useVirtualMachine() 消费模块级单例；测试可直接调用本函数注入
+ * 假控制器，验证启动失败、超时与销毁等故障路径。
  */
-const stage = ref<BootStage>('idle')
-const errorMessage = ref<string | null>(null)
-
-/** 终端显示文本订阅者（与协议层解耦，启动前注册也有效） */
-const displayCallbacks = new Set<(data: string) => void>()
-
-let controller: V86Controller | null = null
-let protocol: ReturnType<typeof useSerialProtocol> | null = null
-
-export function useVirtualMachine() {
+export function createVirtualMachine(options: VirtualMachineOptions = {}) {
+  const stage = ref<BootStage>('idle')
+  const errorMessage = ref<string | null>(null)
+  const displayCallbacks = new Set<(data: string) => void>()
   const progress = useLabProgress()
+
+  const createController =
+    options.createController ??
+    ((onStageChange: (nextStage: BootStage) => void) => new V86Controller(undefined, onStageChange))
+  const readyTimeoutMs = options.readyTimeoutMs ?? DEFAULT_READY_TIMEOUT_MS
+
+  let controller: VirtualMachineController | null = null
+  let protocol: ReturnType<typeof useSerialProtocol> | null = null
+  let readyTimer: number | null = null
+  let bootPromise: Promise<void> | null = null
+  let generation = 0
+
+  function clearReadyTimer(): void {
+    if (readyTimer === null) return
+    window.clearTimeout(readyTimer)
+    readyTimer = null
+  }
+
+  function hasReachedReady(): boolean {
+    return stage.value === 'ready'
+  }
+
+  /**
+   * 释放当前会话。先使 generation 失效，再解除协议监听和停止控制器，
+   * 防止旧控制器的迟到回调覆盖新会话状态。
+   */
+  async function releaseCurrentVm(): Promise<void> {
+    generation += 1
+    clearReadyTimer()
+
+    const currentProtocol = protocol
+    const currentController = controller
+    protocol = null
+    controller = null
+
+    currentProtocol?.dispose()
+    if (currentController !== null) {
+      try {
+        await currentController.stop()
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        log('boot', `释放旧虚拟机失败：${message}`, 'warn')
+      }
+    }
+  }
+
+  async function failCurrentBoot(message: string, failedGeneration: number): Promise<void> {
+    if (failedGeneration !== generation) return
+    log('boot', `启动失败：${message}`, 'error')
+    await releaseCurrentVm()
+    stage.value = 'error'
+    errorMessage.value = message
+  }
 
   function handleMessage(message: ProtocolMessage): void {
     log('protocol', `收到 ${message.type}：${JSON.stringify(message)}`)
     switch (message.type) {
       case 'ready':
-        // Linux 启动并完成自动登录，进入已保存的关卡
+        clearReadyTimer()
         log('stage', `ready 到达，进入关卡 ${progress.state.currentLevel}`)
         stage.value = 'ready'
-        // VM 是内存环境，每次启动都是全新状态，不记得任何关卡完成记录。
-        // 把前端持久化的完成进度同步过去，否则 hashteamctl goto 的解锁校验
-        // 会拒绝恢复到尚未在本次启动中完成的关卡（例如刷新页面续关）。
+        // VM 是内存环境，每次启动都是全新状态。把前端持久化的完成进度
+        // 同步过去，否则刷新后恢复到后续关卡会被 VM 的顺序解锁校验拒绝。
         syncCompletionToVm(progress.state.completedLevels)
-        controller?.restoreLevel(progress.state.currentLevel)
+        void controller?.restoreLevel(progress.state.currentLevel)
         break
       case 'level-ready':
-        progress.setLevel(message.level)
+        if (isKnownLevel(message.level)) progress.setLevel(message.level)
         break
       case 'level-result':
-        if (message.status === 'passed') {
+        // 只接受当前关卡的通过消息，避免迟到或异常协议改写其他关卡进度。
+        if (message.status === 'passed' && message.level === progress.state.currentLevel) {
           progress.complete(message.level)
         }
         break
       case 'hint-request':
-        progress.useHint(message.level)
+        if (message.level === progress.state.currentLevel) progress.useHint(message.level)
         break
       case 'progress':
         // 预留：细粒度进度消息
@@ -56,35 +118,59 @@ export function useVirtualMachine() {
     }
   }
 
-  /** 启动虚拟机（幂等） */
-  async function boot(): Promise<void> {
-    if (controller !== null && stage.value !== 'error') return
+  async function bootInternal(): Promise<void> {
+    if (controller !== null) await releaseCurrentVm()
+
     errorMessage.value = null
     clearBootLog()
     stage.value = 'loading-assets'
     log('stage', '阶段：loading-assets')
 
-    controller = new V86Controller(undefined, (s) => {
-      if (stage.value !== s) log('stage', `阶段：${s}`)
-      stage.value = s
+    const currentGeneration = ++generation
+    const nextController = createController((nextStage) => {
+      if (generation !== currentGeneration) return
+      if (stage.value !== nextStage) log('stage', `阶段：${nextStage}`)
+      stage.value = nextStage
     })
-    protocol = useSerialProtocol(controller)
+    controller = nextController
+    protocol = useSerialProtocol(nextController)
     protocol.onDisplay((data) => {
-      displayCallbacks.forEach((cb) => cb(data))
+      displayCallbacks.forEach((callback) => callback(data))
     })
     protocol.onMessage(handleMessage)
 
     try {
-      await controller.start()
+      await nextController.start()
+      if (generation !== currentGeneration) return
+      // 极快环境或测试控制器可能在 start() resolve 前已发出 ready。
+      if (hasReachedReady()) return
+      readyTimer = window.setTimeout(() => {
+        void failCurrentBoot(
+          `Linux 启动超过 ${Math.ceil(readyTimeoutMs / 1000)} 秒仍未就绪，请检查启动日志后重试。`,
+          currentGeneration,
+        )
+      }, readyTimeoutMs)
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
-      log('boot', `启动失败：${msg}`, 'error')
-      stage.value = 'error'
-      errorMessage.value = msg
+      if (generation !== currentGeneration) return
+      const message = error instanceof Error ? error.message : String(error)
+      await failCurrentBoot(message, currentGeneration)
     }
   }
 
-  /** 向终端订阅显示文本 */
+  /** 启动虚拟机；并发调用共享同一个 Promise，ready/error 状态下保持幂等。 */
+  async function boot(): Promise<void> {
+    if (bootPromise !== null) return bootPromise
+    if (controller !== null && stage.value !== 'error') return
+
+    const task = bootInternal()
+    bootPromise = task
+    try {
+      await task
+    } finally {
+      if (bootPromise === task) bootPromise = null
+    }
+  }
+
   function onDisplay(callback: (data: string) => void): () => void {
     displayCallbacks.add(callback)
     return () => {
@@ -96,69 +182,64 @@ export function useVirtualMachine() {
     controller?.sendSerial(input)
   }
 
-  /**
-   * 把前端记录的已完成关卡同步到 VM。关卡是顺序解锁的，只需回放最大已完成关卡号。
-   * 仅在开机 ready 后调用一次，让 VM 的解锁校验放行到用户上次抵达的关卡。
-   */
   function syncCompletionToVm(completedLevels: number[]): void {
     if (completedLevels.length === 0) return
     const maxCompleted = completedLevels.reduce((a, b) => (a > b ? a : b), 0)
     sendSerial(`hashteamctl mark-completed ${maxCompleted}\n`)
   }
 
-  /**
-   * 静默清除终端当前未提交的输入行（发送 Ctrl+U）。
-   * 用于在送入新命令前清掉用户正在输入的内容，避免两条命令拼在同一行。
-   * Ctrl+U 不会产生可见的 ^C 噪声，空行时也无副作用。
-   */
   function clearLine(): void {
     sendSerial('\x15')
   }
 
-  /**
-   * 中断当前正在运行的命令并放弃未提交输入（发送 Ctrl+C）。
-   * 用于「重置本关」等需要从任意状态（含卡住的命令）恢复的场景。
-   */
   function interruptForeground(): void {
     sendSerial('\x03')
   }
 
-  /**
-   * 切换到指定关卡（更新前端进度并通知虚拟机重建关卡环境）。
-   * 不允许跳关：只能进入已解锁的关卡——第 1 关默认解锁，
-   * 其余关卡需上一关已完成。
-   */
   function gotoLevel(level: number): void {
-    if (level < 1 || level > TOTAL_LEVELS) return
+    if (!isKnownLevel(level)) return
     const unlocked = level === 1 || progress.state.completedLevels.includes(level - 1)
     if (!unlocked) return
-    // 清除用户可能正在输入的内容，避免与 hashteamctl goto 命令拼接
     clearLine()
     progress.setLevel(level)
-    controller?.restoreLevel(level)
+    void controller?.restoreLevel(level)
   }
 
-  /** 重置本关：只重建当前关卡的实验环境，不影响完成状态 */
   function resetCurrentLevel(): void {
-    // 中断可能正在运行的命令，确保 reset-level 在干净的提示符下执行
     interruptForeground()
     sendSerial('reset-level\n')
   }
 
-  /** 以干净的输入行运行一条命令：先清除未提交输入，再回车执行 */
   function runCommand(command: string): void {
     clearLine()
     sendSerial(`${command}\n`)
+  }
+
+  /** 页面卸载或显式销毁时停止 VM，并解除全部外部监听。 */
+  async function dispose(): Promise<void> {
+    await releaseCurrentVm()
+    displayCallbacks.clear()
+    stage.value = 'idle'
+    errorMessage.value = null
   }
 
   return {
     stage,
     errorMessage,
     boot,
+    dispose,
     onDisplay,
     sendSerial,
     gotoLevel,
     resetCurrentLevel,
     runCommand,
   }
+}
+
+let singleton: ReturnType<typeof createVirtualMachine> | null = null
+
+/** 虚拟机生命周期 + 协议消息路由（应用级单例）。 */
+export function useVirtualMachine() {
+  singleton ??= createVirtualMachine()
+  return singleton
 }

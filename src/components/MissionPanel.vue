@@ -24,7 +24,7 @@ const hasMoreHints = computed(() => props.hintsUsed < props.level.hints.length)
     <div class="panel-scroll">
       <header class="level-header">
         <span class="level-badge">第 {{ level.id }} 关</span>
-        <span v-if="completed" class="done-badge">✓ 已完成</span>
+        <span v-if="completed" class="done-badge" role="status" aria-live="polite">✓ 已完成</span>
       </header>
       <h2 class="level-name">{{ level.name }}</h2>
       <p class="level-tagline">{{ level.tagline }}</p>

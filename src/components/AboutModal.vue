@@ -1,17 +1,73 @@
 <script setup lang="ts">
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { CTF_POSITIONING, LAB_DIRECTIONS } from '../data/levels'
 
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
+
+const dialogRef = ref<HTMLElement | null>(null)
+const closeButtonRef = ref<HTMLButtonElement | null>(null)
+let previouslyFocused: HTMLElement | null = null
+
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+function close(): void {
+  emit('close')
+}
+
+function handleKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    close()
+    return
+  }
+  if (event.key !== 'Tab' || dialogRef.value === null) return
+
+  const focusable = Array.from(dialogRef.value.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+  if (focusable.length === 0) {
+    event.preventDefault()
+    dialogRef.value.focus()
+    return
+  }
+
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
+onMounted(() => {
+  previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  document.addEventListener('keydown', handleKeydown)
+  void nextTick(() => closeButtonRef.value?.focus())
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', handleKeydown)
+  previouslyFocused?.focus()
+})
 </script>
 
 <template>
-  <div class="modal-mask" @click.self="emit('close')">
-    <div class="modal-card" role="dialog" aria-label="关于实验室">
+  <div class="modal-mask" @click.self="close">
+    <div
+      ref="dialogRef"
+      class="modal-card"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="about-dialog-title"
+      tabindex="-1"
+    >
       <header class="modal-header">
-        <h2>关于 HASHTEAM 安全实验室</h2>
-        <button type="button" class="btn-close" aria-label="关闭" @click="emit('close')">×</button>
+        <h2 id="about-dialog-title">关于 HASHTEAM 安全实验室</h2>
+        <button ref="closeButtonRef" type="button" class="btn-close" aria-label="关闭" @click="close">×</button>
       </header>
       <div class="modal-body">
         <p>

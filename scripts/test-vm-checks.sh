@@ -28,14 +28,23 @@ if [ -z "$BUSYBOX" ]; then
 fi
 
 WORK="$(mktemp -d)"
-trap 'pkill -x httpd 2>/dev/null || true; rm -rf "$WORK"' EXIT
+stop_test_httpd() {
+    if [ -n "${HASHTEAM_HTTP_PORT:-}" ]; then
+        pkill -f "httpd -p 127.0.0.1:${HASHTEAM_HTTP_PORT}" 2>/dev/null || true
+    fi
+}
+trap 'stop_test_httpd; rm -rf "$WORK"' EXIT
 
 # 统一的 applet 环境：尽量使用 busybox（贴近 VM 内行为）
 STUB="$WORK/stub-bin"
 mkdir -p "$STUB"
-for app in sh grep sed awk tr cat cp mkdir rm kill sleep printf tail head sort uniq base64 strings od dd cut wc; do
+for app in sh grep sed awk tr cat cp mkdir rm kill sleep printf tail head sort uniq base64 strings od dd cut wc \
+    httpd wget; do
     ln -sf "$BUSYBOX" "$STUB/$app"
 done
+# 宿主机可能运行着其他 httpd；测试内的 init.sh 不应通过 pidof 误杀它们。
+# 本测试会在 reset-level 前按专用端口显式停止自己的服务，因此返回空结果即可。
+ln -sf /bin/false "$STUB/pidof"
 
 PASS=0
 FAIL=0
@@ -131,21 +140,22 @@ OUT=$(run_check "$SB" nebula) && RC=0 || RC=$?
 expect_eq "错误答案失败（只有一半暗号）" "$RC" "1"
 
 echo "—— 第 5 关 ——"
-export HASHTEAM_HTTP_PORT=18080  # 沙箱 8080 被平台占用，测试改用 18080
+# 沙箱 8080 常被平台占用，默认改用 18080；调用方可在并行任务中覆盖端口。
+export HASHTEAM_HTTP_PORT="${HASHTEAM_HTTP_PORT:-18080}"
 sandbox 5
 SB="$SB_DIR"
 run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-5/init.sh" >/dev/null
 sleep 1
-ROBOTS=$(cd "$SB/home/guest" && PATH="$STUB:$PATH" "$BUSYBOX" wget -q -O - http://127.0.0.1:18080/robots.txt)
+ROBOTS=$(cd "$SB/home/guest" && PATH="$STUB:$PATH" "$BUSYBOX" wget -q -O - "http://127.0.0.1:${HASHTEAM_HTTP_PORT}/robots.txt")
 expect_contains "$ROBOTS" "robots.txt 暴露隐藏路径" "backup.txt"
-TOKEN=$(cd "$SB/home/guest" && PATH="$STUB:$PATH" "$BUSYBOX" wget -q -O - http://127.0.0.1:18080/backup.txt)
+TOKEN=$(cd "$SB/home/guest" && PATH="$STUB:$PATH" "$BUSYBOX" wget -q -O - "http://127.0.0.1:${HASHTEAM_HTTP_PORT}/backup.txt")
 expect_contains "$TOKEN" "备份文件包含令牌" "dbg-token-8848"
 if OUT=$(run_check "$SB" dbg-token-8848); then RC=0; else RC=$?; fi
 expect_eq "正确答案通过" "$RC" "0"
 OUT=$(run_check "$SB" wrong-token) && RC=0 || RC=$?
 expect_eq "错误答案失败" "$RC" "1"
 # 服务停止后 check 应失败，reset-level 恢复后应通过
-pkill -x httpd || true
+stop_test_httpd
 sleep 1
 OUT=$(run_check "$SB" dbg-token-8848) && RC=0 || RC=$?
 expect_eq "服务停止时验证失败" "$RC" "1"
@@ -153,7 +163,7 @@ HOME="$SB/home/guest" PATH="$STUB:$PATH" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/h
 sleep 1
 if OUT=$(run_check "$SB" dbg-token-8848); then RC=0; else RC=$?; fi
 expect_eq "reset-level 后服务恢复并通过" "$RC" "0"
-pkill -x httpd || true
+stop_test_httpd
 
 echo "—— 第 6 关 ——"
 sandbox 6

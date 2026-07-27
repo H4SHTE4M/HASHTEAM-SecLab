@@ -24,6 +24,51 @@ class MemoryStorage implements StorageLike {
 }
 
 /**
+ * 对真实 Storage 做逐次容错。初始探针成功后仍可能因配额耗尽或浏览器策略变化
+ * 抛错，因此每次操作都同步一份内存副本，并在主存储失败时无缝降级。
+ */
+class ResilientStorage implements StorageLike {
+  private readonly fallback = new MemoryStorage()
+  private primaryAvailable = true
+
+  constructor(private readonly primary: Storage) {}
+
+  getItem(key: string): string | null {
+    if (!this.primaryAvailable) return this.fallback.getItem(key)
+    try {
+      const value = this.primary.getItem(key)
+      if (value !== null) this.fallback.setItem(key, value)
+      return value ?? this.fallback.getItem(key)
+    } catch {
+      this.primaryAvailable = false
+      return this.fallback.getItem(key)
+    }
+  }
+
+  setItem(key: string, value: string): void {
+    this.fallback.setItem(key, value)
+    if (!this.primaryAvailable) return
+    try {
+      this.primary.setItem(key, value)
+    } catch {
+      this.primaryAvailable = false
+      // 内存副本已写入，调用方无需处理浏览器配额或权限异常。
+    }
+  }
+
+  removeItem(key: string): void {
+    this.fallback.removeItem(key)
+    if (!this.primaryAvailable) return
+    try {
+      this.primary.removeItem(key)
+    } catch {
+      this.primaryAvailable = false
+      // 主存储不可用时，内存副本仍保持正确状态。
+    }
+  }
+}
+
+/**
  * 返回可用的持久化存储：优先 window.localStorage；若访问或写入被浏览器拒绝
  * （Safari 隐私模式、存储被禁用等），降级为内存存储。
  * useLabProgress 在模块加载阶段调用本函数，因此这里必须不抛--否则整个应用白屏。
@@ -36,7 +81,7 @@ export function createSafeStorage(): StorageLike {
     const probe = '__hashteam_probe__'
     storage.setItem(probe, '1')
     storage.removeItem(probe)
-    return storage
+    return new ResilientStorage(storage)
   } catch {
     return new MemoryStorage()
   }
@@ -55,12 +100,29 @@ export function createDefaultProgress(now: number = Date.now()): LabProgress {
 function isValidProgress(value: unknown, totalLevels: number): value is LabProgress {
   if (typeof value !== 'object' || value === null) return false
   const p = value as Partial<LabProgress>
-  if (typeof p.currentLevel !== 'number' || p.currentLevel < 1 || p.currentLevel > totalLevels) return false
+  if (!isLevelNumber(p.currentLevel, totalLevels)) return false
   if (!Array.isArray(p.completedLevels)) return false
-  if (p.completedLevels.some((l) => typeof l !== 'number' || l < 1 || l > totalLevels)) return false
+  if (p.completedLevels.some((level) => !isLevelNumber(level, totalLevels))) return false
+  if (new Set(p.completedLevels).size !== p.completedLevels.length) return false
   if (typeof p.hintsUsed !== 'object' || p.hintsUsed === null) return false
-  if (typeof p.startedAt !== 'number' || typeof p.updatedAt !== 'number') return false
+  if (
+    Object.entries(p.hintsUsed).some(([rawLevel, count]) => {
+      const level = Number(rawLevel)
+      return !isLevelNumber(level, totalLevels) || !Number.isInteger(count) || count < 0
+    })
+  ) {
+    return false
+  }
+  if (!isValidTimestamp(p.startedAt) || !isValidTimestamp(p.updatedAt)) return false
   return true
+}
+
+function isLevelNumber(value: unknown, totalLevels: number): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= totalLevels
+}
+
+function isValidTimestamp(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
 }
 
 /** 从存储中读取进度；数据缺失或损坏时返回全新进度 */

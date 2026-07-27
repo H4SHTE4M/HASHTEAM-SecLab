@@ -59,7 +59,13 @@ function toggleLogs(): void {
 </script>
 
 <template>
-  <div class="loading-overlay">
+  <div
+    class="loading-overlay"
+    :role="stage === 'error' ? 'alert' : 'status'"
+    :aria-live="stage === 'error' ? 'assertive' : 'polite'"
+    :aria-busy="stage !== 'error'"
+    aria-label="Linux 实验环境启动状态"
+  >
     <div class="loading-card">
       <div class="loading-brand">
         <span class="mark">#</span> HASHTEAM <span class="sub">Security Lab</span>
@@ -70,7 +76,7 @@ function toggleLogs(): void {
           <li v-for="item in STAGES" :key="item.key" class="stage-item" :class="stageState(item.key)">
             <span class="stage-icon">
               <template v-if="stageState(item.key) === 'done'">✓</template>
-              <template v-else-if="stageState(item.key) === 'active'"><span class="spinner" /></template>
+              <template v-else-if="stageState(item.key) === 'active'"><span class="spinner" aria-hidden="true" /></template>
               <template v-else>·</template>
             </span>
             <span>{{ item.label }}</span>
@@ -79,10 +85,16 @@ function toggleLogs(): void {
         <p class="loading-note">Linux 正在你的浏览器里本地启动，首次加载需要一些时间。</p>
 
         <div class="log-panel">
-          <button type="button" class="log-toggle" @click="toggleLogs">
+          <button
+            type="button"
+            class="log-toggle"
+            :aria-expanded="showLogs"
+            aria-controls="boot-log-list"
+            @click="toggleLogs"
+          >
             {{ showLogs ? '▾' : '▸' }} 启动日志 ({{ logs.length }})
           </button>
-          <div v-if="showLogs" ref="logContainer" class="log-list">
+          <div v-if="showLogs" id="boot-log-list" ref="logContainer" class="log-list">
             <p v-if="logs.length === 0" class="log-empty">暂无日志</p>
             <div
               v-for="entry in logs.slice(-80)"
@@ -124,6 +136,7 @@ function toggleLogs(): void {
 .loading-card {
   width: min(420px, 90vw);
   padding: 32px;
+  box-sizing: border-box;
   background: #0f1830;
   border: 1px solid #22314f;
   border-radius: 12px;

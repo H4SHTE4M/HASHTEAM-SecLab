@@ -72,6 +72,36 @@ describe('SerialProtocolParser', () => {
     expect(messages).toEqual([])
   })
 
+  it('已知消息类型字段缺失或类型错误时拒绝消息', () => {
+    const parser = new SerialProtocolParser()
+    const invalid = [
+      `${M}{"type":"level-ready"}\n`,
+      `${M}{"type":"level-result","level":"1","status":"passed"}\n`,
+      `${M}{"type":"level-result","level":1,"status":"unknown"}\n`,
+      `${M}{"type":"hint-request","level":0}\n`,
+      `${M}{"type":"progress","level":1,"value":"half"}\n`,
+      `${M}{"type":"error","message":""}\n`,
+      `${M}{"type":"unknown","level":1}\n`,
+    ].join('')
+
+    expect(parser.feed(invalid).messages).toEqual([])
+  })
+
+  it('逐类校验并保留合法协议字段', () => {
+    const parser = new SerialProtocolParser()
+    const input = [
+      `${M}{"type":"ready","version":1,"ignored":true}\n`,
+      `${M}{"type":"progress","level":2,"value":0.5}\n`,
+      `${M}{"type":"error","message":"检查失败"}\n`,
+    ].join('')
+
+    expect(parser.feed(input).messages).toEqual([
+      { type: 'ready', version: 1 },
+      { type: 'progress', level: 2, value: 0.5 },
+      { type: 'error', message: '检查失败' },
+    ])
+  })
+
   it('协议标记不在行首时按普通文本处理', () => {
     const parser = new SerialProtocolParser()
     const { display, messages } = parser.feed(`echo ${M}{"type":"ready"}\n`)

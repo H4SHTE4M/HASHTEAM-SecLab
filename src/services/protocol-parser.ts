@@ -75,12 +75,49 @@ export class SerialProtocolParser {
   private parseMessage(json: string): ProtocolMessage | null {
     try {
       const data: unknown = JSON.parse(json)
-      if (typeof data === 'object' && data !== null && typeof (data as { type?: unknown }).type === 'string') {
-        return data as ProtocolMessage
+      if (typeof data !== 'object' || data === null) return null
+      const value = data as Record<string, unknown>
+
+      switch (value.type) {
+        case 'ready':
+          if (value.version !== undefined && !isNonNegativeInteger(value.version)) return null
+          return value.version === undefined
+            ? { type: 'ready' }
+            : { type: 'ready', version: value.version as number }
+        case 'level-ready':
+          return isPositiveInteger(value.level) ? { type: 'level-ready', level: value.level } : null
+        case 'level-result':
+          return isPositiveInteger(value.level) && (value.status === 'passed' || value.status === 'failed')
+            ? { type: 'level-result', level: value.level, status: value.status }
+            : null
+        case 'hint-request':
+          return isPositiveInteger(value.level) ? { type: 'hint-request', level: value.level } : null
+        case 'progress':
+          return isPositiveInteger(value.level) && isFiniteNumber(value.value)
+            ? { type: 'progress', level: value.level, value: value.value }
+            : null
+        case 'error':
+          return typeof value.message === 'string' && value.message.length > 0
+            ? { type: 'error', message: value.message }
+            : null
+        default:
+          return null
       }
     } catch {
       // 非法协议内容：忽略，保证页面不崩溃
     }
     return null
   }
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return isFiniteNumber(value) && Number.isInteger(value) && value >= 0
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return isNonNegativeInteger(value) && value >= 1
 }

@@ -45,7 +45,15 @@ onBeforeUnmount(() => {
       <span class="brand-name">HASHTEAM</span>
       <span class="brand-sub">Security Lab</span>
     </div>
-    <div class="progress" title="关卡进度">
+    <div
+      class="progress"
+      title="关卡进度"
+      role="progressbar"
+      aria-label="已完成关卡"
+      aria-valuemin="0"
+      :aria-valuemax="total"
+      :aria-valuenow="completedCount"
+    >
       <span class="progress-label">进度</span>
       <span class="progress-value">{{ completedCount }} / {{ total }}</span>
     </div>
@@ -55,6 +63,7 @@ onBeforeUnmount(() => {
         type="button"
         class="btn"
         :class="{ 'btn-danger': confirming }"
+        :aria-label="confirming ? '再次点击以确认重新开始' : '重新开始全部关卡'"
         @click="handleResetAll"
       >
         {{ confirming ? '确认重新开始？' : '重新开始' }}
@@ -162,5 +171,35 @@ onBeforeUnmount(() => {
 .btn-ghost:hover {
   background: #16213a;
   color: #c7d3e8;
+}
+
+@media (max-width: 600px) {
+  .topbar {
+    height: auto;
+    min-height: 56px;
+    padding: 8px 12px;
+    gap: 8px 12px;
+    flex-wrap: wrap;
+    box-sizing: border-box;
+  }
+
+  .brand-sub {
+    display: none;
+  }
+
+  .progress {
+    margin-left: auto;
+  }
+
+  .actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .btn {
+    flex: 1;
+    padding-inline: 8px;
+    white-space: nowrap;
+  }
 }
 </style>

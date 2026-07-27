@@ -37,3 +37,20 @@ body {
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
+
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #7dd3fc;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

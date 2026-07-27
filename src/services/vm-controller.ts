@@ -32,13 +32,13 @@ export interface VmAssetConfig {
 }
 
 export const DEFAULT_VM_ASSETS: VmAssetConfig = {
-  libv86Url: 'v86/libv86.js',
-  wasmUrl: 'v86/v86.wasm',
-  biosUrl: 'v86/bios/seabios-256k.bin',
-  bzimageUrl: 'vm/bzImage',
-  // rootfs 会随 VM 脚本更新而变化，但 nginx 以 immutable 长缓存它；
-  // 用内容哈希做查询参数，内容一变 URL 即变，老用户不会卡在旧镜像上。
-  initrdUrl: `vm/rootfs.cpio.gz?v=${__ROOTFS_HASH__}`,
+  // 所有固定文件名资源共用构建期内容哈希。任一 VM 资源更新都会切换整组
+  // URL，避免 immutable 缓存造成 libv86、wasm、内核和 rootfs 版本错配。
+  libv86Url: `v86/libv86.js?v=${__VM_ASSETS_HASH__}`,
+  wasmUrl: `v86/v86.wasm?v=${__VM_ASSETS_HASH__}`,
+  biosUrl: `v86/bios/seabios-256k.bin?v=${__VM_ASSETS_HASH__}`,
+  bzimageUrl: `vm/bzImage?v=${__VM_ASSETS_HASH__}`,
+  initrdUrl: `vm/rootfs.cpio.gz?v=${__VM_ASSETS_HASH__}`,
   memorySize: 128 * 1024 * 1024,
   cmdline: 'console=ttyS0,115200n8 quiet loglevel=3',
 }
@@ -54,10 +54,20 @@ function loadLibV86(url: string): Promise<void> {
     script.src = url
     script.async = true
     script.onload = () => {
-      if (window.V86 !== undefined) resolve()
-      else reject(new Error('libv86.js 已加载，但未找到 V86 全局对象'))
+      if (window.V86 !== undefined) {
+        resolve()
+        return
+      }
+      scriptLoadingPromise = null
+      script.remove()
+      reject(new Error('libv86.js 已加载，但未找到 V86 全局对象'))
     }
-    script.onerror = () => reject(new Error(`无法加载脚本：${url}`))
+    script.onerror = () => {
+      // 失败 Promise 不能永久缓存，否则网络恢复后点击“重试”仍会立即失败。
+      scriptLoadingPromise = null
+      script.remove()
+      reject(new Error(`无法加载脚本：${url}`))
+    }
     document.head.appendChild(script)
   })
   return scriptLoadingPromise
@@ -72,6 +82,10 @@ async function assertAssetsReachable(urls: string[]): Promise<void> {
         response = await fetch(url, { method: 'HEAD' })
       } catch {
         throw new Error(`资源无法访问：${url}（网络错误）`)
+      }
+      if (response.status === 405 || response.status === 501) {
+        // 少数静态托管不支持 HEAD；用 Range GET 做兼容性探测。
+        response = await fetch(url, { headers: { Range: 'bytes=0-0' } })
       }
       if (!response.ok) {
         throw new Error(`资源缺失：${url}（HTTP ${response.status}）。请先运行 vm/build.sh 构建虚拟机资源，详见 README。`)
@@ -90,6 +104,7 @@ export class V86Controller implements VirtualMachineController {
   private readonly decoder = new TextDecoder('utf-8')
   /** 串口原始输出行缓冲（仅用于日志，不影响显示/协议解析） */
   private serialLogLine = ''
+  private stopRequested = false
   private readonly byteHandler = (byte: number): void => {
     const text = this.decoder.decode(new Uint8Array([byte]), { stream: true })
     if (text === '') return
@@ -111,6 +126,7 @@ export class V86Controller implements VirtualMachineController {
 
   async start(): Promise<void> {
     if (this.emulator !== null) return
+    this.stopRequested = false
     this.onStageChange('loading-assets')
     // WASM 能力门：v86 硬依赖 WebAssembly。es2020 构建目标已隐式筛掉过旧浏览器，
     // 这里只拦截「WebAssembly 被手动禁用」这类极罕见情况，给出明确错误而非
@@ -120,14 +136,17 @@ export class V86Controller implements VirtualMachineController {
     }
     log('boot', '加载 libv86.js…')
     await loadLibV86(this.assets.libv86Url)
+    this.assertStartActive()
     log('boot', 'libv86.js 已加载')
     const assetUrls = [this.assets.wasmUrl, this.assets.biosUrl, this.assets.bzimageUrl, this.assets.initrdUrl]
     log('boot', `预检资源可达性：${assetUrls.join(', ')}`)
     await assertAssetsReachable(assetUrls)
+    this.assertStartActive()
     // 预编译 wasm：v86 内部 autostart 后会异步先试 v86.wasm、失败再退 v86-fallback.wasm，
     // 若两个变体都无法实例化，rejection 会以 unhandled 形式漏过 boot() 的 try/catch。
     // 在构造 v86 前同步预编译，把这条罕见失败路径接进现有错误重试流程。
     await this.assertWasmCompilable()
+    this.assertStartActive()
     log('boot', '资源预检通过，开始实例化 v86')
 
     const V86 = window.V86
@@ -195,11 +214,17 @@ export class V86Controller implements VirtualMachineController {
   }
 
   async stop(): Promise<void> {
+    this.stopRequested = true
+    this.serialCallbacks.clear()
     if (this.emulator === null) return
     this.emulator.remove_listener('serial0-output-byte', this.byteHandler)
     this.emulator.stop()
     this.emulator = null
     this.onStageChange('idle')
+  }
+
+  private assertStartActive(): void {
+    if (this.stopRequested) throw new Error('虚拟机启动已取消')
   }
 
   /** 整机重启：回到一个全新的 Linux 环境（内存环境，重启即还原） */

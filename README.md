@@ -97,6 +97,7 @@ pnpm dev            # 启动开发服务器（默认 http://localhost:5173）
 
 ```bash
 pnpm test               # 前端单元测试（协议解析、进度持久化）
+pnpm test:watch         # Vitest 监听模式，适合本地迭代
 pnpm test:vm            # Linux 检查脚本测试（需要 busybox，见下）
 pnpm test:integration   # 端到端测试：Node 无头启动真实虚拟机通关全部 6 关
 pnpm build              # vue-tsc 严格类型检查 + 生产构建（输出 dist/）
@@ -105,6 +106,9 @@ pnpm build              # vue-tsc 严格类型检查 + 生产构建（输出 dis
 
 `pnpm test:vm` 需要一个 busybox 静态二进制：运行过 `vm/build.sh` 后会自动
 使用 `vm/.cache/busybox`；也可以通过 `BUSYBOX=/path/to/busybox` 指定。
+
+仓库内的 `.github/workflows/ci.yml` 会在 push 与 pull request 时运行单元/
+组件测试、Linux 检查脚本、真实 VM 集成测试和生产构建。
 
 ## 7. Linux 镜像构建方法
 
@@ -205,6 +209,8 @@ pnpm build     # 输出 dist/（约 7.4 MB，含全部虚拟机资源）
 
 注意：首次加载会下载约 7MB 资源，建议托管方开启 gzip/br 与长缓存
 （`v86.wasm`、`bzImage`、`rootfs.cpio.gz` 内容稳定，适合强缓存）。
+构建会为整组 VM 资源计算统一内容哈希并附加到 URL；任一资源更新都会整体
+切换缓存版本，避免运行时、内核与 rootfs 新旧混用。
 
 ## 11. 已知限制
 

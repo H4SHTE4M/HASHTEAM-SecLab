@@ -2,4 +2,10 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import './styles/global.css'
 
-createApp(App).mount('#app')
+const app = createApp(App)
+
+app.config.errorHandler = (error, instance, info) => {
+  console.error('[hashteam] Vue 运行时错误', { error, component: instance?.$options.name, info })
+}
+
+app.mount('#app')

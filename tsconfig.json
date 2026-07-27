@@ -13,7 +13,7 @@
     "isolatedModules": true,
     "useDefineForClassFields": true,
     "jsx": "preserve",
-    "types": ["vite/client"],
+    "types": ["vite/client", "node"],
     "noEmit": true
   },
   "include": ["src/**/*.ts", "src/**/*.vue", "tests/**/*.ts", "vite.config.ts"]

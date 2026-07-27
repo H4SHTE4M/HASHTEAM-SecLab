@@ -34,6 +34,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   unsubscribeDisplay?.()
   unsubscribeDisplay = null
+  void vm.dispose()
 })
 
 function handleTerminalInput(data: string): void {
@@ -99,6 +100,7 @@ function handleResetAll(): void {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   background: #0a101f;
   color: #d6deeb;
 }
