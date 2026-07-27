@@ -3,7 +3,7 @@ import type { LabProgress } from '../types/lab'
 import { TOTAL_LEVELS } from '../data/levels'
 import {
   completeLevel,
-  createDefaultProgress,
+  createSafeStorage,
   loadProgress,
   recordHint,
   resetAllProgress,
@@ -14,8 +14,8 @@ import {
  * 关卡进度（模块级单例，LocalStorage 持久化）。
  * 刷新页面后已完成关卡与提示使用情况都会保留。
  */
-const storage = window.localStorage
-const initial = typeof window === 'undefined' ? createDefaultProgress() : loadProgress(storage, TOTAL_LEVELS)
+const storage = createSafeStorage()
+const initial = loadProgress(storage, TOTAL_LEVELS)
 const state = reactive<LabProgress>(initial)
 
 export function useLabProgress() {

@@ -9,6 +9,39 @@ export interface StorageLike {
   removeItem(key: string): void
 }
 
+/** 内存兜底存储：localStorage 不可用时使用，保证进度层不抛错、不白屏 */
+class MemoryStorage implements StorageLike {
+  private readonly store = new Map<string, string>()
+  getItem(key: string): string | null {
+    return this.store.get(key) ?? null
+  }
+  setItem(key: string, value: string): void {
+    this.store.set(key, value)
+  }
+  removeItem(key: string): void {
+    this.store.delete(key)
+  }
+}
+
+/**
+ * 返回可用的持久化存储：优先 window.localStorage；若访问或写入被浏览器拒绝
+ * （Safari 隐私模式、存储被禁用等），降级为内存存储。
+ * useLabProgress 在模块加载阶段调用本函数，因此这里必须不抛--否则整个应用白屏。
+ */
+export function createSafeStorage(): StorageLike {
+  if (typeof window === 'undefined') return new MemoryStorage()
+  try {
+    const storage = window.localStorage
+    // Safari 隐私模式下 localStorage 对象存在但 setItem 抛 SecurityError，需实测探针
+    const probe = '__hashteam_probe__'
+    storage.setItem(probe, '1')
+    storage.removeItem(probe)
+    return storage
+  } catch {
+    return new MemoryStorage()
+  }
+}
+
 export function createDefaultProgress(now: number = Date.now()): LabProgress {
   return {
     currentLevel: 1,

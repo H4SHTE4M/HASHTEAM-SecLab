@@ -36,7 +36,9 @@ export const DEFAULT_VM_ASSETS: VmAssetConfig = {
   wasmUrl: 'v86/v86.wasm',
   biosUrl: 'v86/bios/seabios-256k.bin',
   bzimageUrl: 'vm/bzImage',
-  initrdUrl: 'vm/rootfs.cpio.gz',
+  // rootfs 会随 VM 脚本更新而变化，但 nginx 以 immutable 长缓存它；
+  // 用内容哈希做查询参数，内容一变 URL 即变，老用户不会卡在旧镜像上。
+  initrdUrl: `vm/rootfs.cpio.gz?v=${__ROOTFS_HASH__}`,
   memorySize: 128 * 1024 * 1024,
   cmdline: 'console=ttyS0,115200n8 quiet loglevel=3',
 }
@@ -110,12 +112,22 @@ export class V86Controller implements VirtualMachineController {
   async start(): Promise<void> {
     if (this.emulator !== null) return
     this.onStageChange('loading-assets')
+    // WASM 能力门：v86 硬依赖 WebAssembly。es2020 构建目标已隐式筛掉过旧浏览器，
+    // 这里只拦截「WebAssembly 被手动禁用」这类极罕见情况，给出明确错误而非
+    // 让 v86 在 new V86() 之后异步抛出模糊异常、漏过 boot() 的 try/catch。
+    if (typeof WebAssembly !== 'object' || typeof WebAssembly.instantiate !== 'function') {
+      throw new Error('当前浏览器不支持或已禁用 WebAssembly，请使用 Chrome / Edge / Firefox / Safari 最新版打开。')
+    }
     log('boot', '加载 libv86.js…')
     await loadLibV86(this.assets.libv86Url)
     log('boot', 'libv86.js 已加载')
     const assetUrls = [this.assets.wasmUrl, this.assets.biosUrl, this.assets.bzimageUrl, this.assets.initrdUrl]
     log('boot', `预检资源可达性：${assetUrls.join(', ')}`)
     await assertAssetsReachable(assetUrls)
+    // 预编译 wasm：v86 内部 autostart 后会异步先试 v86.wasm、失败再退 v86-fallback.wasm，
+    // 若两个变体都无法实例化，rejection 会以 unhandled 形式漏过 boot() 的 try/catch。
+    // 在构造 v86 前同步预编译，把这条罕见失败路径接进现有错误重试流程。
+    await this.assertWasmCompilable()
     log('boot', '资源预检通过，开始实例化 v86')
 
     const V86 = window.V86
@@ -146,6 +158,40 @@ export class V86Controller implements VirtualMachineController {
     this.emulator.add_listener('serial0-output-byte', this.byteHandler)
     log('boot', 'v86 已构造（autostart），等待 Linux 内核引导与 init 发出 ready 协议…')
     this.onStageChange('preparing-env')
+  }
+
+  /**
+   * 预编译 wasm 变体，把「浏览器跑不动 v86」的罕见失败从异步 unhandled rejection
+   * 拉回同步 try/catch。v86.wasm（优化版）编译失败时退查 v86-fallback.wasm；仅当
+   * 两者都无法编译才报错——单一变体可编译即交由 v86 自行 instantiate 与选择。
+   *
+   * 注意：compile 成功只代表「能编译」，不等价于 instantiate 必然成功（v86 仍可能
+   * 因 import 表不匹配等自身原因失败）；本检查只覆盖浏览器能力层面的最坏情况。
+   */
+  private async assertWasmCompilable(): Promise<void> {
+    const fallbackUrl = this.assets.wasmUrl.replace('v86.wasm', 'v86-fallback.wasm')
+    if (await this.canCompileWasm(this.assets.wasmUrl)) {
+      log('boot', 'wasm 主变体可编译')
+      return
+    }
+    log('boot', 'wasm 主变体编译失败，检查 fallback 变体', 'warn')
+    if (await this.canCompileWasm(fallbackUrl)) {
+      log('boot', 'wasm fallback 变体可编译，交由 v86 自行选择')
+      return
+    }
+    throw new Error('当前浏览器无法编译 v86 的 WebAssembly 模块（主版本与 fallback 版本均失败），请升级浏览器至最新版后重试。')
+  }
+
+  /** 拉取并尝试编译 wasm；任何失败（网络/编译）一律返回 false，由调用方决定处置 */
+  private async canCompileWasm(url: string): Promise<boolean> {
+    try {
+      const response = await fetch(url)
+      if (!response.ok) return false
+      await WebAssembly.compile(await response.arrayBuffer())
+      return true
+    } catch {
+      return false
+    }
   }
 
   async stop(): Promise<void> {
