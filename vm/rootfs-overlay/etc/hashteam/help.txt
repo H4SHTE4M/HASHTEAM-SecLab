@@ -1,0 +1,13 @@
+实验辅助命令：
+  help            显示本帮助
+  status          查看当前关卡状态
+  check <答案>    验证当前关卡是否完成
+  hint            在右侧任务面板显示一条提示
+  reset-level     重置当前关卡的实验环境
+  hashteamctl     关卡管理（goto N / reset-level / factory-reset）
+
+常用 Linux 命令：
+  ls cd pwd cat echo grep sed awk find sort uniq head tail
+  base64 xxd hexdump strings file curl wget vi less ps kill
+
+小提示：右侧任务面板中的「建议命令」点击即可送入终端运行。

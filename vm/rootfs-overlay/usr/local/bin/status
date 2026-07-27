@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+level=$(cat "$HOME/.hashteam/level" 2>/dev/null || echo 1)
+echo "当前关卡：第 $level 关"
+echo "完成后运行 check 验证；卡住时可以输入 hint。"

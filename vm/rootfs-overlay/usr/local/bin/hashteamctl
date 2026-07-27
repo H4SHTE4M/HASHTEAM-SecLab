@@ -1,0 +1,52 @@
+#!/bin/sh
+# 关卡管理器：切换 / 重置关卡环境，并通过串口协议通知前端
+set -eu
+
+STATE_DIR="$HOME/.hashteam"
+LEVELS_DIR="${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}"
+
+current_level() {
+    cat "$STATE_DIR/level" 2>/dev/null || echo 1
+}
+
+run_init() {
+    sh "$LEVELS_DIR/level-$1/init.sh"
+}
+
+cmd=${1:-}
+case "$cmd" in
+    goto)
+        level=${2:-}
+        case "$level" in
+            ''|*[!0-9]*) echo "无效的关卡编号: $level" >&2; exit 2 ;;
+        esac
+        if [ ! -d "$LEVELS_DIR/level-$level" ]; then
+            echo "关卡 $level 不存在" >&2
+            exit 2
+        fi
+        mkdir -p "$STATE_DIR"
+        echo "$level" > "$STATE_DIR/level"
+        run_init "$level"
+        printf '@@HASHTEAM:{"type":"level-ready","level":%s}\n' "$level"
+        ;;
+    reset-level)
+        level=$(current_level)
+        echo "正在重置第 $level 关的实验环境..."
+        run_init "$level"
+        printf '@@HASHTEAM:{"type":"level-ready","level":%s}\n' "$level"
+        ;;
+    factory-reset)
+        rm -rf "$STATE_DIR"
+        mkdir -p "$STATE_DIR"
+        echo 1 > "$STATE_DIR/level"
+        run_init 1
+        printf '@@HASHTEAM:{"type":"level-ready","level":1}\n'
+        ;;
+    current)
+        current_level
+        ;;
+    *)
+        echo "用法: hashteamctl <goto N | reset-level | factory-reset | current>" >&2
+        exit 2
+        ;;
+esac

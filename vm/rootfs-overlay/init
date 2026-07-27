@@ -1,0 +1,18 @@
+#!/bin/busybox sh
+# HASHTEAM Security Lab initramfs 初始化
+set -eu
+export PATH=/usr/local/bin:/bin:/usr/bin:/sbin
+
+/bin/busybox --install -s /bin
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev
+mount -t tmpfs -o mode=1777 tmp /tmp
+
+hostname -F /etc/hostname
+# 仅启用回环：第 5 关的 Web 服务只监听 127.0.0.1
+ifconfig lo 127.0.0.1 up
+
+echo "HASHTEAM Security Lab 正在进入实验环境..."
+# 以普通用户 guest 自动登录（root 切换无需密码）
+exec setsid cttyhack su - guest

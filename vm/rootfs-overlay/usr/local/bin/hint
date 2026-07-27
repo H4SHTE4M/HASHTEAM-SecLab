@@ -1,0 +1,6 @@
+#!/bin/sh
+# 请求前端显示一条提示
+set -eu
+level=$(cat "$HOME/.hashteam/level" 2>/dev/null || echo 1)
+printf '@@HASHTEAM:{"type":"hint-request","level":%s}\n' "$level"
+echo "提示已显示在右侧任务面板中。"

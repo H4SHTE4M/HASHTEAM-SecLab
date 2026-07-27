@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+# Linux 检查脚本测试（宿主机版）：
+# 用 busybox 在临时 HOME 中运行每一关的 init.sh + check 流程，验证：
+#   - 正确答案通过（退出码 0，且 check 包装器输出 passed 协议）
+#   - 错误答案失败（非零退出码，且输出 error 协议）
+#   - 未完成状态失败（缺少挑战文件时失败）
+#   - 使用不同但合法的方法完成时仍能通过
+#
+# 运行：scripts/test-vm-checks.sh  （可用 BUSYBOX=/path/busybox 指定二进制）
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OVERLAY="$ROOT/vm/rootfs-overlay"
+export HASHTEAM_LEVELS_DIR="$OVERLAY/opt/hashteam/levels"
+
+BUSYBOX="${BUSYBOX:-}"
+if [ -z "$BUSYBOX" ]; then
+    for cand in /tmp/busybox "$(command -v busybox || true)"; do
+        if [ -n "$cand" ] && [ -x "$cand" ]; then
+            BUSYBOX="$cand"
+            break
+        fi
+    done
+fi
+if [ -z "$BUSYBOX" ]; then
+    echo "错误：找不到 busybox 静态二进制。请先运行 vm/build.sh，或设置 BUSYBOX=/path/to/busybox" >&2
+    exit 1
+fi
+
+WORK="$(mktemp -d)"
+trap 'pkill -x httpd 2>/dev/null || true; rm -rf "$WORK"' EXIT
+
+# 统一的 applet 环境：尽量使用 busybox（贴近 VM 内行为）
+STUB="$WORK/stub-bin"
+mkdir -p "$STUB"
+for app in sh grep sed awk tr cat cp mkdir rm kill sleep printf tail head sort uniq base64 strings od dd cut wc; do
+    ln -sf "$BUSYBOX" "$STUB/$app"
+done
+
+PASS=0
+FAIL=0
+ok() { PASS=$((PASS + 1)); echo "  ✓ $1"; }
+bad() { FAIL=$((FAIL + 1)); echo "  ✗ $1" >&2; }
+expect_eq() { # desc actual expected
+    if [ "$2" = "$3" ]; then ok "$1"; else bad "$1（期望 $3，实际 $2）"; fi
+}
+expect_contains() { # desc haystack needle
+    case "$1" in *"$3"*) ok "$2" ;; *) bad "$2（输出中未找到：$3）" ;; esac
+}
+
+# 为某关准备独立沙箱：HOME + 当前关卡号（每次调用都是独立目录）
+SB_N=0
+SB_DIR=
+sandbox() { # level —— 结果放在全局变量 SB_DIR（不能用命令替换，子shell会丢计数）
+    SB_N=$((SB_N + 1))
+    SB_DIR="$WORK/sb${SB_N}-l$1"
+    mkdir -p "$SB_DIR/home/guest/.hashteam"
+    echo "$1" > "$SB_DIR/home/guest/.hashteam/level"
+}
+run_level() { # sandbox script [args...]
+    local sb="$1"; shift
+    HOME="$sb/home/guest" HASHTEAM_USER=guest PATH="$STUB:$PATH" "$BUSYBOX" sh "$@"
+}
+run_check() { # sandbox [args...] → 运行 check 包装器
+    local sb="$1"; shift
+    HOME="$sb/home/guest" HASHTEAM_USER=guest PATH="$STUB:$PATH" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/check" "$@"
+}
+
+echo "使用 busybox: $BUSYBOX"
+echo
+
+echo "—— 第 1 关 ——"
+sandbox 1
+SB="$SB_DIR"
+run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-1/init.sh" >/dev/null
+if OUT=$(run_check "$SB" first-light); then RC=0; else RC=$?; fi
+expect_eq "正确答案通过（退出码 0）" "$RC" "0"
+expect_contains "$OUT" "输出 passed 协议" '"status":"passed"'
+OUT=$(run_check "$SB" wrong-answer) && RC=0 || RC=$?
+expect_eq "错误答案失败（退出码 1）" "$RC" "1"
+expect_contains "$OUT" "输出 error 协议" '"type":"error"'
+sandbox 1
+SB2="$SB_DIR"  # 未运行 init：未完成状态
+OUT=$(run_check "$SB2" first-light) && RC=0 || RC=$?
+expect_eq "未完成状态失败（README 缺失）" "$RC" "1"
+
+echo "—— 第 2 关 ——"
+sandbox 2
+SB="$SB_DIR"
+run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-2/init.sh" >/dev/null
+if [ -f "$SB/home/guest/.message" ]; then ok "隐藏文件已创建"; else bad "隐藏文件未创建"; fi
+if OUT=$(run_check "$SB" dotfile-42); then RC=0; else RC=$?; fi
+expect_eq "正确答案通过" "$RC" "0"
+OUT=$(run_check "$SB" wrong) && RC=0 || RC=$?
+expect_eq "错误答案失败" "$RC" "1"
+rm "$SB/home/guest/.message"
+OUT=$(run_check "$SB" dotfile-42) && RC=0 || RC=$?
+expect_eq "未完成状态失败（隐藏文件被删）" "$RC" "1"
+
+echo "—— 第 3 关 ——"
+sandbox 3
+SB="$SB_DIR"
+run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-3/init.sh" >/dev/null
+TOP=$(cd "$SB/home/guest" && PATH="$STUB:$PATH" "$STUB/grep" 'Failed password' auth.log | "$STUB/awk" '{print $11}' | "$STUB/sort" | "$STUB/uniq" -c | "$STUB/sort" -nr | "$STUB/head" -1 | "$STUB/awk" '{print $2}')
+expect_eq "目标管道统计结果正确" "$TOP" "203.0.113.66"
+# 不同但合法的方法：逐 IP 计数比较
+ALT=$(cd "$SB/home/guest" && for ip in $(PATH="$STUB:$PATH" "$STUB/awk" '/Failed password/{print $11}' auth.log | "$STUB/sort" -u); do echo "$(PATH="$STUB:$PATH" "$STUB/grep" 'Failed password' auth.log | "$STUB/grep" -c "$ip") $ip"; done | "$STUB/sort" -nr | "$STUB/head" -1 | "$STUB/awk" '{print $2}')
+expect_eq "另一种合法统计方法结果一致" "$ALT" "203.0.113.66"
+if OUT=$(run_check "$SB" 203.0.113.66); then RC=0; else RC=$?; fi
+expect_eq "正确答案通过" "$RC" "0"
+OUT=$(run_check "$SB" 198.51.100.23) && RC=0 || RC=$?
+expect_eq "错误答案失败（日志中存在但非最多）" "$RC" "1"
+OUT=$(run_check "$SB" 9.9.9.9) && RC=0 || RC=$?
+expect_eq "错误答案失败（不在日志中）" "$RC" "1"
+sandbox 3
+SB2="$SB_DIR"
+OUT=$(run_check "$SB2" 203.0.113.66) && RC=0 || RC=$?
+expect_eq "未完成状态失败（auth.log 缺失）" "$RC" "1"
+
+echo "—— 第 4 关 ——"
+sandbox 4
+SB="$SB_DIR"
+run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-4/init.sh" >/dev/null
+FRAG1=$(cd "$SB/home/guest" && PATH="$STUB:$PATH" "$STUB/base64" -d message.b64 | "$STUB/grep" -o 'nebula')
+expect_eq "base64 还原出碎片 1" "$FRAG1" "nebula"
+FRAG2=$(cd "$SB/home/guest" && PATH="$STUB:$PATH" "$STUB/strings" secret.bin | "$STUB/grep" -o 'comet-7' | "$STUB/head" -1)
+expect_eq "strings 提取出碎片 2" "$FRAG2" "comet-7"
+if OUT=$(run_check "$SB" nebula-comet-7); then RC=0; else RC=$?; fi
+expect_eq "正确答案通过" "$RC" "0"
+OUT=$(run_check "$SB" nebula) && RC=0 || RC=$?
+expect_eq "错误答案失败（只有一半暗号）" "$RC" "1"
+
+echo "—— 第 5 关 ——"
+export HASHTEAM_HTTP_PORT=18080  # 沙箱 8080 被平台占用，测试改用 18080
+sandbox 5
+SB="$SB_DIR"
+run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-5/init.sh" >/dev/null
+sleep 1
+ROBOTS=$(cd "$SB/home/guest" && PATH="$STUB:$PATH" "$BUSYBOX" wget -q -O - http://127.0.0.1:18080/robots.txt)
+expect_contains "$ROBOTS" "robots.txt 暴露隐藏路径" "backup.txt"
+TOKEN=$(cd "$SB/home/guest" && PATH="$STUB:$PATH" "$BUSYBOX" wget -q -O - http://127.0.0.1:18080/backup.txt)
+expect_contains "$TOKEN" "备份文件包含令牌" "dbg-token-8848"
+if OUT=$(run_check "$SB" dbg-token-8848); then RC=0; else RC=$?; fi
+expect_eq "正确答案通过" "$RC" "0"
+OUT=$(run_check "$SB" wrong-token) && RC=0 || RC=$?
+expect_eq "错误答案失败" "$RC" "1"
+# 服务停止后 check 应失败，reset-level 恢复后应通过
+pkill -x httpd || true
+sleep 1
+OUT=$(run_check "$SB" dbg-token-8848) && RC=0 || RC=$?
+expect_eq "服务停止时验证失败" "$RC" "1"
+HOME="$SB/home/guest" PATH="$STUB:$PATH" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" reset-level >/dev/null
+sleep 1
+if OUT=$(run_check "$SB" dbg-token-8848); then RC=0; else RC=$?; fi
+expect_eq "reset-level 后服务恢复并通过" "$RC" "0"
+pkill -x httpd || true
+
+echo "—— 第 6 关 ——"
+sandbox 6
+SB="$SB_DIR"
+run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-6/init.sh" >/dev/null
+OUT=$(run_check "$SB") && RC=0 || RC=$?
+expect_eq "未完成状态失败（3 处不安全）" "$RC" "1"
+expect_contains "$OUT" "报告待修复数量" "还有 3 处"
+cd "$SB/home/guest" && PATH="$STUB:$PATH" "$STUB/sed" -i 's/debug=true/debug=false/' server.conf
+OUT=$(run_check "$SB") && RC=0 || RC=$?
+expect_contains "$OUT" "只修一处仍有 2 处不达标" "还有 2 处"
+# 方法 1：sed 全部修复
+cd "$SB/home/guest" && PATH="$STUB:$PATH" "$STUB/sed" -i 's/allow_guest=true/allow_guest=false/' server.conf && PATH="$STUB:$PATH" "$STUB/sed" -i 's/listen=0.0.0.0/listen=127.0.0.1/' server.conf
+if OUT=$(run_check "$SB"); then RC=0; else RC=$?; fi
+expect_eq "sed 修复后通过" "$RC" "0"
+# 方法 2：整体重写文件（不同但合法的方法）
+sandbox 6
+SB2="$SB_DIR"
+run_level "$SB2" "$HASHTEAM_LEVELS_DIR/level-6/init.sh" >/dev/null
+cat > "$SB2/home/guest/server.conf" <<'CONF'
+debug=false
+allow_guest=false
+listen=127.0.0.1
+max_connections=100
+CONF
+if OUT=$(run_check "$SB2"); then RC=0; else RC=$?; fi
+expect_eq "重写文件修复后同样通过" "$RC" "0"
+
+echo
+echo "—— 结果：$PASS 通过，$FAIL 失败 ——"
+[ "$FAIL" -eq 0 ]

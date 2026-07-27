@@ -1,0 +1,22 @@
+#!/bin/sh
+# 关卡验证入口：调用当前关卡的 check.sh，并向前端发送验证结果
+set -u
+
+STATE_DIR="$HOME/.hashteam"
+level=$(cat "$STATE_DIR/level" 2>/dev/null || echo 1)
+LEVELS_DIR="${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}"
+script="$LEVELS_DIR/level-$level/check.sh"
+
+if [ ! -f "$script" ]; then
+    echo "当前关卡没有检查脚本。" >&2
+    exit 2
+fi
+
+if sh "$script" "$@"; then
+    printf '@@HASHTEAM:{"type":"level-result","level":%s,"status":"passed"}\n' "$level"
+    exit 0
+else
+    rc=$?
+    printf '@@HASHTEAM:{"type":"error","message":"level %s check failed"}\n' "$level"
+    exit "$rc"
+fi

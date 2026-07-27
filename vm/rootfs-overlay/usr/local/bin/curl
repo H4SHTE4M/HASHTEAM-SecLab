@@ -1,0 +1,16 @@
+#!/bin/sh
+# curl 兼容层：基于 busybox wget，仅支持本实验所需的基本用法
+set -eu
+url=""
+for arg in "$@"; do
+    case "$arg" in
+        -s|--silent|-S|-i|-v|-L) : ;;
+        http://*|https://*) url="$arg" ;;
+        *) echo "curl(兼容层): 不支持的参数 $arg（仅支持 curl [选项] URL）" >&2; exit 2 ;;
+    esac
+done
+if [ -z "$url" ]; then
+    echo "用法: curl [-s] <URL>" >&2
+    exit 2
+fi
+exec wget -q -O - "$url"

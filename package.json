@@ -1,0 +1,30 @@
+{
+  "name": "hashteam-web-lab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "HASHTEAM Security Lab - 浏览器内运行的交互式 Linux 安全新手村",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:vm": "sh scripts/test-vm-checks.sh",
+    "test:integration": "node scripts/integration-test.mjs",
+    "build:vm": "sh vm/build.sh"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "v86": "^0.5.424",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "jsdom": "^25.0.1",
+    "typescript": "~5.7.3",
+    "vite": "^6.0.7",
+    "vitest": "^3.0.4",
+    "vue-tsc": "^2.2.8"
+  }
+}

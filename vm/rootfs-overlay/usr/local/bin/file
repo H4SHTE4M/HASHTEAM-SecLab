@@ -1,0 +1,32 @@
+#!/bin/sh
+# 极简 file(1) 替代实现：识别常见魔数，否则区分文本 / 二进制
+set -u
+if [ $# -eq 0 ]; then
+    echo "用法: file <文件...>" >&2
+    exit 2
+fi
+for f in "$@"; do
+    if [ -d "$f" ]; then
+        echo "$f: directory"
+        continue
+    fi
+    if [ ! -r "$f" ]; then
+        echo "$f: cannot open (No such file or directory)"
+        continue
+    fi
+    magic=$(dd if="$f" bs=1 count=4 2>/dev/null | od -An -tx1 | tr -d ' \n')
+    case "$magic" in
+        7f454c46*) echo "$f: ELF executable"; continue ;;
+        1f8b*)     echo "$f: gzip compressed data"; continue ;;
+        25504446*) echo "$f: PDF document"; continue ;;
+        504b*)     echo "$f: Zip archive data"; continue ;;
+    esac
+    # 存在控制字符（除 \t \n \r）→ 二进制 data；否则文本
+    if [ -n "$(tr -d '\t\n\r\040-\176\200-\377' < "$f" | head -c 1)" ]; then
+        echo "$f: data"
+    elif [ -n "$(tr -d '\000-\177' < "$f" | head -c 1)" ]; then
+        echo "$f: UTF-8 Unicode text"
+    else
+        echo "$f: ASCII text"
+    fi
+done

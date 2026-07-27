@@ -1,0 +1,5 @@
+export PATH=/usr/local/bin:/bin:/usr/bin:/sbin
+export PS1='\u@hashteam:\w\$ '
+umask 022
+# busybox ash 自带 help 内建命令会遮蔽 PATH，用别名指向实验帮助
+alias help='cat /etc/hashteam/help.txt'
