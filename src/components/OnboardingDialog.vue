@@ -96,7 +96,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="onboarding-layer">
+  <!-- 需要观察终端的教学步骤（0-1）降低遮罩透明度，其余步骤压暗背景聚焦弹窗 -->
+  <div class="onboarding-layer" :class="{ 'focus-terminal': tutorialStep >= 0 && tutorialStep <= 1 }">
     <div
       v-if="tutorialStep >= 0 && tutorialStep <= 1"
       class="terminal-highlight"
@@ -233,8 +234,14 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: flex-end;
   padding: 20px;
-  background: rgba(5, 9, 18, 0.12);
+  background: rgba(5, 9, 18, 0.55);
   box-sizing: border-box;
+  transition: background-color 0.3s ease;
+}
+
+/* 教学步骤 0-1 需要阅读终端内容，遮罩调亮 */
+.onboarding-layer.focus-terminal {
+  background: rgba(5, 9, 18, 0.12);
 }
 
 .terminal-highlight {
@@ -243,6 +250,8 @@ onBeforeUnmount(() => {
   border: 2px solid rgba(56, 189, 248, 0.65);
   border-radius: 12px;
   box-shadow: inset 0 0 30px rgba(56, 189, 248, 0.08);
+  /* 装饰性元素：不拦截点击，允许与卡片交叠时直接点到卡片 */
+  pointer-events: none;
 }
 
 .terminal-highlight span {
@@ -258,6 +267,9 @@ onBeforeUnmount(() => {
 }
 
 .onboarding-card {
+  /* 高亮框（absolute）会压静态元素，卡片需要显式建立层级盖过它 */
+  position: relative;
+  z-index: 1;
   width: min(460px, 100%);
   max-height: calc(100vh - 40px);
   overflow-y: auto;
@@ -539,8 +551,10 @@ kbd {
     display: none;
   }
 
-  .onboarding-layer {
+  .onboarding-layer,
+  .onboarding-layer.focus-terminal {
     justify-content: center;
+    /* 窄屏为上下堆叠布局、无高亮框，各步骤统一遮罩 */
     background: rgba(5, 9, 18, 0.45);
   }
 }
