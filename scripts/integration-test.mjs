@@ -100,6 +100,25 @@ async function main() {
     await waitFor(/first-light/)
   })
 
+  await step('SUID 边界：仅 su/passwd，普通命令进入独立 helper', async () => {
+    send("stat -c 'SUID=%a:%u:%g' /bin/busybox-suid")
+    await waitFor(/SUID=4755:0:0/)
+    send("echo APPLETS=$(/bin/busybox-suid --list | tr '\\n' ',')")
+    await waitFor(/APPLETS=passwd,su,/)
+
+    // /etc/profile 的别名必须覆盖主 BusyBox ash 的内建 applet；进入密码
+    // 提示即证明 su/passwd 已通过独立 helper 的 SUID 检查。
+    send('su -c id')
+    await waitFor(/Password:/)
+    emulator.serial0_send('\x03')
+    await waitFor(/guest@hashteam:/)
+
+    send('passwd')
+    await waitFor(/Old password:/)
+    emulator.serial0_send('\x03')
+    await waitFor(/guest@hashteam:/)
+  })
+
   await step('第 1 关：错误答案失败', async () => {
     send('check wrong-token')
     await waitFor(/✗ 通行证不对/)

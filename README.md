@@ -81,8 +81,10 @@
 
 - Node.js ≥ 18（建议 20+）与 pnpm 10
 - Python 3（打包 initramfs）
-- 仅当需要**重新构建内核**时：gcc、make、flex、bison、bc、xz
-  （仅重新打包 initramfs 不需要编译工具链）
+- 重新构建 VM 资源时：make、curl、tar、sha256sum，以及 i386 交叉编译器；
+  默认使用 `/opt/32/bin/i686-aosc-linux-gnu-`，也可通过
+  `BUSYBOX_CROSS_COMPILE` 指定
+- 仅当需要**重新构建内核**时，额外需要：gcc、flex、bison、bc、xz
 
 运行环境（用户侧）：见「浏览器兼容性」一节，无需安装任何东西。
 
@@ -103,6 +105,7 @@ pnpm test               # 前端单元测试（协议解析、进度持久化）
 pnpm test:watch         # Vitest 监听模式，适合本地迭代
 pnpm validate:challenges # 校验关卡 manifest、连续编号与必要脚本
 pnpm test:vm            # Linux 检查脚本测试（需要 busybox，见下）
+pnpm test:suid          # 校验 initramfs 中 SUID helper 的权限与 applet 白名单
 pnpm test:integration   # 端到端测试：Node 无头启动真实虚拟机通关全部 10 关
 pnpm build              # vue-tsc 严格类型检查 + 生产构建（输出 dist/）
 ./scripts/verify-build.sh  # 一键完成：资源检查 + 全部测试 + 构建
@@ -122,7 +125,8 @@ pnpm build              # vue-tsc 严格类型检查 + 生产构建（输出 dis
 | --- | --- | --- | --- |
 | 内核 bzImage | 自构建：kernel.org `linux-6.12.96`，`tinyconfig` + 最小特性集（串口控制台 / initramfs / tmpfs / IPv4 回环 / **无网卡驱动**） | GPLv2 | ≈ 1.3 MB |
 | 用户态 busybox | Debian `busybox-static` 1.38.0-3（i386 静态链接） | GPLv2 | ≈ 1.0 MB（打进 initramfs） |
-| initramfs | 本项目 `vm/rootfs-overlay/` + busybox，`scripts/pack-initramfs.py` 打包（确定性、显式权限） | 本项目 | ≈ 1.1 MB（gzip） |
+| SUID helper | 源码构建 BusyBox 1.38.0（i386 静态链接，严格仅含 `su/passwd`） | GPLv2 | ≈ 1.0 MB（打进 initramfs） |
+| initramfs | 本项目 `vm/rootfs-overlay/` + 两个 busybox，`scripts/pack-initramfs.py` 打包（确定性、显式权限） | 本项目 | ≈ 1.6 MB（gzip） |
 | v86 运行时 | npm `v86` 包（libv86.js / v86.wasm） | BSD-2-Clause | ≈ 2.5 MB |
 | SeaBIOS | Debian `seabios` 包（bios-256k.bin） | LGPLv3 | 256 KB |
 
@@ -142,7 +146,7 @@ pnpm build              # vue-tsc 严格类型检查 + 生产构建（输出 dis
 而本项目构建环境（以及部分校园网环境）无法稳定访问这些地址；
 同时 env86 产出的是通用 Buildroot 镜像，仍然需要二次定制关卡内容。
 因此我们采用了**完全等价但更透明**的路线：
-`tinyconfig 内核 + Debian busybox-static + 自定义 initramfs`，
+`tinyconfig 内核 + Debian busybox-static + 最小 SUID helper + 自定义 initramfs`，
 每一步都来自可审计的标准源（kernel.org / Debian 仓库），
 并且全部脚本化（`vm/build.sh`）。
 
@@ -292,11 +296,13 @@ hashteam-web-lab/
 ├── tests/              # vitest 单元测试（协议解析、进度持久化）
 ├── vm/
 │   ├── build.sh        # 虚拟机资源构建（内核 + initramfs + v86 资源）
+│   ├── busybox-suid.config # 仅启用 su/passwd 的最小 BusyBox 配置
 │   └── rootfs-overlay/ # initramfs 内容；每关目录含 manifest、脚本和素材
 └── scripts/
     ├── validate-challenges.mjs # 构建前校验关卡配置和目录完整性
     ├── pack-initramfs.py    # 确定性 cpio 打包（显式权限位）
-    ├── test-vm-checks.sh    # Linux 检查脚本测试（53 项断言）
+    ├── verify-suid-initramfs.py # 校验 SUID 权限与 applet 白名单
+    ├── test-vm-checks.sh    # Linux 检查脚本测试（54 项断言）
     ├── integration-test.mjs # 端到端：Node 无头启动真实 VM 通关 10 关
     ├── prepare-vm-assets.sh # vm/build.sh 的便捷入口
     └── verify-build.sh      # 一键验证：资源 + 测试 + 构建

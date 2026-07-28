@@ -4,6 +4,10 @@ set -eu
 export PATH=/usr/local/bin:/bin:/usr/bin:/sbin
 
 /bin/busybox --install -s /bin
+# su 和 passwd 需要 SUID 才能提权；使用独立的最小 SUID busybox
+ln -sf /bin/busybox-suid /bin/su
+ln -sf /bin/busybox-suid /bin/passwd
+
 mount -t proc proc /proc
 mount -t sysfs sys /sys
 mount -t devtmpfs dev /dev
