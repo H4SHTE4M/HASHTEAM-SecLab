@@ -21,7 +21,7 @@
       "type": "explain",
       "title": "先看懂终端在等什么",
       "objective": "能区分提示符和自己应该输入的位置",
-      "instruction": "终端末尾的 $ 是 Shell 提示符，表示系统已经准备好。光标所在的 $ 后面才是输入区；提示符本身不用输入。按 Enter 提交，Backspace 删除，方向键 ↑/↓ 可以找回之前的命令。",
+      "instruction": "终端末尾的 $ 是 Shell 提示符，表示系统已经准备好。提示符 $ 之后、光标所在处才是输入区；提示符本身不用输入。按回车（Enter）提交，退格（Backspace）删除，方向键 ↑/↓ 可以找回之前的命令。",
       "completion": "acknowledge",
       "allowRun": false,
       "introduces": [
@@ -135,7 +135,7 @@
       "type": "checkpoint",
       "title": "准备第一次手动验证",
       "objective": "确认自己已经记录真实通行证",
-      "instruction": "在纸面或剪贴板中确认：你保存的是冒号后的值，且没有 $、尖括号或多余空格。确认后，下方验证区才会开放。",
+      "instruction": "在纸上或剪贴板里确认：你保存的是冒号后的值，且没有 $、尖括号或多余空格。确认后，下方验证区才会开放。",
       "completion": "confirm",
       "allowRun": false,
       "uses": ["placeholder", "terminal-prompt"],

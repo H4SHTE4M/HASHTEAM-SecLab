@@ -10,7 +10,7 @@ for arg in "$@"; do
     esac
 done
 if [ -z "$url" ]; then
-    echo "用法: curl [-s] <URL>" >&2
+    echo "用法：curl [-s] <URL>" >&2
     exit 2
 fi
 exec wget -q -O - "$url"

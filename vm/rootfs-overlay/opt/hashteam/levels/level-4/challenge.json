@@ -18,7 +18,7 @@
     {
       "id": 1,
       "type": "observe",
-      "title": "只先观察权限现状",
+      "title": "先观察权限现状",
       "objective": "从详细列表中找到权限字符串和两个目标文件",
       "instruction": "运行详细目录列表。先看每行最左侧的十个字符，再找部署脚本和机密文本对应的两行；暂时不要修改。",
       "completion": "run",
@@ -171,7 +171,7 @@
     {
       "level": 3,
       "kind": "structure",
-      "text": "chmod 的结构是“chmod 三位权限 文件名”；每一位分别把本组需要的读4、写2、执行1相加。"
+      "text": "chmod 的结构是“chmod 三位权限 文件名”；每一位分别把本组需要的读=4、写=2、执行=1相加。"
     }
   ],
   "verification": {

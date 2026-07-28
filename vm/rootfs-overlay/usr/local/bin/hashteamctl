@@ -71,7 +71,7 @@ case "$cmd" in
         current_level
         ;;
     *)
-        echo "用法: hashteamctl <goto N | reset-level | factory-reset | mark-completed N | current>" >&2
+        echo "用法：hashteamctl <goto N | reset-level | factory-reset | mark-completed N | current>" >&2
         exit 2
         ;;
 esac

@@ -74,7 +74,7 @@
       "allowRun": false,
       "uses": ["text-fields", "awk-field-reference"],
       "question": {
-        "prompt": "这份训练日志中，来源 IP 位于第几个空白分隔字段？",
+        "prompt": "这份认证日志中，来源 IP 位于第几个空白分隔字段？",
         "choices": [
           { "id": "field-9", "label": "第 9 个字段" },
           { "id": "field-11", "label": "第 11 个字段" },

@@ -10,17 +10,17 @@ if [ ! -f "$HOME/incident.txt" ]; then
     exit 1
 fi
 if [ -z "$given" ]; then
-    echo "用法: check <后门监听的端口号>"
+    echo "用法：check <端口号>"
     exit 2
 fi
 if [ "$given" != "$expected" ]; then
-    echo "✗ $given 不是后门监听的端口。用 netstat -tln 找 LISTEN 里那个陌生端口；"
-    echo "  如果后门已经被你 kill 了，reset-level 可以让它重新出现。"
+    echo "✗ $given 不是陌生监听的端口。回到监听状态，找 LISTEN 中不属于基线的那个端口；"
+    echo "  如果异常进程已被你结束，reset-level 可以让它重新出现。"
     exit 1
 fi
 if netstat -tln 2>/dev/null | grep -q ":$PORT "; then
-    echo "✗ 端口对了，但后门进程还在运行。用 ps 找到它，然后 kill <PID>。"
+    echo "✗ 端口对了，但异常进程还在运行。回到进程列表确认它的 PID，再结束它。"
     exit 1
 fi
-echo "✓ 后门已清除！ps 发现异常、netstat 确认端口、kill 收尾——这就是应急三板斧。"
+echo "✓ 异常进程已清除！ps 发现异常、netstat 确认端口、kill 收尾——这就是应急三板斧。"
 exit 0

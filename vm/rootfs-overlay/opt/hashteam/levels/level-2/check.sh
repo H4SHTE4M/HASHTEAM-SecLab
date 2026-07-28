@@ -4,11 +4,11 @@ set -u
 expected=$(cat "${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}/level-2"/answer)
 given=${1:-}
 if [ ! -f "$HOME/.message" ]; then
-    echo "✗ 隐藏文件还没找到（或者被你删了？）。试试 ls -la，或者 reset-level。"
+    echo "✗ 隐藏文件还没找到（或者被你删了？）。换一种能看到全部条目的查看方式再找找，或用 reset-level 重置本关。"
     exit 1
 fi
 if [ -z "$given" ]; then
-    echo "用法: check <验证信息>"
+    echo "用法：check <验证信息>"
     exit 2
 fi
 if [ "$given" = "$expected" ]; then

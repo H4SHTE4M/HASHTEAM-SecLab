@@ -9,12 +9,12 @@ if [ ! -f "$LOG" ]; then
     exit 1
 fi
 if [ -z "$given" ]; then
-    echo "用法: check <失败登录的次数>"
+    echo "用法：check <失败次数>"
     exit 2
 fi
 if [ "$given" = "$expected" ]; then
     echo "✓ 正确！失败登录一共 $expected 次。"
-    echo "  你已经会「先筛出来、再数个数」了——下一关就要回答「是谁干的」。"
+    echo "  你已经会“先筛出来、再数个数”了——下一关就要回答“是谁干的”。"
     exit 0
 fi
 echo "✗ 次数不对。分别检查搜索短语、筛选出的行和最终计数对象。"

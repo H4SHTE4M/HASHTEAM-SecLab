@@ -2,7 +2,7 @@
 # 极简 file(1) 替代实现：识别常见魔数，否则区分文本 / 二进制
 set -u
 if [ $# -eq 0 ]; then
-    echo "用法: file <文件...>" >&2
+    echo "用法：file <文件...>" >&2
     exit 2
 fi
 for f in "$@"; do

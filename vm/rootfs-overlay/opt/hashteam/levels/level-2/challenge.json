@@ -106,7 +106,7 @@
       "uses": ["command-anatomy", "hidden-files"],
       "observation": "记录消息中验证标签后面的真实值。",
       "commonErrors": ["如果找不到文件，检查点号、大小写和空格。"],
-      "reinforcement": "已经学过的 cat 不再给完整答案。"
+      "reinforcement": "学过的命令不再附模板，由你完整写出。"
     },
     {
       "id": 6,

@@ -9,7 +9,7 @@ if [ ! -f "$LOG" ]; then
     exit 1
 fi
 if [ -z "$given" ]; then
-    echo "用法: check <IP地址>"
+    echo "用法：check <IP地址>"
     exit 2
 fi
 if ! grep -q "$given" "$LOG"; then

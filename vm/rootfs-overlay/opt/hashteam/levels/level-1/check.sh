@@ -14,7 +14,7 @@ if [ ! -f "$HOME/README" ]; then
     exit 1
 fi
 if [ -z "$given" ]; then
-    echo "用法: check <通行证>（通行证写在 README 里）"
+    echo "用法：check <通行证>"
     exit 2
 fi
 if [ "$given" = "$expected" ]; then

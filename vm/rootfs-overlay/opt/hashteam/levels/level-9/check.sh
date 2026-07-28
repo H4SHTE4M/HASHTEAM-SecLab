@@ -9,7 +9,7 @@ if ! wget -q -O /dev/null "http://127.0.0.1:$PORT/robots.txt" 2>/dev/null; then
     exit 1
 fi
 if [ -z "$given" ]; then
-    echo "用法: check <令牌>"
+    echo "用法：check <令牌>"
     exit 2
 fi
 if [ "$given" = "$expected" ]; then

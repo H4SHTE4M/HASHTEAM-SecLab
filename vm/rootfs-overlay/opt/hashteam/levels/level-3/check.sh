@@ -17,7 +17,7 @@ echo "正在复查 inbox 的目录结构 ..."
 expect_file logs/app.log       "日志应放进 logs/"
 expect_file scripts/backup.sh  "脚本应放进 scripts/"
 expect_file scripts/deploy.sh  "脚本应放进 scripts/"
-expect_file secrets/api.key    "机密应放进 secrets/"
+expect_file secrets/api.key    "密钥应放进 secrets/"
 
 if [ "$errors" -eq 0 ]; then
     echo "✓ 整理完成！现在每类文件都有清楚的位置。"
