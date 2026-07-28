@@ -21,6 +21,6 @@ if [ "$given" = "$expected" ]; then
     echo "  你刚才做的就是安全运维的日常：从日志中定位攻击者。"
     exit 0
 fi
-echo "✗ $given 不是失败次数最多的 IP。再统计一次："
-echo "  grep \"Failed password\" auth.log | awk '{print \$11}' | sort | uniq -c | sort -nr | head"
+echo "✗ $given 不是失败次数最多的 IP。"
+echo "  回到单列地址、分组次数和数字降序三个中间结果定位问题。"
 exit 1

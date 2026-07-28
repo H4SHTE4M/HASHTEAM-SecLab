@@ -1,93 +1,230 @@
 # 关卡开发指南
 
-关卡采用“一关一目录”的结构。前端展示配置、虚拟机初始化脚本、判题脚本和
-素材放在一起，避免新增关卡时分别修改前端数组和 VM 目录。
+关卡采用“一关一目录”的结构，前端教学配置、虚拟机初始化脚本、判题脚本和素材放在一起：
 
 ```text
 vm/rootfs-overlay/opt/hashteam/levels/
 ├── challenge.schema.json
 └── level-1/
-    ├── challenge.json   # 前端任务卡 manifest
+    ├── challenge.json   # 渐进式教学 manifest
     ├── init.sh          # 每次进入或重置关卡时运行
-    ├── check.sh         # check 命令调用，只验证最终状态
-    └── ...              # answer、日志、二进制等关卡素材
+    ├── check.sh         # 只验证环境最终状态
+    └── ...              # 日志、二进制等关卡素材
 ```
 
-## 新增一关
+前端通过 Vite 自动发现全部 `level-*/challenge.json`。新增关卡不需要维护 import 列表或总数。
 
-1. 新建下一个连续编号的 `level-N/` 目录。
-2. 添加 `challenge.json`、`init.sh` 和 `check.sh`。
-3. 运行 `pnpm validate:challenges`，检查字段、编号、slug 和必要脚本。
-4. 在 `scripts/test-vm-checks.sh` 与 `scripts/integration-test.mjs` 中补充判题测试。
-5. 运行 `pnpm test:vm`，再用 `./vm/build.sh --skip-kernel` 重打包 initramfs。
-6. 运行 `pnpm build`，确认前端能够加载新的 manifest。
+## 教学闭环
 
-前端通过 Vite 在构建时自动发现全部 `level-*/challenge.json`，所以不需要再维护
-关卡 import 列表或总关卡数。
+每关按同一条路径组织：
 
-## 最小 manifest
+1. 短背景只说明问题和成功状态，不给关键发现。
+2. `introduces` 在概念首次使用的当前步骤展示最小必要知识。
+3. `observation` 明确要求观察的输出，不写观察结果。
+4. 步骤通过运行、填写、手动输入、判断或确认留下完成证据。
+5. 三层提示固定为方向、工具、结构，最高层仍保留关键空位。
+6. 全部必要步骤完成后才开放最终验证。
+7. 通关后先展示解决结果、已掌握能力和下一关迁移关系。
+
+环境中的 `check` 成功不等于教学路径已经完成。前端只有在全部步骤已记录证据时才解锁关卡；这能防止学生绕过观察和判断直接提交答案。
+
+## Manifest v2
+
+顶层结构：
 
 ```json
 {
   "$schema": "../challenge.schema.json",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": 1,
   "slug": "process-investigation",
   "name": "可疑进程",
-  "tagline": "进程排查：找到异常行为",
-  "story": "值班告警显示服务器上出现了一个可疑进程，请确认它的身份。",
-  "goals": ["列出当前进程", "找出可疑进程", "提交进程名完成验证"],
-  "suggestedCommands": ["ps", "ps aux"],
-  "hints": ["先用 ps 查看当前正在运行的进程。"],
-  "teaches": ["进程管理", "基础应急响应"],
-  "checkUsage": "check <进程名>"
+  "tagline": "从基线中发现异常",
+  "storySummary": "本机出现不属于正常基线的服务。",
+  "story": "完整故事可以展开，但不承担命令教学职责。",
+  "goals": ["建立基线", "定位异常", "处置并复核"],
+  "prerequisites": ["比较终端输出"],
+  "newConcepts": ["进程与 PID"],
+  "steps": [],
+  "hints": [],
+  "verification": {},
+  "completionSummary": {}
 }
 ```
 
-字段约束：
+字段职责：
 
-- `schemaVersion`：当前固定为 `1`。
-- `id`：必须与 `level-N` 目录一致，所有关卡从 1 开始连续编号。
-- `slug`：稳定标识，只能包含小写字母、数字和连字符，并且全局唯一。
-- `goals`、`suggestedCommands`、`hints`、`teaches`：至少包含一项。
-  `suggestedCommands` 在挑战模式中只作为静态命令备忘，不会直接运行。
-- `guide`：可选的分步讲解数组；每项必须有 `note`，可以带 `command`。
-  引导模式一次只揭示一步；完整命令可点击运行，包含 `<PID>` 一类尖括号占位符的
-  命令会自动显示为不可运行的模板，必须由学生替换后手动输入。
-- `concepts`：可选的核心概念数组；每项必须有 `term` 和 `explanation`，用于解释本关
-  操作在现实安全中的意义。
-- `takeaway`：可选的通关回顾；关卡通过后在任务面板展示，帮助学生理解
-  这一关的意义。
-- `checkUsage`：任务面板展示的验证命令说明。
+- `storySummary`：默认可见的短背景。
+- `story`：可展开全文，不能隐藏完成任务所必需的信息。
+- `goals`：描述成功状态，不列完整操作脚本。
+- `prerequisites`：本关复用的既有能力；第 1 关可以为空。
+- `newConcepts`：本关实际首次引入的概念名称，必须与步骤中的 `introduces` 一致，最多三个。
+- `steps`：教学步骤，编号从 1 连续。
+- `hints`：固定三层分级帮助。
+- `verification`：验证结构、占位符解释和反馈分类。
+- `completionSummary`：只回顾已经实践过的能力，并说明下一关怎样迁移。
 
-`$schema` 能让支持 JSON Schema 的编辑器直接提示字段和格式错误；构建脚本还会
-执行独立校验，因此 CI 不依赖编辑器。
+## 步骤模型
 
-## 脚本约定
+所有步骤都包含：
 
-`init.sh` 应当是幂等的：重复执行后得到同样的初始环境。所有用户可修改的文件
-应创建或复制到 `$HOME`，不要直接让用户修改关卡源码目录。
-
-`check.sh` 只检查最终结果，不限制用户使用哪条命令。成功时退出 `0`，失败时打印
-清晰、可行动的反馈并退出非零状态。不要在脚本中手写串口协议；统一的
-`/usr/local/bin/check` 包装器会发送通过或失败消息。
-
-关卡目录内可通过以下写法定位只读素材，宿主机测试和 VM 内都能工作：
-
-```sh
-LEVEL_DIR="${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}/level-1"
-cp "$LEVEL_DIR/example.log" "$HOME/example.log"
+```json
+{
+  "id": 1,
+  "type": "observe",
+  "title": "查看当前进程",
+  "objective": "根据基线定位额外服务",
+  "instruction": "运行后比较 COMMAND 一列。",
+  "completion": "run",
+  "allowRun": true,
+  "command": "ps",
+  "observation": "找出不属于预期职责的程序并记录 PID。",
+  "commonErrors": ["PID 不是端口。"],
+  "reinforcement": "异常判断必须能写出基线证据。"
+}
 ```
 
-## 修改 manifest 格式
+支持的类型与完成证据：
 
-新增可选字段时，同时更新：
+| `type` | 用途 | `completion` | 关键约束 |
+| --- | --- | --- | --- |
+| `explain` | 首次解释必要概念 | `acknowledge` | 不运行命令 |
+| `observe` | 运行安全示例并观察 | `run` | 必须提供 `command`、`observation`，仅此类可 `allowRun: true` |
+| `partial-command` | 给结构，由学生填字段 | `input` | 使用 `commandTemplate` 与 `fields`，不可一键运行 |
+| `manual-command` | 只给目标，由学生完整输入 | `input` | 不得预置命令或模板 |
+| `question` | 根据输出判断 | `answer` | 至少两个选项，答对才继续 |
+| `checkpoint` | 确认中间状态 | `confirm` | 必须写清要确认的 `observation` |
+| `reflection` | 强化刚完成的方法 | `acknowledge` | 不首次堆入未实践知识 |
 
-1. `challenge.schema.json`
-2. `src/types/lab.ts`
-3. `src/services/challenge-manifest.ts`
-4. `scripts/validate-challenges.mjs`
-5. `tests/challenge-manifest.test.ts`
+### 概念时机
 
-如果需要不兼容的字段变化，应提升 `schemaVersion` 并明确迁移现有关卡，避免旧
-manifest 被静默误读。
+概念在首次操作前或当前步骤定义：
+
+```json
+{
+  "introduces": [
+    {
+      "id": "pipeline",
+      "term": "管道",
+      "explanation": "左边产生输出，右边消费输入。"
+    }
+  ],
+  "uses": ["grep-filter", "pipeline"]
+}
+```
+
+`id` 可以被后续关卡的 `uses` 复用。校验器会按关卡和步骤顺序检查，任何概念在定义前使用都会失败。
+
+### 补全命令
+
+模板空位使用 `{{field-id}}`，每个空位必须恰好对应一个字段：
+
+```json
+{
+  "type": "partial-command",
+  "completion": "input",
+  "allowRun": false,
+  "commandTemplate": "cat {{file}}",
+  "fields": [
+    {
+      "id": "file",
+      "label": "文件名",
+      "placeholder": "从 ls 输出中填写"
+    }
+  ]
+}
+```
+
+字段的 `placeholder` 只能描述来源或格式，不能写真实答案。
+
+挑战模式和引导模式共享同一步骤。引导模式展示结构化字段；挑战模式默认要求完整输入，只有展开到第三层提示后才展示结构。
+
+## 分层提示
+
+每关恰好三层，顺序固定：
+
+```json
+[
+  { "level": 1, "kind": "direction", "text": "指出应该观察什么。" },
+  { "level": 2, "kind": "tool", "text": "指出可能使用的命令类别。" },
+  { "level": 3, "kind": "structure", "text": "给出仍需填写关键值的结构。" }
+]
+```
+
+提示不得推进步骤、代替判断或直接给出最终答案。
+
+## 验证与占位符
+
+```json
+{
+  "verification": {
+    "usage": "check <结果>",
+    "instruction": "用终端发现的真实值替换占位符。",
+    "placeholders": [
+      {
+        "token": "<结果>",
+        "meaning": "排名第一行中的地址，不包含前面的计数"
+      }
+    ],
+    "feedback": {
+      "empty": "还未提供结果。",
+      "incorrect": "回到中间输出定位字段或排序问题。",
+      "success": "环境状态与目标一致。"
+    }
+  }
+}
+```
+
+`usage` 中每个尖括号占位符都必须逐一解释。UI 会拒绝把未替换的尖括号原样送入终端。
+
+`check.sh` 的失败反馈应区分空参数、对象错误和环境状态错误，指出排查方向但不打印完整解法。
+
+## 初始化和判题脚本
+
+`init.sh` 必须幂等：
+
+- 用户可修改文件写入 `$HOME`。
+- 重置时清理上一轮进程和文件。
+- 启动文案只说明现场，不泄露答案、路径路线或最终参数。
+- 训练数据规模描述必须与实际素材一致。
+
+`check.sh` 只检查最终环境状态，不限制唯一命令：
+
+- 成功退出 `0`，失败退出非零。
+- 不在失败输出中打印完整命令管道或最终修复值。
+- 涉及运行配置时，同时检查配置文件和真实进程/监听状态。
+
+## 自动校验
+
+`pnpm validate:challenges` 会检查：
+
+- 关卡和步骤编号连续、slug 唯一、必要脚本存在。
+- 顶层、步骤和嵌套对象没有旧字段或未知字段。
+- 步骤类型与完成证据匹配。
+- 手动步骤没有预置可点击命令。
+- 命令模板空位与 `fields` 一一对应。
+- 概念在首次使用前或当前步骤定义。
+- `newConcepts` 与实际引入一致，单关不超过三个。
+- 每关至少包含一次独立填写、输入或判断，且不能全关一键运行。
+- 三层提示按方向、工具、结构排列。
+- 验证占位符都有解释。
+- 通关前不引用通关后内容。
+- 答案文件内容不出现在通关前教学文本。
+- 第 8–10 关受保护的端口、路径、令牌和最终配置不在初始内容泄露。
+- 日志规模描述与当前训练数据一致。
+
+## 新增或修改关卡
+
+1. 添加或修改 `challenge.json`、`init.sh`、`check.sh` 和素材。
+2. 运行 `pnpm validate:challenges`。
+3. 在 `tests/components.test.ts` 增加教学交互测试。
+4. 在 `scripts/test-vm-checks.sh` 增加环境判题与替代合法方法。
+5. 依次运行：
+
+   ```sh
+   pnpm test
+   pnpm test:vm
+   pnpm build
+   ```
+
+6. 修改 VM 文件后，发布前运行 `pnpm build:vm` 重打包 initramfs，再执行集成测试。

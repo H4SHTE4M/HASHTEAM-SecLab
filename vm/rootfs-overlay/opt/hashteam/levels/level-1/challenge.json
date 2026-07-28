@@ -1,56 +1,183 @@
 {
   "$schema": "../challenge.schema.json",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": 1,
   "slug": "welcome-terminal",
   "name": "欢迎来到服务器",
-  "tagline": "初次登录：认识你的终端",
-  "story": "你刚刚拿到了 HASHTEAM 实验室测试服务器的最低权限账号。管理员在系统里留下了一份说明文件，里面写着你的「通行证」。先确认一下自己的身份和位置，然后读一读这份说明。",
+  "tagline": "终端基础：读懂提示，再让系统回答",
+  "storySummary": "你拿到了实验室测试服务器的访客账号，需要确认身份、位置和管理员留下的信息。",
+  "story": "这是你第一次进入纯终端环境。管理员留下了一份说明文件，其中包含进入后续任务所需的通行证。先弄清终端在等待什么，再通过系统输出自己找到并提交它。",
   "goals": [
-    "确认当前登录的用户身份",
-    "查看当前所在的目录",
-    "阅读管理员留下的 README 文件",
-    "找到通行证并完成验证"
+    "辨认 Shell 提示符和实际输入区域",
+    "确认当前用户与所在目录",
+    "列出并读取管理员留下的说明文件",
+    "手动填写通行证完成第一次验证"
   ],
-  "suggestedCommands": ["whoami", "pwd", "ls", "cat README"],
-  "guide": [
+  "prerequisites": [],
+  "newConcepts": ["Shell 提示符与输入区", "命令、参数与空格", "占位符"],
+  "steps": [
     {
+      "id": 1,
+      "type": "explain",
+      "title": "先看懂终端在等什么",
+      "objective": "能区分提示符和自己应该输入的位置",
+      "instruction": "终端末尾的 $ 是 Shell 提示符，表示系统已经准备好。光标所在的 $ 后面才是输入区；提示符本身不用输入。按 Enter 提交，Backspace 删除，方向键 ↑/↓ 可以找回之前的命令。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "terminal-prompt",
+          "term": "Shell 提示符与输入区",
+          "explanation": "提示符显示当前会话已就绪；真正的命令从它后面的光标处开始。复制输出时也不要把提示符一起带走。"
+        },
+        {
+          "id": "command-anatomy",
+          "term": "命令、参数与空格",
+          "explanation": "命令说明要做什么，后面的参数说明对谁做；二者用空格分开。比如 cat README 中，cat 是命令，README 是文件参数。"
+        }
+      ],
+      "reinforcement": "以后看到提示符，就从它后面的光标开始输入。"
+    },
+    {
+      "id": 2,
+      "type": "observe",
+      "title": "确认当前身份",
+      "objective": "根据终端输出找到当前用户名",
+      "instruction": "运行 whoami。命令只负责提问，下一行的输出才是系统给出的答案。",
+      "completion": "run",
+      "allowRun": true,
+      "uses": ["terminal-prompt", "command-anatomy"],
       "command": "whoami",
-      "note": "这是你的第一条关卡命令。可以点击上面的命令直接运行，也可以在左侧光标后输入 whoami，再按 Enter。终端会回答当前登录的用户名。"
+      "observation": "观察命令下方只包含用户名的那一行，不要把提示符算进用户名。",
+      "reinforcement": "whoami 回答的是“我是谁”。"
     },
     {
+      "id": 3,
+      "type": "observe",
+      "title": "确认当前位置",
+      "objective": "辨认当前工作目录的完整路径",
+      "instruction": "运行 pwd，并把它的输出和刚才的用户名输出比较：路径通常以 / 开头，而且可能包含多段目录名。",
+      "completion": "run",
+      "allowRun": true,
+      "uses": ["command-anatomy"],
       "command": "pwd",
-      "note": "pwd 回答「我在哪」：它会打印你当前所在的目录（路径）。在 Linux 里，你做的每件事都发生在某个目录里，弄清楚位置是第一步。"
+      "observation": "找到以 / 开头的路径，确认自己位于 guest 的主目录。",
+      "reinforcement": "pwd 回答的是“我在哪”。"
     },
     {
+      "id": 4,
+      "type": "observe",
+      "title": "看看这里有什么",
+      "objective": "从目录列表中找到管理员留下的说明",
+      "instruction": "运行 ls。它会列出当前目录可见的文件名；先只观察，不要猜文件内容。",
+      "completion": "run",
+      "allowRun": true,
+      "uses": ["command-anatomy"],
       "command": "ls",
-      "note": "ls 回答「这里有什么」：列出当前目录下的文件。你会看到一份 README——那就是管理员留给你的说明。"
+      "observation": "找出名称像说明文档的文件，并准确记下大小写。",
+      "reinforcement": "ls 回答的是“这里有什么”。"
     },
     {
-      "command": "cat README",
-      "note": "cat 把文件内容原样打印出来。读 README，里面有一行写着「通行证」，把它交给 check 就过关了。"
+      "id": 5,
+      "type": "partial-command",
+      "title": "自己补全读取命令",
+      "objective": "把刚观察到的文件名作为参数交给 cat",
+      "instruction": "下面只给出命令结构。填写你在 ls 输出里发现的说明文件名，再运行；空格会把 cat 和文件参数分开。",
+      "completion": "input",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "placeholder",
+          "term": "占位符",
+          "explanation": "占位符表示“这里要换成你发现的真实内容”。尖括号或输入框提示不是命令的一部分，不能原样照抄。"
+        }
+      ],
+      "uses": ["command-anatomy", "placeholder"],
+      "commandTemplate": "cat {{filename}}",
+      "fields": [
+        {
+          "id": "filename",
+          "label": "说明文件名",
+          "placeholder": "填写 ls 中看到的文件名"
+        }
+      ],
+      "observation": "在文件内容中寻找标明“通行证”的一行，只记录冒号后的值。",
+      "commonErrors": [
+        "如果提示找不到文件，检查文件名大小写和 cat 后面的空格。",
+        "不要把输入框的提示文字当成真实文件名。"
+      ],
+      "reinforcement": "参数来自前一步的观察，而不是来自答案脚本。"
+    },
+    {
+      "id": 6,
+      "type": "question",
+      "title": "判断应该记录哪一段",
+      "objective": "从终端输出中提取验证需要的值",
+      "instruction": "根据刚才读到的文件内容作答；这一步检查你是否区分了标签、真实值和提示符。",
+      "completion": "answer",
+      "allowRun": false,
+      "uses": ["terminal-prompt", "placeholder"],
+      "question": {
+        "prompt": "运行 check 时，应该用哪一段替换 <通行证>？",
+        "choices": [
+          { "id": "value", "label": "“通行证：”冒号后面的真实值" },
+          { "id": "placeholder", "label": "原样输入 <通行证>" },
+          { "id": "prompt", "label": "复制包含 $ 的整行提示符" }
+        ],
+        "answer": "value",
+        "success": "正确：只需要真实值，不包含标签、尖括号、提示符或多余空格。"
+      },
+      "commonErrors": ["如果不确定，重新观察 cat 的输出，而不是猜测。"],
+      "reinforcement": "复制结果时，只取任务需要的那一段。"
+    },
+    {
+      "id": 7,
+      "type": "checkpoint",
+      "title": "准备第一次手动验证",
+      "objective": "确认自己已经记录真实通行证",
+      "instruction": "在纸面或剪贴板中确认：你保存的是冒号后的值，且没有 $、尖括号或多余空格。确认后，下方验证区才会开放。",
+      "completion": "confirm",
+      "allowRun": false,
+      "uses": ["placeholder", "terminal-prompt"],
+      "observation": "我已经记录真实通行证，并知道必须手动替换验证命令中的占位符。",
+      "reinforcement": "观察、提取、再验证，是后面每一关都会复用的节奏。"
     }
   ],
-  "concepts": [
-    {
-      "term": "Shell 与终端",
-      "explanation": "终端是你和操作系统对话的窗口，Shell 是读懂你命令的那个程序。你敲进去的每个命令，都是让这台机器替你做事的指令——安全人员几乎一切工作都从这里开始，因为它最直接、最强大。"
-    },
-    {
-      "term": "用户与身份",
-      "explanation": "whoami 告诉你当前身份。在 Linux 里，「你是谁」直接决定「你能做什么」——不同用户有不同的权限。安全攻防很多时候就是围绕「如何变成更有权力的用户」或「如何防止别人变成」展开的。"
-    },
-    {
-      "term": "当前工作目录",
-      "explanation": "pwd 显示你此刻所在的目录。命令默认都作用于「当前目录」，所以搞不清位置就会对错误的文件下手。养成随时知道「我在哪」的习惯，能避免大量误操作。"
-    }
-  ],
-  "takeaway": "你刚刚发出了人生第一批 Linux 命令，并且得到了回应。别小看 whoami、pwd、ls、cat——它们是安全从业者每天重复千百次的基本功：确认身份、确认位置、看清环境、读取信息。所有复杂的攻防，都是从这四件小事长出来的。",
   "hints": [
-    "先试试 whoami 和 pwd，弄清楚「我是谁、我在哪」。",
-    "用 ls 看看目录里有什么文件，再用 cat 把 README 的内容读出来。",
-    "README 里有一行写着通行证，把它作为参数传给 check，例如：check <通行证>"
+    {
+      "level": 1,
+      "kind": "direction",
+      "text": "依次回答“我是谁、我在哪、这里有什么”，然后从说明文件中寻找验证信息。"
+    },
+    {
+      "level": 2,
+      "kind": "tool",
+      "text": "whoami、pwd、ls 分别回答前三个问题；读取文本文件可以使用 cat。"
+    },
+    {
+      "level": 3,
+      "kind": "structure",
+      "text": "读取结构是 cat 加一个文件名参数；验证结构是 check 加通行证真实值。两处都需要空格。"
+    }
   ],
-  "teaches": ["认识 Shell", "文件与目录", "当前用户与当前路径"],
-  "checkUsage": "check <通行证>"
+  "verification": {
+    "usage": "check <通行证>",
+    "instruction": "不要照抄尖括号。把 <通行证> 整体替换为你从说明文件中记录的真实值，并在终端手动输入。",
+    "placeholders": [
+      {
+        "token": "<通行证>",
+        "meaning": "说明文件中“通行证：”冒号后的真实值；不包含标签、提示符或尖括号"
+      }
+    ],
+    "feedback": {
+      "empty": "还没有提供通行证：先读取说明文件并替换占位符。",
+      "incorrect": "通行证不匹配：检查是否复制了标签、提示符或多余空格。",
+      "success": "身份、位置、文件和通行证都已正确确认。"
+    }
+  },
+  "completionSummary": {
+    "solved": "你通过终端输出独立找到了管理员留下的通行证。",
+    "mastered": ["辨认提示符与输入区", "区分命令和参数", "读取并提取终端输出", "正确替换占位符"],
+    "next": "下一关会复用 ls 和 cat，并通过比较输出认识“选项”和隐藏文件。"
+  }
 }

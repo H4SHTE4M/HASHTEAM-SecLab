@@ -1,81 +1,184 @@
 {
   "$schema": "../challenge.schema.json",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": 3,
   "slug": "tidy-up",
   "name": "搬家与整理",
-  "tagline": "目录与文件：先把这台机器收拾干净",
-  "story": "你发现服务器的 inbox 里堆着日志、脚本和接口密钥。老管理员留下了 todo.txt，请你先进入这个待整理目录，再给三类文件各建一个位置。一台连自己的文件都找不到的服务器，很难谈安全。",
+  "tagline": "文件与路径：从示范一次到独立完成",
+  "storySummary": "待整理目录混放着日志、脚本和密钥，需要建立清晰结构并归类。",
+  "story": "管理员留下了一份待办，说明现场位置和分类原则。你需要先确认自己在哪，再为不同类型建立目录并移动文件；最终只看目录状态，不限制你采用唯一命令。",
   "goals": [
-    "进入 inbox 目录并确认当前位置",
-    "新建 logs、scripts、secrets 三个目录",
-    "把日志、脚本和密钥移动到对应目录",
-    "运行 check 复查最终目录结构"
+    "阅读待办并进入待整理目录",
+    "建立日志、脚本和机密的分类目录",
+    "根据源和目标关系移动全部文件",
+    "复查最终目录结构"
   ],
-  "suggestedCommands": [
-    "cat todo.txt",
-    "cd inbox",
-    "pwd",
-    "ls",
-    "mkdir logs scripts secrets",
-    "mv app.log logs/",
-    "mv backup.sh deploy.sh scripts/",
-    "mv api.key secrets/"
-  ],
-  "guide": [
+  "prerequisites": ["使用 pwd 与 ls 确认位置", "使用 cat 读取说明", "根据终端输出补全命令"],
+  "newConcepts": ["相对路径", "源与目标"],
+  "steps": [
     {
-      "command": "cat todo.txt",
-      "note": "先读管理员留下的待办，确认现场在 inbox 目录，以及每一类文件应该放到哪里。"
+      "id": 1,
+      "type": "manual-command",
+      "title": "先读现场说明",
+      "objective": "复用 cat，找到待整理目录和分类要求",
+      "instruction": "主目录里有一份待办文件。先用 ls 找到它，再完整输入读取命令。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["command-anatomy"],
+      "observation": "记录待整理目录名称、三个目标目录名称和各类文件的去向。",
+      "reinforcement": "先读要求，再动文件。"
     },
     {
-      "command": "cd inbox",
-      "note": "cd 用来进入目录。运行后，后续命令就会默认作用在 inbox 里面。"
+      "id": 2,
+      "type": "explain",
+      "title": "理解当前位置与相对路径",
+      "objective": "知道命令中的相对路径从哪里开始计算",
+      "instruction": "不以 / 开头的路径通常相对于当前目录。cd 改变当前目录，pwd 用来复核；进入待整理目录后，文件名和目标目录都可以写成较短的相对路径。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "relative-path",
+          "term": "相对路径",
+          "explanation": "相对路径从当前工作目录开始解释。操作前用 pwd 确认位置，可以避免把正确命令用在错误目录。"
+        }
+      ],
+      "uses": ["command-anatomy"],
+      "reinforcement": "路径是否正确，取决于你当前站在哪里。"
     },
     {
-      "command": "pwd",
-      "note": "用 pwd 确认当前位置。输出应以 /inbox 结尾；养成操作前确认位置的习惯能减少误操作。"
+      "id": 3,
+      "type": "partial-command",
+      "title": "进入并确认现场",
+      "objective": "把待办中的目录名填入 cd",
+      "instruction": "填写待整理目录名并运行，然后自己用 pwd 和 ls 观察位置与文件。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["relative-path"],
+      "commandTemplate": "cd {{directory}}",
+      "fields": [
+        {
+          "id": "directory",
+          "label": "待整理目录",
+          "placeholder": "填写待办中给出的目录名"
+        }
+      ],
+      "observation": "pwd 应以目标目录结尾；ls 应显示待分类的四个文件。",
+      "commonErrors": ["如果 cd 失败，确认你仍在主目录，并检查目录名。"],
+      "reinforcement": "位置确认是文件操作的安全带。"
     },
     {
-      "command": "ls",
-      "note": "查看 inbox 的现状：日志、两个脚本和密钥现在混在一起。"
+      "id": 4,
+      "type": "partial-command",
+      "title": "建立分类目录",
+      "objective": "一次补全多个 mkdir 参数",
+      "instruction": "mkdir 后可以跟多个目录参数。按待办填写三个目录名，参数之间各留一个空格。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["command-anatomy", "relative-path"],
+      "commandTemplate": "mkdir {{directories}}",
+      "fields": [
+        {
+          "id": "directories",
+          "label": "三个目录名",
+          "placeholder": "按空格分隔三个名称"
+        }
+      ],
+      "observation": "再次 ls，确认三个新目录都出现且原文件仍在。",
+      "reinforcement": "一个命令可以接收多个并列参数。"
     },
     {
-      "command": "mkdir logs scripts secrets",
-      "note": "mkdir 创建目录，一次可以创建多个。这里建立三个「抽屉」，分别存放日志、脚本和机密。"
+      "id": 5,
+      "type": "explain",
+      "title": "分清源和目标",
+      "objective": "读懂 mv 参数的方向",
+      "instruction": "mv 的基本关系是“源在前，目标在后”。目标若是目录，文件会被搬进去；多个源可以共享最后一个目标目录。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "source-target",
+          "term": "源与目标",
+          "explanation": "文件操作常按“从哪里来 → 到哪里去”排列参数。对 mv 来说，最后一个参数是目标，前面是一个或多个源。"
+        }
+      ],
+      "uses": ["relative-path"],
+      "reinforcement": "读 mv 时，从最后一个参数先确认目的地。"
     },
     {
-      "command": "mv app.log logs/",
-      "note": "mv 是移动：把 app.log 搬进 logs/，移动后原位置不再保留。"
+      "id": 6,
+      "type": "partial-command",
+      "title": "示范移动一类文件",
+      "objective": "完成一次源文件到目标目录的移动",
+      "instruction": "选择日志文件作为源、日志目录作为目标，自行填入两部分。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["source-target", "relative-path"],
+      "commandTemplate": "mv {{source}} {{target}}/",
+      "fields": [
+        { "id": "source", "label": "日志源文件", "placeholder": "从 ls 输出中选择" },
+        { "id": "target", "label": "日志目标目录", "placeholder": "填写对应分类目录" }
+      ],
+      "observation": "用 ls 和目标目录的列表确认源位置不再有该文件、目标中已经出现。",
+      "commonErrors": ["源和目标顺序不要颠倒。"],
+      "reinforcement": "移动后要同时观察原位置和目标位置。"
     },
     {
-      "command": "mv backup.sh deploy.sh scripts/",
-      "note": "mv 可以一次移动多个文件，最后一个参数 scripts/ 是共同的目标目录。"
+      "id": 7,
+      "type": "manual-command",
+      "title": "独立完成剩余整理",
+      "objective": "迁移刚学会的源/目标关系完成脚本和密钥归类",
+      "instruction": "不再提供命令模板。自己输入一条或多条命令，把剩余文件放入正确目录；可以采用任何能得到目标结构的方法。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["source-target", "relative-path", "command-anatomy"],
+      "observation": "最终顶层只留下三个分类目录，各目录中的文件数量与待办一致。",
+      "commonErrors": ["一次移动多个源时，最后一个参数必须是共同目标目录。"],
+      "reinforcement": "你已经从示范过渡到独立组合文件操作。"
     },
     {
-      "command": "mv api.key secrets/",
-      "note": "最后把接口密钥移入 secrets/。完成后用 check 复查，check 在任何目录中都可以运行。"
+      "id": 8,
+      "type": "checkpoint",
+      "title": "复查目录结构",
+      "objective": "在最终验证前自行发现漏放或错放",
+      "instruction": "分别列出三个目标目录，按待办逐项核对。",
+      "completion": "confirm",
+      "allowRun": false,
+      "uses": ["relative-path"],
+      "observation": "我已确认日志、两个脚本和密钥分别位于正确的三个目录。",
+      "reinforcement": "文件操作以最终状态复查收尾。"
     }
   ],
-  "concepts": [
-    {
-      "term": "当前目录",
-      "explanation": "cd 改变当前目录，pwd 确认当前位置。命令默认作用于当前目录，知道自己在哪里是避免删错、改错文件的基本习惯。"
-    },
-    {
-      "term": "目录结构",
-      "explanation": "Linux 用树状目录组织文件。把同类资源放在清晰的位置，既方便设置权限，也让突然多出来的异常文件更容易被发现。"
-    },
-    {
-      "term": "运维的条理",
-      "explanation": "安全运维不只是处理告警，也包括持续知道每类文件在哪里、谁在使用。环境越清晰，异常越难藏在杂物中。"
-    }
-  ],
-  "takeaway": "你刚刚使用 cd、pwd、mkdir 和 mv 整理了一次真实目录：先确认位置，再建立结构、移动文件并复查。清晰的目录结构是权限管控和异常发现的前提；机器越乱，后门越容易藏进不起眼的角落。",
   "hints": [
-    "先读 todo.txt，再用 cd inbox 进入待整理目录；pwd 可以确认当前位置。",
-    "在 inbox 中运行 mkdir logs scripts secrets，一次建好三个目录。",
-    "用 mv 文件名 目标目录/ 移动文件。整理完直接运行 check。"
+    {
+      "level": 1,
+      "kind": "direction",
+      "text": "先从待办提取“当前位置、要建哪些目录、每个文件去哪里”三类信息。"
+    },
+    {
+      "level": 2,
+      "kind": "tool",
+      "text": "cd/pwd 确认位置，mkdir 建目录，mv 负责移动；ls 用于每个阶段复查。"
+    },
+    {
+      "level": 3,
+      "kind": "structure",
+      "text": "创建结构是 mkdir 后跟多个目录名；移动结构是 mv 后先写一个或多个源，最后写目标目录。"
+    }
   ],
-  "teaches": ["cd 与当前目录", "mkdir / mv", "目录结构", "运维的条理意识"],
-  "checkUsage": "check（自动检查目录结构）"
+  "verification": {
+    "usage": "check",
+    "instruction": "check 会检查最终目录结构，不要求唯一命令。先自行复查，再运行。",
+    "placeholders": [],
+    "feedback": {
+      "empty": "本关验证不需要参数。",
+      "incorrect": "目录结构尚未完成；根据反馈检查漏放或错放的文件。",
+      "success": "所有文件都已归入清晰、正确的目录结构。"
+    }
+  },
+  "completionSummary": {
+    "solved": "你从待办提取要求，建立目录并独立完成了文件归类。",
+    "mastered": ["确认当前目录", "理解相对路径", "区分源与目标", "移动后复查"],
+    "next": "下一关会先观察文件属性，再把“谁可以做什么”收紧到最小范围。"
+  }
 }

@@ -16,5 +16,5 @@ if [ "$given" = "$expected" ]; then
     echo "✓ 正确！robots.txt、调试接口、备份文件——信息泄露往往就是这样发生的。"
     exit 0
 fi
-echo "✗ 令牌不对。从首页和 robots.txt 开始，逐个访问被隐藏的路径。"
+echo "✗ 令牌不对。回到公开入口，按每次响应给出的线索逐步检查。"
 exit 1

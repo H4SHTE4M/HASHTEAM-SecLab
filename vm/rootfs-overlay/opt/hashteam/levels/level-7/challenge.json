@@ -1,65 +1,200 @@
 {
   "$schema": "../challenge.schema.json",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": 7,
   "slug": "encoding-forensics",
   "name": "看不懂的消息",
-  "tagline": "可疑数据：编码不是加密",
-  "story": "你在服务器上发现了两个可疑文件：message.b64 看起来像一堆乱码，secret.bin 更是一个打不开的「二进制」。别急——它们只是经过了「编码」，而编码从来都不是加密。两块碎片拼起来，才是完整的暗号。",
+  "tagline": "组合信息：先识别、分别提取、准确拼接",
+  "storySummary": "两份可疑文件各藏着一段信息，需要选择合适工具提取并组合。",
+  "story": "值班现场留下了两个外观不同的文件：一个像可打印编码，另一个包含二进制数据。最终结果不在任何单个命令中；你需要记录两次输出，再按文件内线索判断顺序与连接符。",
   "goals": [
-    "查看 message.b64 的内容并还原它",
-    "用合适的工具从 secret.bin 中提取可读字符串",
-    "把两块碎片按提示拼成完整暗号"
+    "从目录与文件类型输出识别两个目标",
+    "还原可打印编码中的第一段信息",
+    "从二进制数据中筛出有意义的可读字符串",
+    "按线索组合两段结果"
   ],
-  "suggestedCommands": [
-    "cat message.b64",
-    "base64 -d message.b64",
-    "file secret.bin",
-    "strings secret.bin",
-    "xxd secret.bin | head"
-  ],
-  "guide": [
+  "prerequisites": ["使用 ls/file 观察文件", "理解命令选项", "准确复制终端输出"],
+  "newConcepts": ["编码不等于加密", "二进制中的可读字符串", "组合多次输出"],
+  "steps": [
     {
-      "command": "cat message.b64",
-      "note": "先看看这堆「乱码」长什么样。注意它只用到了字母、数字和少量符号——这正是 Base64 编码的特征：把任意数据转成可打印字符，方便在文本里传输。"
+      "id": 1,
+      "type": "observe",
+      "title": "先发现文件，不猜处理方法",
+      "objective": "从当前目录找出本关新增的两个可疑文件",
+      "instruction": "运行目录列表，观察两个新文件的名称和扩展名。扩展名只是线索，不是最终结论。",
+      "completion": "run",
+      "allowRun": true,
+      "uses": ["command-anatomy"],
+      "command": "ls",
+      "observation": "记下两个可疑文件的完整名称与大小写。",
+      "reinforcement": "文件名提供方向，但处理前仍要观察内容或类型。"
     },
     {
-      "command": "base64 -d message.b64",
-      "note": "base64 -d 把编码还原成原文。所谓「乱码」立刻变回可读内容——因为它根本不是加密，只是一种「换个写法」。碎片一到手了。"
+      "id": 2,
+      "type": "manual-command",
+      "title": "判断两种文件",
+      "objective": "复用 file，对两个目标分别识别类型",
+      "instruction": "自行输入 file 命令，可以一次跟两个文件参数。运行后比较两条类型说明。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["command-anatomy"],
+      "observation": "区分哪一个是可打印文本，哪一个是二进制数据。",
+      "reinforcement": "先识别类型，再选工具。"
     },
     {
-      "command": "file secret.bin",
-      "note": "对 secret.bin 先用 file 探一下类型。它是个二进制文件，直接 cat 只会看到一堆无法显示的字符。"
+      "id": 3,
+      "type": "explain",
+      "title": "编码只是可逆的写法",
+      "objective": "理解解码与解密的区别",
+      "instruction": "Base64 常把任意数据改写成便于传输的可打印字符。-d 表示 decode；规则公开、无需密钥，所以它不提供保密性。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "encoding-not-encryption",
+          "term": "编码不等于加密",
+          "explanation": "编码为了表示或传输，任何人都可按公开规则还原；加密依赖密钥提供保密性。看到 Base64 外观不能把它当成安全保护。"
+        }
+      ],
+      "uses": ["command-options"],
+      "reinforcement": "能直接按公开规则还原的内容，不应被当作秘密。"
     },
     {
-      "command": "strings secret.bin",
-      "note": "strings 能从二进制里挑出所有「可打印的字符串」——程序里写死的口令、路径、暗号往往就这样被原样暴露出来。碎片二就在里面。"
+      "id": 4,
+      "type": "partial-command",
+      "title": "解码并记录第一段",
+      "objective": "填写解码选项和正确文件名",
+      "instruction": "根据文件类型输出选择文本目标，并填写解码选项。运行后只记录明确标注的第一段内容。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["encoding-not-encryption", "command-options"],
+      "commandTemplate": "base64 {{option}} {{file}}",
+      "fields": [
+        { "id": "option", "label": "解码选项", "placeholder": "填写以 - 开头的 decode 选项" },
+        { "id": "file", "label": "编码文件名", "placeholder": "从 file 输出中选择" }
+      ],
+      "observation": "记录“第一块碎片”标签后的值，并留意它对另一个文件给出的方向。",
+      "commonErrors": ["不要把标签和冒号复制进碎片。"],
+      "reinforcement": "第一段来自实际解码输出。"
     },
     {
-      "command": "check <完整暗号>",
-      "note": "把两块碎片按提示用连字符拼起来。先把 <完整暗号> 换成你得到的真实内容，再手动输入这条验证命令。"
+      "id": 5,
+      "type": "explain",
+      "title": "从二进制中挑出可读线索",
+      "objective": "理解 strings 的筛选作用",
+      "instruction": "二进制不能安全地直接 cat。strings 会扫描其中连续的可打印字符；输出可能含噪声，需要根据标签和上下文判断有意义的行。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "binary-strings",
+          "term": "二进制中的可读字符串",
+          "explanation": "程序和样本里常残留路径、口令或调试文字。strings 只负责提取可打印片段，哪一段有意义仍需人判断。"
+        }
+      ],
+      "reinforcement": "工具负责缩小范围，人负责理解上下文。"
+    },
+    {
+      "id": 6,
+      "type": "partial-command",
+      "title": "提取并判断第二段",
+      "objective": "从二进制文件输出中找出明确标注的碎片",
+      "instruction": "填写二进制文件名并运行 strings。不要选择看似随机的短字符，寻找带语义标签的行。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["binary-strings"],
+      "commandTemplate": "strings {{file}}",
+      "fields": [
+        { "id": "file", "label": "二进制文件名", "placeholder": "从 file 输出中选择" }
+      ],
+      "observation": "找到明确标注第二段的行，并同时找到描述组合顺序的结构提示。",
+      "commonErrors": ["strings 可能输出噪声；不要把第一条可打印内容直接当答案。"],
+      "reinforcement": "有标签和上下文的字符串比随机片段更可信。"
+    },
+    {
+      "id": 7,
+      "type": "explain",
+      "title": "规划组合而不丢字符",
+      "objective": "理解多段结果的顺序和连接符都属于答案",
+      "instruction": "组合结果时要分别确认第一段、第二段、顺序和连接符。尖括号只表示位置，不属于最终内容；提示符和多余空格也不能带入。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "combine-output",
+          "term": "组合多次输出",
+          "explanation": "需要跨命令保存信息时，先给每段标明来源，再按输出中的结构线索拼接；连接符、顺序和复制边界同样需要验证。"
+        }
+      ],
+      "uses": ["placeholder", "terminal-prompt"],
+      "reinforcement": "组合不是猜字符串，而是执行输出给出的结构。"
+    },
+    {
+      "id": 8,
+      "type": "question",
+      "title": "确认组合规则",
+      "objective": "根据两个文件的真实输出判断拼接方式",
+      "instruction": "回看终端中明确写出的结构提示，再作答。",
+      "completion": "answer",
+      "allowRun": false,
+      "uses": ["combine-output"],
+      "question": {
+        "prompt": "最终值应该怎样构成？",
+        "choices": [
+          { "id": "ordered", "label": "第一段、一个连字符、第二段" },
+          { "id": "reverse", "label": "第二段直接接第一段，不加分隔" },
+          { "id": "labels", "label": "复制两行完整标签和提示符" }
+        ],
+        "answer": "ordered",
+        "success": "正确。具体两段仍必须使用你从终端记录的真实值。"
+      },
+      "reinforcement": "结构已确认，内容仍来自两次独立观察。"
+    },
+    {
+      "id": 9,
+      "type": "checkpoint",
+      "title": "逐项核对最终值",
+      "objective": "避免顺序、连接符或复制范围错误",
+      "instruction": "在提交前逐项检查两段值、顺序、唯一的连接符和首尾空格。",
+      "completion": "confirm",
+      "allowRun": false,
+      "uses": ["combine-output", "terminal-prompt"],
+      "observation": "我已按第一段-第二段组合，且没有标签、尖括号、提示符或额外空格。",
+      "reinforcement": "跨输出组合最容易错在边界，提交前要显式核对。"
     }
   ],
-  "concepts": [
-    {
-      "term": "编码不等于加密",
-      "explanation": "Base64、十六进制这类编码只是「换种写法」，任何人都能用公开规则还原，不提供任何保密性。把口令或密钥「编码一下」就当加密，是最常见的低级错误——它挡不住任何愿意花十秒钟的人。"
-    },
-    {
-      "term": "strings 取证",
-      "explanation": "二进制文件（程序、固件、样本）里常残留大量明文：写死的口令、调试信息、隐藏的命令。strings 能把这些可打印字符串挑出来，是逆向分析和恶意代码取证的第一件工具。"
-    },
-    {
-      "term": "基础取证思维",
-      "explanation": "面对一个看不懂的文件，不要乱猜：先用 file 判断类型，再针对类型选工具（文本用 cat、编码用 base64 -d、二进制用 strings）。「先识别、再处理」是所有数据取证的基本套路。"
-    }
-  ],
-  "takeaway": "你刚刚做的事，在安全里叫「静态分析」的入门：不运行一个文件，光靠观察就把它藏的字符串挖了出来。真实世界里，分析一个可疑样本的第一件事往往就是 strings 和 base64 -d——很多恶意软件把服务器地址、密钥就这么明晃晃地编码塞进文件里，赌你不会去看。你现在已经会看了。",
   "hints": [
-    "message.b64 是 Base64 编码的文本，base64 -d 可以把它还原出来。",
-    "二进制文件里往往藏着可读字符串，strings 命令能把它们挑出来；xxd 可以看到文件的十六进制全貌。",
-    "两块碎片各自是暗号的一半，用连字符（-）按顺序拼接，就是最终答案。"
+    {
+      "level": 1,
+      "kind": "direction",
+      "text": "先用文件类型把两个目标分开处理；每次只记录带明确标签的碎片和结构线索。"
+    },
+    {
+      "level": 2,
+      "kind": "tool",
+      "text": "可打印编码使用 base64 的解码选项；二进制中的明文可以用 strings 筛出。"
+    },
+    {
+      "level": 3,
+      "kind": "structure",
+      "text": "命令结构分别是 base64 加解码选项和文件名、strings 加二进制文件名；最终按输出标出的第一段、连接符、第二段组合。"
+    }
   ],
-  "teaches": ["编码不等于加密", "文本与二进制", "基础取证思维"],
-  "checkUsage": "check <完整暗号>"
+  "verification": {
+    "usage": "check <完整暗号>",
+    "instruction": "用两次终端输出组合出的值替换占位符。",
+    "placeholders": [
+      { "token": "<完整暗号>", "meaning": "按文件内结构提示组合的第一段、连接符和第二段" }
+    ],
+    "feedback": {
+      "empty": "还未提供组合结果。",
+      "incorrect": "组合不匹配；分别核对两段内容、顺序、连接符和复制边界。",
+      "success": "你正确识别两类数据、提取碎片并组合了结果。"
+    }
+  },
+  "completionSummary": {
+    "solved": "你针对文本编码和二进制分别选工具，并用多次输出构造最终结果。",
+    "mastered": ["区分编码与加密", "先识别文件类型", "使用 strings 找语义线索", "记录和拼接多次输出"],
+    "next": "下一关会继续要求记录输出，但对象将从文件变为进程、PID 和监听端口。"
+  }
 }

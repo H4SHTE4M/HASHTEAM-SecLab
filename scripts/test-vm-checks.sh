@@ -33,6 +33,9 @@ stop_test_httpd() {
         pkill -f "httpd -p 127.0.0.1:${HASHTEAM_HTTP_PORT}" 2>/dev/null || true
     fi
     pkill -f "httpd -f -p 127.0.0.1:31337" 2>/dev/null || true
+    if [ -n "${HASHTEAM_SECURE_PORT:-}" ]; then
+        pkill -f "httpd .*:${HASHTEAM_SECURE_PORT}" 2>/dev/null || true
+    fi
 }
 trap 'stop_test_httpd; rm -rf "$WORK"' EXIT
 
@@ -259,20 +262,34 @@ expect_eq "reset-level 后服务恢复并通过" "$RC" "0"
 stop_test_httpd
 
 echo "—— 第 10 关 ——"
+export HASHTEAM_SECURE_PORT="${HASHTEAM_SECURE_PORT:-19091}"
 sandbox 10
 SB="$SB_DIR"
 run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-10/init.sh" >/dev/null
+sleep 1
+PORTS=$("$STUB/netstat" -tln)
+expect_contains "$PORTS" "初始服务监听所有接口" "0.0.0.0:${HASHTEAM_SECURE_PORT} "
 OUT=$(run_check "$SB") && RC=0 || RC=$?
-expect_eq "未完成状态失败（3 处不安全）" "$RC" "1"
-expect_contains "$OUT" "报告待修复数量" "还有 3 处"
+expect_eq "未完成综合状态验证失败" "$RC" "1"
+expect_contains "$OUT" "按观察面报告待修复数量" "还有 6 个观察面"
 cd "$SB/home/guest" && PATH="$STUB:$PATH" "$STUB/sed" -i 's/debug=true/debug=false/' server.conf
 OUT=$(run_check "$SB") && RC=0 || RC=$?
-expect_contains "$OUT" "只修一处仍有 2 处不达标" "还有 2 处"
-# 方法 1：sed 全部修复
+expect_contains "$OUT" "只修配置一项仍有多类问题" "还有 5 个观察面"
+# 方法 1：sed + chmod + 服务重启
 cd "$SB/home/guest" && PATH="$STUB:$PATH" "$STUB/sed" -i 's/allow_guest=true/allow_guest=false/' server.conf && PATH="$STUB:$PATH" "$STUB/sed" -i 's/listen=0.0.0.0/listen=127.0.0.1/' server.conf
+"$STUB/chmod" 600 "$SB/home/guest/server.conf"
+PID=$(cat "$SB/home/guest/.hashteam/level-10-httpd.pid")
+"$STUB/kill" "$PID" 2>/dev/null || true
+sleep 1
+HOME="$SB/home/guest" PATH="$STUB:$PATH" "$STUB/httpd" -p "127.0.0.1:${HASHTEAM_SECURE_PORT}" -h "$SB/home/guest/www"
+sleep 1
 if OUT=$(run_check "$SB"); then RC=0; else RC=$?; fi
-expect_eq "sed 修复后通过" "$RC" "0"
-# 方法 2：整体重写文件（不同但合法的方法）
+expect_eq "配置、权限和运行状态全部修复后通过" "$RC" "0"
+stop_test_httpd
+sleep 1
+# 方法 2：整体重写文件 + 符号权限（不同但合法的方法）
+HASHTEAM_SECURE_PORT=$((HASHTEAM_SECURE_PORT + 1))
+export HASHTEAM_SECURE_PORT
 sandbox 10
 SB2="$SB_DIR"
 run_level "$SB2" "$HASHTEAM_LEVELS_DIR/level-10/init.sh" >/dev/null
@@ -282,8 +299,14 @@ allow_guest=false
 listen=127.0.0.1
 max_connections=100
 CONF
+"$STUB/chmod" u=rw,go= "$SB2/home/guest/server.conf"
+PID=$(cat "$SB2/home/guest/.hashteam/level-10-httpd.pid")
+"$STUB/kill" "$PID" 2>/dev/null || true
+sleep 1
+HOME="$SB2/home/guest" PATH="$STUB:$PATH" "$STUB/httpd" -p "127.0.0.1:${HASHTEAM_SECURE_PORT}" -h "$SB2/home/guest/www"
+sleep 1
 if OUT=$(run_check "$SB2"); then RC=0; else RC=$?; fi
-expect_eq "重写文件修复后同样通过" "$RC" "0"
+expect_eq "重写文件与符号权限修复同样通过" "$RC" "0"
 
 echo
 echo "—— 结果：$PASS 通过，$FAIL 失败 ——"

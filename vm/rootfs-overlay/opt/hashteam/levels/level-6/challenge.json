@@ -1,68 +1,207 @@
 {
   "$schema": "../challenge.schema.json",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": 6,
   "slug": "auth-log-analysis",
   "name": "谁在攻击服务器",
-  "tagline": "异常登录分析：日志会说实话",
-  "story": "上一关你已经会用 grep 从日志里捞关键词了。值班同学发现服务器最近总有人尝试暴力破解登录。你面前是一份认证日志 auth.log，里面混杂着正常登录和大量失败尝试。作为安全运维新人，这次要更进一步：找出失败登录次数最多的那个 IP。",
+  "tagline": "字段与统计：每加一段都观察数据变化",
+  "storySummary": "失败登录来自多个地址，需要找出出现次数最多的来源。",
+  "story": "你已经能筛出失败记录，但值班处置还需要知道哪个来源最活跃。本关会把同一份日志逐步变成单列地址、分组次数和降序排名；任何一步不对，都先停下来修正中间结果。",
   "goals": [
-    "浏览 auth.log，了解日志的大致结构",
-    "筛选出所有失败的登录记录",
-    "统计每个来源 IP 的失败次数",
-    "找出失败次数最多的 IP 并完成验证"
+    "复用上一关能力筛选失败记录",
+    "观察一行日志并定位来源地址字段",
+    "逐段提取、排序、去重计数和数字排序",
+    "记录排名第一的来源地址"
   ],
-  "suggestedCommands": [
-    "grep \"Failed password\" auth.log",
-    "grep \"Failed password\" auth.log | awk '{print $11}'",
-    "grep \"Failed password\" auth.log | awk '{print $11}' | sort | uniq -c | sort -nr | head"
-  ],
-  "guide": [
+  "prerequisites": ["grep 筛选", "引号", "管道", "观察每个中间输出"],
+  "newConcepts": ["字段", "awk 字段引用", "分组计数管道"],
+  "steps": [
     {
-      "command": "grep \"Failed password\" auth.log",
-      "note": "沿用上一关的 grep，先筛出所有失败登录。不要急着拼完整管道；每加一段都先观察输出是否变成了你期望的样子。"
+      "id": 1,
+      "type": "manual-command",
+      "title": "复用失败记录筛选",
+      "objective": "不依赖完整答案重建上一关的 grep",
+      "instruction": "自行输入命令，只输出失败登录记录。运行后先确认没有成功记录混入。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["grep-filter", "shell-quotes"],
+      "observation": "输出应保持完整日志行，但只包含失败事件。",
+      "reinforcement": "已掌握的能力直接复用，不再重复提供完整命令。"
     },
     {
+      "id": 2,
+      "type": "observe",
+      "title": "只取一行来数位置",
+      "objective": "在较短输出中定位来源地址",
+      "instruction": "下面的观察命令沿用已学筛选，并只保留第一行。不要把 head 当作最终统计的一部分。",
+      "completion": "run",
+      "allowRun": true,
+      "uses": ["pipeline", "grep-filter", "command-options"],
       "command": "grep \"Failed password\" auth.log | head -n 1",
-      "note": "不确定 IP 在第几列？在管道中段接一个 head -n 1 只看第一行，按空格数一数 IP 是第几个字段（这关里是第 11 列）。"
+      "observation": "从左到右按空格分隔数每一段，找到形如四段数字的来源地址位于第几个字段。",
+      "reinforcement": "缩小样本可以让结构更容易观察。"
     },
     {
-      "command": "grep \"Failed password\" auth.log | awk '{print $11}'",
-      "note": "awk 按空格切分每一行，{print $11} 打印第 11 列——也就是来源 IP。现在输出里每行都是一个 IP 地址了。"
+      "id": 3,
+      "type": "explain",
+      "title": "理解字段和 awk 写法",
+      "objective": "知道 $N 表示第 N 个字段，并理解引号边界",
+      "instruction": "awk 默认按空白把每行切成字段。程序写在单引号中，{print $N} 表示打印第 N 个字段；$ 和数字属于 awk 语法，单引号不能漏，也不要把 $N 当成 Shell 提示符。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "text-fields",
+          "term": "字段",
+          "explanation": "一行文本按分隔规则切开后，每一段就是一个字段。字段位置必须从实际数据观察，不能凭记忆套用。"
+        },
+        {
+          "id": "awk-field-reference",
+          "term": "awk 字段引用",
+          "explanation": "awk 的 $1、$2、$N 引用当前行对应位置的字段；程序通常放在单引号中，避免 Shell 提前解释 $。"
+        }
+      ],
+      "uses": ["shell-quotes"],
+      "reinforcement": "$N 是字段位置，占位的 N 必须换成你数出的数字。"
     },
     {
-      "command": "grep \"Failed password\" auth.log | awk '{print $11}' | sort",
-      "note": "sort 给 IP 排序，相同的 IP 会排到一起。这一步是为下一步做准备：uniq 只会合并「相邻」的重复行，所以必须先 sort。"
+      "id": 4,
+      "type": "question",
+      "title": "确认来源地址字段",
+      "objective": "根据真实日志选择字段编号",
+      "instruction": "回到单行输出重新数，不要从后续命令猜答案。",
+      "completion": "answer",
+      "allowRun": false,
+      "uses": ["text-fields", "awk-field-reference"],
+      "question": {
+        "prompt": "这份训练日志中，来源 IP 位于第几个空白分隔字段？",
+        "choices": [
+          { "id": "field-9", "label": "第 9 个字段" },
+          { "id": "field-11", "label": "第 11 个字段" },
+          { "id": "field-13", "label": "第 13 个字段" }
+        ],
+        "answer": "field-11",
+        "success": "正确。这个编号来自当前日志格式；换一份日志仍要重新观察。"
+      },
+      "reinforcement": "字段编号是数据格式的一部分，不是 awk 的固定答案。"
     },
     {
-      "command": "grep \"Failed password\" auth.log | awk '{print $11}' | sort | uniq -c",
-      "note": "uniq -c 把相邻的重复 IP 合并，并在行首标出出现次数。现在每个 IP 出现几次一目了然，只是还没排序。"
+      "id": 5,
+      "type": "partial-command",
+      "title": "把整行变成单列地址",
+      "objective": "填写字段编号并观察 awk 输出",
+      "instruction": "把刚判断的数字填进 $ 后面。运行后不要继续，先检查每行是否只剩一个地址。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["grep-filter", "pipeline", "awk-field-reference"],
+      "commandTemplate": "grep \"Failed password\" auth.log | awk '{print ${{field}}}'",
+      "fields": [
+        { "id": "field", "label": "来源地址字段号", "placeholder": "只填数字" }
+      ],
+      "observation": "输出的每一行都应只有一个 IP 地址，不再包含时间、用户名等字段。",
+      "commonErrors": ["只填数字，不要重复输入 $。", "单引号必须成对保留。"],
+      "reinforcement": "复杂管道的第一步，是把数据变成下一步需要的形状。"
     },
     {
-      "command": "grep \"Failed password\" auth.log | awk '{print $11}' | sort | uniq -c | sort -nr | head",
-      "note": "最后再接 sort -nr 按次数从大到小排，head 取最前面的几行。排在第一的那个 IP 就是失败次数最多的攻击者，交给 check 完成验证。"
+      "id": 6,
+      "type": "explain",
+      "title": "理解排序后再去重计数",
+      "objective": "知道 sort、uniq -c 和数字降序各自改变什么",
+      "instruction": "sort 先让相同地址相邻；uniq -c 才能把相邻重复行合并并在行首计数；最后再按行首数字从大到小排序。每一步都要观察输出形状。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "counting-pipeline",
+          "term": "分组计数管道",
+          "explanation": "先排序使相同值相邻，再用 uniq -c 分组计数，最后对计数做数字降序。顺序不同会改变含义。"
+        }
+      ],
+      "uses": ["pipeline"],
+      "reinforcement": "sort 是让相同项相邻，uniq -c 才负责计数。"
+    },
+    {
+      "id": 7,
+      "type": "manual-command",
+      "title": "加入排序并观察",
+      "objective": "在已验证的地址提取管道后追加 sort",
+      "instruction": "从历史命令取回地址提取管道，在末尾追加排序。完整输入并运行。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["counting-pipeline", "pipeline"],
+      "observation": "相同地址现在应连续出现，但每条记录仍占一行。",
+      "reinforcement": "只增加一段，才能清楚知道变化来自哪里。"
+    },
+    {
+      "id": 8,
+      "type": "manual-command",
+      "title": "加入去重计数并观察",
+      "objective": "把连续重复地址变成“次数 + 地址”",
+      "instruction": "在刚验证的排序管道末尾加入去重计数，再完整运行。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["counting-pipeline", "pipeline"],
+      "observation": "每个地址只剩一行，行首出现它的次数。",
+      "reinforcement": "输出形状已从单列地址变成两列统计。"
+    },
+    {
+      "id": 9,
+      "type": "manual-command",
+      "title": "按次数排名",
+      "objective": "让最大计数出现在第一行",
+      "instruction": "在计数结果后加入按数字反向排序的步骤；可以再只看开头几行。完整命令仍需你自己组合。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["counting-pipeline", "pipeline", "command-options"],
+      "observation": "第一行的计数应不小于后续行；记录第一行右侧的地址。",
+      "commonErrors": ["普通字典序会把数字当文字，确认使用数字排序。"],
+      "reinforcement": "排名第一的对象来自完整、逐段验证过的统计链。"
+    },
+    {
+      "id": 10,
+      "type": "checkpoint",
+      "title": "只记录排名对象",
+      "objective": "区分次数列和地址列",
+      "instruction": "最终验证需要地址，不需要前面的计数。确认复制范围。",
+      "completion": "confirm",
+      "allowRun": false,
+      "uses": ["text-fields", "terminal-prompt"],
+      "observation": "我已记录第一行的 IP 地址，没有带上次数、提示符或空格。",
+      "reinforcement": "分析输出可能有多列，提交前要重新确认目标字段。"
     }
   ],
-  "concepts": [
-    {
-      "term": "管道",
-      "explanation": "用 | 把多个小命令串联，让前一个的输出成为后一个的输入。这是 Linux 文本处理的灵魂：不靠一个万能大工具，而是把许多各司其职的小工具组合起来解决复杂问题——日志分析尤其依赖它。"
-    },
-    {
-      "term": "日志即证据",
-      "explanation": "系统会把登录、操作、错误都写进日志。攻击者来过的痕迹几乎总能在日志里找到。安全运维的日常不是盯着屏幕等告警，而是回到日志里，把「谁、什么时候、做了什么」还原出来。"
-    },
-    {
-      "term": "暴力破解",
-      "explanation": "攻击者用程序反复猜测用户名和密码，直到撞对为止。它的特征就是同一个来源 IP 在短时间内产生大量「失败登录」——这正是本关要你从日志里揪出来的模式。"
-    }
-  ],
-  "takeaway": "你刚刚完成了一次标准的「日志取证」：从成千上万行里筛出失败登录、按来源统计、锁定攻击最猛的那个 IP。这正是安全运维（SOC）每天在做的事——攻击发生后，第一个被问到的问题永远是「是谁干的」，而答案几乎总藏在日志里。排序第一的 203.0.113.66，就是要拉进黑名单的对象。",
   "hints": [
-    "失败的登录记录里都包含固定字样 Failed password，先用 grep 把它们捞出来。",
-    "awk 可以按空格切分每一行，IP 地址就在其中一列，数一数是第几列。",
-    "把 IP 提取出来后，sort | uniq -c 可以统计每个 IP 出现几次，再 sort -nr 按次数从大到小排序。"
+    {
+      "level": 1,
+      "kind": "direction",
+      "text": "把任务拆成五次形状变化：完整失败行 → 单列地址 → 相同项相邻 → 次数加地址 → 次数降序。"
+    },
+    {
+      "level": 2,
+      "kind": "tool",
+      "text": "grep 筛选，awk 取字段，sort 排序，uniq 的计数选项合并相邻项，再用 sort 的数字反向选项排名。"
+    },
+    {
+      "level": 3,
+      "kind": "structure",
+      "text": "从已验证的 grep | awk 开始，依次追加“排序 | 去重计数 | 数字反向排序”；awk 的字段号仍需从日志自行填写。"
+    }
   ],
-  "teaches": ["日志分析", "管道", "文本筛选与统计", "基础安全运维"],
-  "checkUsage": "check <IP地址>"
+  "verification": {
+    "usage": "check <IP地址>",
+    "instruction": "用最终排名第一行的地址替换占位符，不要包含前面的计数。",
+    "placeholders": [
+      { "token": "<IP地址>", "meaning": "失败登录次数排名第一的来源地址" }
+    ],
+    "feedback": {
+      "empty": "还未提供来源地址。",
+      "incorrect": "地址不是当前最高频来源；回到字段提取或排序中间结果定位问题。",
+      "success": "你通过逐段统计锁定了最活跃的失败登录来源。"
+    }
+  },
+  "completionSummary": {
+    "solved": "你把日志逐段转换为来源地址排名，并准确提取了第一名。",
+    "mastered": ["观察文本字段", "使用 awk 的 $N", "排序后去重计数", "按数字降序排名"],
+    "next": "下一关会把“记录输出并组合结果”迁移到两种不同文件格式。"
+  }
 }

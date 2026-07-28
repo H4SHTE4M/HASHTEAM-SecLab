@@ -15,5 +15,5 @@ if [ "$given" = "$expected" ]; then
     echo "✓ 正确！隐藏不等于安全，默认看不见的东西依然存在。"
     exit 0
 fi
-echo "✗ 验证信息不对。用 cat .message 仔细看看冒号后面的内容。"
+echo "✗ 验证信息不对。回到隐藏消息，检查冒号后的内容和复制范围。"
 exit 1

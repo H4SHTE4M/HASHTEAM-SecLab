@@ -11,9 +11,9 @@ check_perm() { # 文件 期望权限
     fi
     mode=$(stat -c %a "$1")
     if [ "$mode" = "$2" ]; then
-        echo "  ✓ $1 权限为 $mode"
+        echo "  ✓ $(basename "$1") 权限符合业务用途"
     else
-        echo "  ✗ $1 应为 $2（当前：$mode）"
+        echo "  ✗ $(basename "$1") 权限仍不符合业务用途（当前数字形式：$mode）"
         errors=$((errors + 1))
     fi
 }
@@ -26,5 +26,5 @@ if [ "$errors" -eq 0 ]; then
     echo "✓ 权限收紧完成！最小权限原则：只给完成工作所必需的权限，多一点都不行。"
     exit 0
 fi
-echo "还有 $errors 处权限过宽，继续加油。"
+echo "还有 $errors 处权限不符合用途。回到三组权限逐组检查。"
 exit 1

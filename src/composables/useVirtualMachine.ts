@@ -3,7 +3,7 @@ import type { BootStage, ProtocolMessage, VirtualMachineController } from '../ty
 import { V86Controller } from '../services/vm-controller'
 import { useSerialProtocol } from './useSerialProtocol'
 import { useLabProgress } from './useLabProgress'
-import { TOTAL_LEVELS } from '../data/levels'
+import { getLevel, TOTAL_LEVELS } from '../data/levels'
 import { log, clear as clearBootLog } from '../services/boot-logger'
 
 const DEFAULT_READY_TIMEOUT_MS = 60_000
@@ -102,7 +102,16 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
       case 'level-result':
         // 只接受当前关卡的通过消息，避免迟到或异常协议改写其他关卡进度。
         if (message.status === 'passed' && message.level === progress.state.currentLevel) {
-          progress.complete(message.level)
+          const requiredSteps = getLevel(message.level)?.steps.map((step) => step.id) ?? []
+          const completedSteps = new Set(progress.completedStepsFor(message.level))
+          if (requiredSteps.every((stepId) => completedSteps.has(stepId))) {
+            progress.complete(message.level)
+          } else {
+            const notice =
+              '\r\n\x1b[33m环境结果已经正确，但还需要完成右侧当前教学步骤，' +
+              '确认你观察过关键输出后再运行一次 check。\x1b[0m\r\n'
+            displayCallbacks.forEach((callback) => callback(notice))
+          }
         }
         break
       case 'hint-request':

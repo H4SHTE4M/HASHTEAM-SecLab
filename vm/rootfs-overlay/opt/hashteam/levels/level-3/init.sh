@@ -14,8 +14,7 @@ cat > todo.txt <<'T_EOF'
   scripts/    放 backup.sh 和 deploy.sh
   secrets/    放 api.key
 
-先用 cd inbox 进入目录，再用 pwd 确认位置。
-整理完成后可在任何目录运行 check 复查。
+操作前先确认位置；整理完成后逐个目录复查。
 T_EOF
 
 cat > inbox/app.log <<'A_EOF'
@@ -41,5 +40,4 @@ K_EOF
 echo "──────────────────────────────────────────────"
 echo " 第 3 关 · 搬家与整理"
 echo "──────────────────────────────────────────────"
-echo "待整理文件都在 inbox/（任务见 todo.txt）。"
-echo "进入 inbox，把日志、脚本和密钥分类放好，然后运行 check。"
+echo "管理员留下了待办。请先从主目录盘点并阅读现场说明。"

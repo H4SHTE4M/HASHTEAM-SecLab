@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "HASHTEAM Security Lab Challenge",
+  "title": "HASHTEAM Security Lab Progressive Challenge",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -9,106 +9,230 @@
     "slug",
     "name",
     "tagline",
+    "storySummary",
     "story",
     "goals",
-    "suggestedCommands",
+    "prerequisites",
+    "newConcepts",
+    "steps",
     "hints",
-    "teaches",
-    "checkUsage"
+    "verification",
+    "completionSummary"
   ],
   "properties": {
-    "$schema": {
-      "type": "string"
-    },
-    "schemaVersion": {
-      "const": 1
-    },
-    "id": {
-      "type": "integer",
-      "minimum": 1
-    },
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 2 },
+    "id": { "type": "integer", "minimum": 1 },
     "slug": {
       "type": "string",
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
     },
-    "name": {
-      "type": "string",
-      "minLength": 1
+    "name": { "$ref": "#/$defs/nonEmptyString" },
+    "tagline": { "$ref": "#/$defs/nonEmptyString" },
+    "storySummary": { "$ref": "#/$defs/nonEmptyString" },
+    "story": { "$ref": "#/$defs/nonEmptyString" },
+    "goals": { "$ref": "#/$defs/nonEmptyStringList" },
+    "prerequisites": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/nonEmptyString" }
     },
-    "tagline": {
-      "type": "string",
-      "minLength": 1
-    },
-    "story": {
-      "type": "string",
-      "minLength": 1
-    },
-    "goals": {
-      "$ref": "#/$defs/nonEmptyStringList"
-    },
-    "suggestedCommands": {
-      "$ref": "#/$defs/nonEmptyStringList"
-    },
-    "guide": {
+    "newConcepts": { "$ref": "#/$defs/nonEmptyStringList" },
+    "steps": {
       "type": "array",
       "minItems": 1,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["note"],
-        "properties": {
-          "command": {
-            "type": "string",
-            "minLength": 1
-          },
-          "note": {
-            "type": "string",
-            "minLength": 1
-          }
-        }
-      }
-    },
-    "concepts": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["term", "explanation"],
-        "properties": {
-          "term": {
-            "type": "string",
-            "minLength": 1
-          },
-          "explanation": {
-            "type": "string",
-            "minLength": 1
-          }
-        }
-      }
-    },
-    "takeaway": {
-      "type": "string",
-      "minLength": 1
+      "items": { "$ref": "#/$defs/step" }
     },
     "hints": {
-      "$ref": "#/$defs/nonEmptyStringList"
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["level", "kind", "text"],
+          "properties": {
+            "level": { "const": 1 },
+            "kind": { "const": "direction" },
+            "text": { "$ref": "#/$defs/nonEmptyString" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["level", "kind", "text"],
+          "properties": {
+            "level": { "const": 2 },
+            "kind": { "const": "tool" },
+            "text": { "$ref": "#/$defs/nonEmptyString" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["level", "kind", "text"],
+          "properties": {
+            "level": { "const": 3 },
+            "kind": { "const": "structure" },
+            "text": { "$ref": "#/$defs/nonEmptyString" }
+          }
+        }
+      ]
     },
-    "teaches": {
-      "$ref": "#/$defs/nonEmptyStringList"
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["usage", "instruction", "placeholders", "feedback"],
+      "properties": {
+        "usage": { "$ref": "#/$defs/nonEmptyString" },
+        "instruction": { "$ref": "#/$defs/nonEmptyString" },
+        "placeholders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["token", "meaning"],
+            "properties": {
+              "token": {
+                "type": "string",
+                "pattern": "^<[^<>\\n]+>$"
+              },
+              "meaning": { "$ref": "#/$defs/nonEmptyString" }
+            }
+          }
+        },
+        "feedback": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["empty", "incorrect", "success"],
+          "properties": {
+            "empty": { "$ref": "#/$defs/nonEmptyString" },
+            "incorrect": { "$ref": "#/$defs/nonEmptyString" },
+            "success": { "$ref": "#/$defs/nonEmptyString" }
+          }
+        }
+      }
     },
-    "checkUsage": {
-      "type": "string",
-      "minLength": 1
+    "completionSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["solved", "mastered", "next"],
+      "properties": {
+        "solved": { "$ref": "#/$defs/nonEmptyString" },
+        "mastered": { "$ref": "#/$defs/nonEmptyStringList" },
+        "next": { "$ref": "#/$defs/nonEmptyString" }
+      }
     }
   },
   "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
     "nonEmptyStringList": {
       "type": "array",
       "minItems": 1,
-      "items": {
-        "type": "string",
-        "minLength": 1
+      "items": { "$ref": "#/$defs/nonEmptyString" }
+    },
+    "concept": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "term", "explanation"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "term": { "$ref": "#/$defs/nonEmptyString" },
+        "explanation": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "commandField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "placeholder"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "label": { "$ref": "#/$defs/nonEmptyString" },
+        "placeholder": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "choice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonEmptyString" },
+        "label": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prompt", "choices", "answer", "success"],
+      "properties": {
+        "prompt": { "$ref": "#/$defs/nonEmptyString" },
+        "choices": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/choice" }
+        },
+        "answer": { "$ref": "#/$defs/nonEmptyString" },
+        "success": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "title",
+        "objective",
+        "instruction",
+        "completion",
+        "allowRun"
+      ],
+      "properties": {
+        "id": { "type": "integer", "minimum": 1 },
+        "type": {
+          "enum": [
+            "explain",
+            "observe",
+            "partial-command",
+            "manual-command",
+            "question",
+            "checkpoint",
+            "reflection"
+          ]
+        },
+        "title": { "$ref": "#/$defs/nonEmptyString" },
+        "objective": { "$ref": "#/$defs/nonEmptyString" },
+        "instruction": { "$ref": "#/$defs/nonEmptyString" },
+        "completion": {
+          "enum": ["acknowledge", "run", "input", "answer", "confirm"]
+        },
+        "allowRun": { "type": "boolean" },
+        "introduces": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/concept" }
+        },
+        "uses": { "$ref": "#/$defs/nonEmptyStringList" },
+        "command": { "$ref": "#/$defs/nonEmptyString" },
+        "commandTemplate": { "$ref": "#/$defs/nonEmptyString" },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/commandField" }
+        },
+        "observation": { "$ref": "#/$defs/nonEmptyString" },
+        "question": { "$ref": "#/$defs/question" },
+        "commonErrors": { "$ref": "#/$defs/nonEmptyStringList" },
+        "reinforcement": { "$ref": "#/$defs/nonEmptyString" }
       }
     }
   }

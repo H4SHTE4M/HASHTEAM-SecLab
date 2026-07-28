@@ -1,62 +1,204 @@
 {
   "$schema": "../challenge.schema.json",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": 8,
   "slug": "backdoor-process",
   "name": "多出来的进程",
-  "tagline": "进程与服务识别：那个不请自来的家伙",
-  "story": "上一关的两块碎片指向一个更糟的发现：有入侵者在这台机器上留了后门。值班系统凌晨告警——ps 里多出一个你不认识的进程，netstat 里多出一个陌生的监听端口。作为值班人，你要把它揪出来：确认它监听的端口号，结束这个进程，然后把端口号交给 check 报备。学会了认出「不该有的服务」，下一关我们就自己起一个本地 Web 服务，看看它会泄露什么。",
+  "tagline": "进程与端口：从正常基线中定位异常",
+  "storySummary": "值班告警显示本机出现未知监听服务，需要确认关联对象并清除。",
+  "story": "这台训练机的用户会话正常只需要系统初始化和交互 Shell，不应有用户自行启动的网络服务。请以此为基线，观察进程和监听状态，关联 PID 与端口并完成处置。",
   "goals": [
-    "用 ps 查看当前运行的进程，找出可疑项",
-    "用 netstat -tln 查看监听中的端口，找出陌生端口并记下它",
-    "（可选）用 curl 访问该端口，确认后门在提供什么",
-    "kill 结束后门进程，把端口号交给 check"
+    "建立当前训练机的正常进程基线",
+    "识别不属于基线的用户进程",
+    "从监听列表找出对应的陌生端口",
+    "结束异常进程并确认监听消失"
   ],
-  "suggestedCommands": [
-    "ps",
-    "ps aux",
-    "netstat -tln",
-    "curl http://127.0.0.1:31337/",
-    "kill <PID>"
-  ],
-  "guide": [
+  "prerequisites": ["比较输出找差异", "记录终端字段", "使用手动命令完成关键操作"],
+  "newConcepts": ["进程与 PID", "监听地址与端口", "进程处置复核"],
+  "steps": [
     {
+      "id": 1,
+      "type": "explain",
+      "title": "先定义什么算异常",
+      "objective": "理解进程、PID 和本关正常基线",
+      "instruction": "进程是正在运行的程序，每个进程有一个数字 PID。当前训练场景只预期系统初始化和你的 Shell；额外的用户网络服务就是调查对象。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "process-pid",
+          "term": "进程与 PID",
+          "explanation": "ps 显示正在运行的程序，PID 是某次运行实例的编号。结束进程时要使用实际 PID，而不是占位符或端口号。"
+        }
+      ],
+      "reinforcement": "异常不是“名字看着奇怪”，而是“不属于预期基线”。"
+    },
+    {
+      "id": 2,
+      "type": "observe",
+      "title": "查看正在运行的程序",
+      "objective": "从进程列表定位额外的用户网络服务",
+      "instruction": "运行进程列表，重点比较 COMMAND 一列和本关基线。",
+      "completion": "run",
+      "allowRun": true,
+      "uses": ["process-pid"],
       "command": "ps",
-      "note": "先列出当前进程。大部分是系统正常运行所需；重点看 COMMAND 列里路径或名字扎眼的——比如藏在点开头目录里的东西。第一列 PID 待会儿 kill 要用。"
+      "observation": "找出提供 HTTP 服务、且不属于 init 或当前 Shell 的进程，并记下它的 PID。",
+      "reinforcement": "先用职责判断对象，再记录处置需要的 PID。"
     },
     {
-      "command": "netstat -tln",
-      "note": "-t 看 TCP、-l 只看监听中、-n 显示数字端口。LISTEN 列表里那个陌生的大端口就是后门在等人连接——记下这个端口号，最后要交给 check。"
+      "id": 3,
+      "type": "question",
+      "title": "解释为什么它可疑",
+      "objective": "用基线而不是端口答案支持判断",
+      "instruction": "根据 ps 的实际输出选择理由。",
+      "completion": "answer",
+      "allowRun": false,
+      "uses": ["process-pid"],
+      "question": {
+        "prompt": "哪条证据最能说明目标进程值得调查？",
+        "choices": [
+          { "id": "unexpected-service", "label": "它是基线未包含、由用户目录启动的网络服务" },
+          { "id": "has-pid", "label": "它拥有 PID" },
+          { "id": "shell", "label": "它是当前交互 Shell" }
+        ],
+        "answer": "unexpected-service",
+        "success": "正确。所有进程都有 PID；真正的异常是职责和来源不符合基线。"
+      },
+      "reinforcement": "判断要写得出证据，而不是只凭陌生感。"
     },
     {
-      "command": "curl http://127.0.0.1:31337/",
-      "note": "（可选）访问这个端口，看看后门到底在提供什么内容。请求只发往虚拟机内部，安全。"
+      "id": 4,
+      "type": "explain",
+      "title": "把网络行为与进程关联",
+      "objective": "理解本机地址、端口和 LISTEN",
+      "instruction": "监听表示程序正在等待连接。地址说明在哪个网络接口接收，冒号后的数字是端口；netstat 的 -t、-l、-n 分别限定 TCP、监听状态和数字显示。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "listening-port",
+          "term": "监听地址与端口",
+          "explanation": "监听地址决定连接从哪里进入，端口区分同一机器上的服务。进程异常和陌生监听同时出现时，可以通过服务类型和时间线关联。"
+        }
+      ],
+      "uses": ["command-options"],
+      "reinforcement": "进程回答“谁在运行”，监听列表回答“它在等什么连接”。"
     },
     {
-      "command": "kill <PID>",
-      "note": "回到 ps 输出，找到可疑进程第一列的 PID。把模板里的 <PID> 换成真实数字后手动输入，结束进程；再用 netstat -tln 确认端口已经消失。"
+      "id": 5,
+      "type": "partial-command",
+      "title": "自己组合监听查看选项",
+      "objective": "填写 TCP、监听、数字显示三个短选项",
+      "instruction": "把三个短选项组合成一个参数并运行，不要从后续内容寻找端口。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["listening-port", "command-options"],
+      "commandTemplate": "netstat {{options}}",
+      "fields": [
+        { "id": "options", "label": "监听查看组合选项", "placeholder": "组合 -t、-l、-n" }
+      ],
+      "observation": "排除已知系统项，记录陌生监听行冒号后的端口数字。",
+      "commonErrors": ["端口来自 Local Address 一列，不是 PID。"],
+      "reinforcement": "关键端口必须从当前环境输出发现。"
+    },
+    {
+      "id": 6,
+      "type": "question",
+      "title": "确认 PID 与端口角色",
+      "objective": "避免把两个数字用反",
+      "instruction": "回看 ps 与 netstat 的两份输出。",
+      "completion": "answer",
+      "allowRun": false,
+      "uses": ["process-pid", "listening-port"],
+      "question": {
+        "prompt": "结束进程和最终报备分别需要哪个值？",
+        "choices": [
+          { "id": "pid-port", "label": "kill 使用 PID；check 提交监听端口" },
+          { "id": "port-pid", "label": "kill 使用端口；check 提交 PID" },
+          { "id": "same", "label": "两处都填写同一个数字" }
+        ],
+        "answer": "pid-port",
+        "success": "正确。PID 标识进程实例，端口标识网络入口。"
+      },
+      "reinforcement": "同为数字，含义和使用位置完全不同。"
+    },
+    {
+      "id": 7,
+      "type": "manual-command",
+      "title": "独立结束异常进程",
+      "objective": "使用实际 PID 完成处置",
+      "instruction": "自己输入完整 kill 命令。PID 必须来自 ps 输出；不要输入尖括号，也不要把端口当 PID。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["process-pid", "placeholder"],
+      "observation": "命令完成后再次运行 ps，目标服务应不再出现。",
+      "commonErrors": ["若提示没有该进程，重新运行 ps 获取当前 PID。"],
+      "reinforcement": "处置对象必须来自实时证据。"
+    },
+    {
+      "id": 8,
+      "type": "explain",
+      "title": "处置后必须复核",
+      "objective": "理解进程消失和监听消失要同时确认",
+      "instruction": "只执行 kill 还不能证明目标达成。重新查看进程和监听列表：异常进程与对应端口都消失，才说明网络入口已关闭。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "remediation-verification",
+          "term": "进程处置复核",
+          "explanation": "操作成功提示不等于风险消失。应回到最初的观察面，确认进程和网络状态都恢复到基线。"
+        }
+      ],
+      "uses": ["process-pid", "listening-port"],
+      "reinforcement": "修复要以环境状态为准。"
+    },
+    {
+      "id": 9,
+      "type": "checkpoint",
+      "title": "确认监听已经消失",
+      "objective": "用新的 ps 和 netstat 输出证明处置结果",
+      "instruction": "重新运行前面的两个观察命令，再确认报备端口仍记录在你的笔记中。",
+      "completion": "confirm",
+      "allowRun": false,
+      "uses": ["remediation-verification", "terminal-prompt"],
+      "observation": "异常进程和陌生监听均已消失；我仍保存处置前发现的端口号。",
+      "reinforcement": "发现、处置、复核形成了最小应急闭环。"
     }
   ],
-  "concepts": [
-    {
-      "term": "进程",
-      "explanation": "进程就是「正在运行的程序」。攻击者想在机器上持续活动（监听指令、回传数据），几乎一定要留下一个运行中的进程。ps 让你看清机器上此刻到底在跑什么——不认识的进程，就是潜在的入侵者。"
-    },
-    {
-      "term": "端口与服务",
-      "explanation": "一个程序要对外提供网络服务，就必须监听某个端口。后门要接收远程指令也不例外。netstat 列出所有监听端口，正常的服务你认识，那个陌生的大端口往往就是问题所在。"
-    },
-    {
-      "term": "应急响应",
-      "explanation": "发现入侵迹象后的标准处置流程：先认出异常（进程、端口），确认它是什么，再终止并清理。本关的「ps 发现 → netstat 确认 → kill 清除」就是一次微型的应急响应。"
-    }
-  ],
-  "takeaway": "你刚刚完成了一次微型的「应急响应」：从正在运行的进程里揪出后门、确认它监听的端口、把它终结。这正是安全值守的看家本领——入侵者要在你的机器上长期扎根，几乎必然留下一个进程和一个监听端口；而「认出并清除不该有的东西」，就是应急响应最核心的一步。",
   "hints": [
-    "ps 的 COMMAND 列显示进程启动时的完整命令行，找路径或名字最陌生的那个；第一列是它的 PID。",
-    "netstat -tln 列出所有监听中的 TCP 端口——这台机器正常时不该有奇怪的大端口处于 LISTEN。",
-    "kill 后面跟的是 PID（数字），不是进程名。kill 之后把后门监听的端口号交给 check，例如 check 12345。"
+    {
+      "level": 1,
+      "kind": "direction",
+      "text": "用“是否属于 init、Shell 或预期系统职责”判断进程，再在监听列表找同一时期出现的陌生入口。"
+    },
+    {
+      "level": 2,
+      "kind": "tool",
+      "text": "ps 查看进程和 PID；netstat 配合 TCP、监听、数字选项查看端口；kill 处置进程。"
+    },
+    {
+      "level": 3,
+      "kind": "structure",
+      "text": "监听查看结构是 netstat 加三个组合短选项；处置结构是 kill 加 ps 第一列的真实 PID。端口仍需从 Local Address 自行记录。"
+    }
   ],
-  "teaches": ["进程管理", "端口与服务识别", "kill 与进程终止", "基础应急响应"],
-  "checkUsage": "check <端口号>"
+  "verification": {
+    "usage": "check <端口号>",
+    "instruction": "提交处置前记录的陌生监听端口；check 还会确认该监听已经消失。",
+    "placeholders": [
+      { "token": "<端口号>", "meaning": "处置前从陌生 LISTEN 行记录的端口数字，不是 PID" }
+    ],
+    "feedback": {
+      "empty": "还未提供处置前记录的端口。",
+      "incorrect": "对象或状态不匹配；重新核对端口来源，并确认异常进程和监听都已消失。",
+      "success": "异常进程和网络入口均已清除并复核。"
+    }
+  },
+  "completionSummary": {
+    "solved": "你依据基线关联了异常进程与陌生监听，使用 PID 处置并复核。",
+    "mastered": ["用基线判断异常进程", "区分 PID 与端口", "查看监听状态", "处置后回到环境复核"],
+    "next": "下一关会复用监听端口与本机地址，把它们组成 URL 并探索 HTTP 路径。"
+  }
 }

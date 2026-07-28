@@ -1,51 +1,161 @@
 {
   "$schema": "../challenge.schema.json",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": 2,
   "slug": "hidden-file",
   "name": "消失的文件",
-  "tagline": "隐藏的信息：看不见 ≠ 不存在",
-  "story": "管理员说主目录里放着一条给你的消息，可普通的 ls 怎么也看不到。在 Linux 里，有些文件只是默认不展示，并不是真的不存在。",
+  "tagline": "选项与隐藏信息：比较默认视图和完整视图",
+  "storySummary": "管理员确认主目录里有一条消息，但普通目录列表没有显示它。",
+  "story": "信息没有消失，只是默认视图没有把所有内容列出来。你的任务是通过改变查看方式找出差异，再判断哪一个新出现的对象值得读取。",
   "goals": [
-    "比较普通 ls 和显示全部文件的结果",
-    "找到以点开头的隐藏文件",
-    "确认文件类型并读取验证信息"
+    "比较 ls 与带选项的目录列表",
+    "辨认以点开头的隐藏文件",
+    "自行读取隐藏消息并提交验证信息"
   ],
-  "suggestedCommands": ["ls", "ls -la", "file .message", "cat .message"],
-  "guide": [
+  "prerequisites": ["使用 ls 查看目录", "使用 cat 读取文本", "替换验证占位符"],
+  "newConcepts": ["命令选项", "隐藏文件"],
+  "steps": [
     {
+      "id": 1,
+      "type": "explain",
+      "title": "认识命令选项",
+      "objective": "理解选项会改变同一命令的工作方式",
+      "instruction": "选项通常写在命令后，以 - 开头，并用空格分开。ls 仍负责列目录，-l 会显示详情，-a 会把默认隐藏的条目也列出；短选项可以组合。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "command-options",
+          "term": "命令选项",
+          "explanation": "选项不会改变命令是谁，而是调整它怎样工作。命令、选项、参数之间都要保留空格。"
+        }
+      ],
+      "uses": ["command-anatomy"],
+      "reinforcement": "看到 - 开头的部分，先问它改变了哪个命令。"
+    },
+    {
+      "id": 2,
+      "type": "observe",
+      "title": "建立默认视图",
+      "objective": "记住普通 ls 当前显示的文件",
+      "instruction": "先运行不带选项的 ls，把它作为比较基线。",
+      "completion": "run",
+      "allowRun": true,
+      "uses": ["command-anatomy"],
       "command": "ls",
-      "note": "先用最普通的 ls 看一眼：目录里似乎只有 notes.txt。管理员说的消息并没有出现在默认列表里。"
+      "observation": "记住当前能看到的普通文件名，下一步找新增条目。",
+      "reinforcement": "比较之前要先知道“原来是什么样”。"
     },
     {
-      "command": "ls -la",
-      "note": "给 ls 加上 -a（all）就会显示全部文件，包括以点开头的隐藏文件；-l 会同时显示详细信息。找一找新出现的 .message。"
+      "id": 3,
+      "type": "partial-command",
+      "title": "补全显示全部内容的选项",
+      "objective": "用选项扩大目录观察范围",
+      "instruction": "给 ls 填入能显示全部条目的短选项。运行后和上一步逐项比较。",
+      "completion": "input",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "hidden-files",
+          "term": "隐藏文件",
+          "explanation": "Linux 中以 . 开头的名称默认不在普通 ls 输出中；隐藏只是显示约定，不是访问控制。"
+        }
+      ],
+      "uses": ["command-options"],
+      "commandTemplate": "ls {{option}}",
+      "fields": [
+        {
+          "id": "option",
+          "label": "显示全部条目的选项",
+          "placeholder": "填写一个以 - 开头的短选项"
+        }
+      ],
+      "observation": "找出普通 ls 没显示、现在新出现且像消息的点开头文件。",
+      "commonErrors": ["选项前要有 -，并与 ls 之间保留空格。"],
+      "reinforcement": "默认没显示，不等于不存在。"
     },
     {
-      "command": "file .message",
-      "note": "读取陌生文件前，可以先用 file 判断类型。输出会告诉你 .message 是文本文件。"
+      "id": 4,
+      "type": "question",
+      "title": "判断哪项值得调查",
+      "objective": "根据两次输出的差异选择目标",
+      "instruction": "不要根据故事猜名称，只根据刚才的终端输出判断。",
+      "completion": "answer",
+      "allowRun": false,
+      "uses": ["hidden-files"],
+      "question": {
+        "prompt": "哪类条目最符合“普通 ls 看不到、显示全部后出现”的线索？",
+        "choices": [
+          { "id": "dotfile", "label": "名称以 . 开头的文件" },
+          { "id": "normal", "label": "两次列表里都出现的普通文件" },
+          { "id": "prompt", "label": "终端提示符中的用户名" }
+        ],
+        "answer": "dotfile",
+        "success": "正确。点开头解释了它为什么只在显示全部内容时出现。"
+      },
+      "reinforcement": "目标来自输出差异，而不是现成答案。"
     },
     {
-      "command": "cat .message",
-      "note": "用 cat 读取文本。记下冒号后的验证信息，再按下方提示交给 check。"
+      "id": 5,
+      "type": "manual-command",
+      "title": "独立读取隐藏消息",
+      "objective": "复用上一关能力，自行组合读取命令",
+      "instruction": "在输入框中完整写出读取目标文件的命令并运行。系统不再提供模板；文件名必须来自你自己的目录输出。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["command-anatomy", "hidden-files"],
+      "observation": "记录消息中验证标签后面的真实值。",
+      "commonErrors": ["如果找不到文件，检查点号、大小写和空格。"],
+      "reinforcement": "已经学过的 cat 不再给完整答案。"
+    },
+    {
+      "id": 6,
+      "type": "checkpoint",
+      "title": "确认提取结果",
+      "objective": "避免把标签或提示符复制进验证值",
+      "instruction": "确认你记录的是隐藏消息中的真实值，而不是整行文字。",
+      "completion": "confirm",
+      "allowRun": false,
+      "uses": ["placeholder", "terminal-prompt"],
+      "observation": "我已记录冒号后的验证信息，没有包含标签、$ 或尖括号。",
+      "reinforcement": "扩大观察范围之后，仍要准确提取结果。"
     }
   ],
-  "concepts": [
-    {
-      "term": "隐藏文件",
-      "explanation": "Linux 里以点（.）开头的文件默认不出现在 ls 结果里。这不是权限保护，只是一种显示约定；知道 -a 参数的人都能看到。"
-    },
-    {
-      "term": "「不可见」不等于「不存在」",
-      "explanation": "界面没有显示，不代表系统里没有。隐藏文件、后台进程和未列出的端口都可能藏着异常，防守者需要主动扩大观察范围。"
-    }
-  ],
-  "takeaway": "你刚刚识破了最常见的一种伪装：把东西命名成点开头的文件，赌管理员只看一次普通 ls。真实环境中的后门也常藏进 .config、.cache 之类的名字。别只相信默认视图，主动查看被隐藏的角落。",
   "hints": [
-    "以点（.）开头的文件默认不会出现在 ls 中，试试 ls -la。",
-    "找到 .message 后，先用 file 看类型，再用 cat 读取。",
-    "把文件中冒号后的验证信息交给 check，例如 check <验证信息>。"
+    {
+      "level": 1,
+      "kind": "direction",
+      "text": "把普通目录列表和“显示全部”的列表放在一起比较，重点看新出现的名称。"
+    },
+    {
+      "level": 2,
+      "kind": "tool",
+      "text": "ls 的 all 选项可以显示点开头条目；找到目标后复用 cat。"
+    },
+    {
+      "level": 3,
+      "kind": "structure",
+      "text": "查看结构是 ls 加显示全部的短选项；读取结构是 cat 加你在输出中发现的点开头文件名。"
+    }
   ],
-  "teaches": ["隐藏文件", "文件类型识别", "「不可见」不等于「不存在」"],
-  "checkUsage": "check <验证信息>"
+  "verification": {
+    "usage": "check <验证信息>",
+    "instruction": "用隐藏消息里冒号后的值替换占位符，再手动验证。",
+    "placeholders": [
+      {
+        "token": "<验证信息>",
+        "meaning": "隐藏消息中验证标签后的值"
+      }
+    ],
+    "feedback": {
+      "empty": "还未填写验证信息。",
+      "incorrect": "值不匹配；重新检查点开头文件的内容和复制范围。",
+      "success": "你通过比较视图找到了默认隐藏的信息。"
+    }
+  },
+  "completionSummary": {
+    "solved": "你没有相信默认列表，而是通过选项发现并读取了隐藏消息。",
+    "mastered": ["理解命令选项", "比较两次终端输出", "辨认隐藏文件"],
+    "next": "下一关会复用“先确认位置再操作”，并让你自己组合路径与移动目标。"
+  }
 }

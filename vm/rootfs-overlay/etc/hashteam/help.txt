@@ -1,14 +1,145 @@
-实验辅助命令：
-  help            显示本帮助
-  status          查看当前关卡状态
-  check <答案>    验证当前关卡是否完成
-  hint            在右侧任务面板显示一条提示
-  reset-level     重置当前关卡的实验环境
-  hashteamctl     关卡管理（goto N / reset-level / factory-reset）
+HASHTEAM 零基础命令备忘
+========================
 
-常用 Linux 命令：
-  ls cd pwd cat echo grep sed awk find sort uniq head tail wc
-  mv cp mkdir touch chmod stat ps netstat kill
-  base64 xxd hexdump strings file curl wget vi less
+先读命令结构
+  命令 [选项] [参数]
+  空格用于分开不同部分；[ ] 只表示“这一部分可能出现”，不要输入方括号。
+  任务面板里的 <文件名>、<PID> 等是占位符，必须换成你从终端发现的真实值。
 
-小提示：右侧任务面板中的「建议命令」点击即可送入终端运行。
+实验辅助
+  help
+    用途：显示这份备忘。
+    格式：help
+    注意：它只提供命令知识，不会直接给出当前关卡答案。
+
+  hint
+    用途：在右侧依次展开方向、工具、命令结构三层提示。
+    格式：hint
+    注意：最高层仍会保留需要你填写或判断的关键内容。
+
+  check [答案]
+    用途：按当前环境状态进行最终验证。
+    例子：check 你实际发现的值
+    注意：不要原样输入 <答案>；有些关卡只需运行 check，不带参数。
+
+  status
+    用途：查看当前关卡和已完成状态。
+    格式：status
+
+  reset-level
+    用途：把当前关卡恢复到初始环境。
+    格式：reset-level
+    注意：会撤销本关文件和进程修改，但不改变学习模式。
+
+查看与移动
+  pwd
+    用途：显示当前工作目录。
+    格式：pwd
+    常见错误：把输出的路径当成下一条命令。
+
+  ls [选项] [路径]
+    用途：列出目录内容。
+    例子：ls -la
+    注意：-l 显示详情，-a 显示点开头条目；选项和命令之间要有空格。
+
+  cat 文件
+    用途：把文本文件内容打印到终端。
+    例子：cat README
+    常见错误：文件名大小写错误，或漏掉 cat 后的空格。
+
+  head [选项] 文件
+    用途：只看文件开头，适合先了解格式。
+    例子：head -n 3 auth.log
+
+  cd 目录
+    用途：进入另一个目录。
+    例子：cd inbox
+    注意：运行后用 pwd 复核当前位置。
+
+  mkdir 目录...
+    用途：创建一个或多个目录。
+    例子：mkdir logs scripts
+
+  mv 源... 目标
+    用途：移动或重命名文件；最后一个参数是目标。
+    例子：mv app.log logs/
+    常见错误：把源和目标顺序写反。
+
+搜索与统计
+  grep "短语" 文件
+    用途：保留包含指定文字的整行。
+    例子：grep "Failed password" auth.log
+    注意：搜索短语包含空格时要用引号包成一个参数。
+
+  awk '{print $N}'
+    用途：按空白切分每行并打印第 N 个字段。
+    例子：awk '{print $2}'
+    注意：N 必须换成从真实输出数出的字段号；单引号可避免 Shell 提前解释 $。
+
+  sort
+    用途：排序输入行，让相同内容相邻。
+    格式：上一条命令 | sort
+
+  uniq -c
+    用途：合并相邻重复行并在行首计数。
+    格式：sort | uniq -c
+    注意：通常要先 sort，否则分散的重复项不会合并。
+
+  wc -l
+    用途：统计输入有多少行。
+    格式：上一条命令 | wc -l
+
+  管道 |
+    用途：把左边命令的输出交给右边命令作为输入。
+    例子：grep "ERROR" app.log | wc -l
+    注意：每增加一段，都先运行并观察中间结果。
+
+权限、进程与网络
+  chmod 三位权限 文件
+    用途：修改文件权限。
+    例子：chmod 600 private.txt
+    注意：每一位分别对应属主、属组、其他用户；读=4、写=2、执行=1。
+
+  stat -c '%a %n' 文件
+    用途：用数字形式复查权限和文件名。
+    例子：stat -c '%a %n' private.txt
+
+  ps
+    用途：查看正在运行的进程及 PID。
+    格式：ps
+    注意：PID 标识进程，不是端口。
+
+  netstat -tln
+    用途：查看正在监听的 TCP 数字地址和端口。
+    格式：netstat -tln
+    注意：Local Address 冒号后面是端口。
+
+  kill PID
+    用途：结束指定进程。
+    例子：kill 123
+    常见错误：原样输入 PID、<PID> 或把端口当成 PID。
+
+文件识别与本地 HTTP
+  file 文件
+    用途：先判断陌生文件大致类型。
+    例子：file sample.bin
+
+  base64 -d 文件
+    用途：还原 Base64 编码文本。
+    例子：base64 -d message.b64
+    注意：编码不是加密。
+
+  strings 文件
+    用途：从二进制数据中挑出可打印字符串。
+    例子：strings sample.bin
+    注意：输出可能含噪声，需要根据标签和上下文判断。
+
+  curl URL
+    用途：请求 HTTP 资源并打印响应。
+    例子：curl http://127.0.0.1:8000/
+    注意：本课程只允许访问训练虚拟机内明确授权的本机地址。
+
+  sed 's/旧/新/' 文件
+    用途：预览文本替换；加 -i 才会原地修改文件。
+    例子：sed 's/blue/green/' settings.txt
+    注意：修改后重新读取文件复查，也可以使用 vi 等其他方式。

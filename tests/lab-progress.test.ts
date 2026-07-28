@@ -2,8 +2,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   LEGACY_PROGRESS_STORAGE_KEY,
+  PREVIOUS_PROGRESS_STORAGE_KEY,
   PROGRESS_STORAGE_KEY,
   advanceGuideStep,
+  completeLearningStep,
   completeLevel,
   consumeProgressResetNotice,
   createSafeStorage,
@@ -37,6 +39,7 @@ describe('lab-progress（基于 localStorage）', () => {
     expect(p.completedLevels).toEqual([])
     expect(p.hintsUsed).toEqual({})
     expect(p.guideSteps).toEqual({})
+    expect(p.completedSteps).toEqual({})
   })
 
   it('完成关卡后持久化，重新加载仍在', () => {
@@ -86,9 +89,21 @@ describe('lab-progress（基于 localStorage）', () => {
 
     resetGuideStep(window.localStorage, p, 2)
     expect(loadProgress(window.localStorage, TOTAL).guideSteps[2]).toBe(0)
+    expect(loadProgress(window.localStorage, TOTAL).completedSteps[2]).toEqual([])
   })
 
-  it('发现 v1 存档时一次性重置并产生一次迁移提示', () => {
+  it('步骤完成证据按关卡持久化、去重，并在重置本关时清空', () => {
+    const p = loadProgress(window.localStorage, TOTAL)
+    expect(completeLearningStep(window.localStorage, p, 2, 1)).toEqual([1])
+    expect(completeLearningStep(window.localStorage, p, 2, 1)).toEqual([1])
+    expect(completeLearningStep(window.localStorage, p, 2, 3)).toEqual([1, 3])
+    expect(loadProgress(window.localStorage, TOTAL).completedSteps[2]).toEqual([1, 3])
+
+    resetGuideStep(window.localStorage, p, 2)
+    expect(loadProgress(window.localStorage, TOTAL).completedSteps[2]).toEqual([])
+  })
+
+  it('发现旧版存档时一次性重置并产生一次迁移提示', () => {
     window.localStorage.setItem(
       LEGACY_PROGRESS_STORAGE_KEY,
       JSON.stringify({ currentLevel: 3, completedLevels: [1, 2] }),
@@ -99,6 +114,14 @@ describe('lab-progress（基于 localStorage）', () => {
     expect(window.localStorage.getItem(LEGACY_PROGRESS_STORAGE_KEY)).toBeNull()
     expect(consumeProgressResetNotice(window.localStorage)).toBe(true)
     expect(consumeProgressResetNotice(window.localStorage)).toBe(false)
+
+    window.localStorage.setItem(
+      PREVIOUS_PROGRESS_STORAGE_KEY,
+      JSON.stringify({ currentLevel: 3, completedLevels: [1, 2] }),
+    )
+    loadProgress(window.localStorage, TOTAL)
+    expect(window.localStorage.getItem(PREVIOUS_PROGRESS_STORAGE_KEY)).toBeNull()
+    expect(consumeProgressResetNotice(window.localStorage)).toBe(true)
   })
 
   it('损坏的存档不会导致异常，直接从头开始', () => {
@@ -116,6 +139,7 @@ describe('lab-progress（基于 localStorage）', () => {
         completedLevels: 'no',
         hintsUsed: {},
         guideSteps: {},
+        completedSteps: {},
         startedAt: 0,
         updatedAt: 0,
       }),
@@ -126,11 +150,12 @@ describe('lab-progress（基于 localStorage）', () => {
 
   it('拒绝重复关卡、非法提示次数和非有限时间戳', () => {
     const invalidRecords = [
-      { currentLevel: 1, completedLevels: [1, 1], hintsUsed: {}, guideSteps: {}, startedAt: 1, updatedAt: 1 },
-      { currentLevel: 1, completedLevels: [], hintsUsed: { 2: -1 }, guideSteps: {}, startedAt: 1, updatedAt: 1 },
-      { currentLevel: 1, completedLevels: [], hintsUsed: { 99: 1 }, guideSteps: {}, startedAt: 1, updatedAt: 1 },
-      { currentLevel: 1, completedLevels: [], hintsUsed: {}, guideSteps: { 1: -1 }, startedAt: 1, updatedAt: 1 },
-      { currentLevel: 1, completedLevels: [], hintsUsed: {}, guideSteps: {}, startedAt: 'now', updatedAt: 1 },
+      { currentLevel: 1, completedLevels: [1, 1], hintsUsed: {}, guideSteps: {}, completedSteps: {}, startedAt: 1, updatedAt: 1 },
+      { currentLevel: 1, completedLevels: [], hintsUsed: { 2: -1 }, guideSteps: {}, completedSteps: {}, startedAt: 1, updatedAt: 1 },
+      { currentLevel: 1, completedLevels: [], hintsUsed: { 99: 1 }, guideSteps: {}, completedSteps: {}, startedAt: 1, updatedAt: 1 },
+      { currentLevel: 1, completedLevels: [], hintsUsed: {}, guideSteps: { 1: -1 }, completedSteps: {}, startedAt: 1, updatedAt: 1 },
+      { currentLevel: 1, completedLevels: [], hintsUsed: {}, guideSteps: {}, completedSteps: { 1: [1, 1] }, startedAt: 1, updatedAt: 1 },
+      { currentLevel: 1, completedLevels: [], hintsUsed: {}, guideSteps: {}, completedSteps: {}, startedAt: 'now', updatedAt: 1 },
     ]
 
     for (const record of invalidRecords) {
@@ -148,6 +173,7 @@ describe('lab-progress（基于 localStorage）', () => {
     const fresh = resetAllProgress(window.localStorage)
     expect(fresh.completedLevels).toEqual([])
     expect(fresh.guideSteps).toEqual({})
+    expect(fresh.completedSteps).toEqual({})
     const reloaded = loadProgress(window.localStorage, TOTAL)
     expect(reloaded.completedLevels).toEqual([])
   })

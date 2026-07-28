@@ -33,8 +33,11 @@ const currentMode = computed(() => preferences.state.mode ?? 'guided')
 const currentGuideStep = computed(() =>
   progress.guideStepFor(
     progress.state.currentLevel,
-    currentLevelDef.value.guide?.length ?? 0,
+    currentLevelDef.value.steps.length,
   ),
+)
+const currentCompletedSteps = computed(() =>
+  progress.completedStepsFor(progress.state.currentLevel),
 )
 
 let unsubscribeDisplay: (() => void) | null = null
@@ -119,10 +122,12 @@ function handleCompleteOnboarding(): void {
         :is-last="isLastLevel"
         :mode="currentMode"
         :guide-step="currentGuideStep"
+        :completed-steps="currentCompletedSteps"
         @next="handleNextLevel"
         @use-hint="progress.useHint"
         @run-command="handleRunCommand"
         @advance-guide="progress.advanceGuide"
+        @complete-step="progress.completeStep"
         @change-mode="preferences.setMode"
       />
     </main>

@@ -11,6 +11,6 @@ if [ "$given" = "$expected" ]; then
     echo "✓ 验证通过！记住：编码（Base64）只是为了传输，不等于加密。"
     exit 0
 fi
-echo "✗ 暗号不对。提示：message.b64 用 base64 -d 还原，"
-echo "  secret.bin 里的可读字符串用 strings 挑出来，两块碎片用 - 拼接。"
+echo "✗ 组合结果不对。分别核对两段内容、顺序、连接符和复制边界。"
+echo "  需要工具方向时逐层展开右侧提示。"
 exit 1

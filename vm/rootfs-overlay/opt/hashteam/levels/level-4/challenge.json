@@ -1,62 +1,192 @@
 {
   "$schema": "../challenge.schema.json",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": 4,
   "slug": "file-permissions",
   "name": "过宽的权限",
-  "tagline": "权限与属主：最小权限，多一点都不给",
-  "story": "整理好的文件，还得管好「谁能动它」。今天凌晨，基线扫描在你的主目录里发现两个权限过宽的文件：部署脚本 deploy.sh 是谁都能改、谁都能执行的 777，里面还写着部署密钥；secret.txt 是谁都能读的 644。如果攻击者登上了这台机器，这些就是白送的礼物——后面你就会在日志里看到他们的尝试。现在，先把权限收紧到最安全的状态。",
+  "tagline": "权限：先读懂现状，再决定最小范围",
+  "storySummary": "基线扫描发现两个文件向不必要的用户开放了能力，需要按用途收紧。",
+  "story": "部署脚本需要由属主执行，机密文本只需要由属主读写。你要先观察权限字符串，判断多余能力属于谁，再把两个文件调整到满足用途的最小权限。",
   "goals": [
-    "用 ls -l 看懂文件的权限位与属主",
-    "把 deploy.sh 收紧为仅属主可读、可写、可执行（700）",
-    "把 secret.txt 收紧为仅属主可读、可写（600）",
-    "运行 check 复查最终权限"
+    "观察并拆分两个文件的权限字符串",
+    "根据文件用途判断属主、属组和其他用户需要的能力",
+    "用数字权限完成修改并复查"
   ],
-  "suggestedCommands": [
-    "ls -l",
-    "cat baseline-report.txt",
-    "chmod 700 deploy.sh",
-    "chmod 600 secret.txt",
-    "stat -c '%a %n' deploy.sh secret.txt"
-  ],
-  "guide": [
+  "prerequisites": ["使用 ls 及选项查看详细信息", "根据文件名选择操作对象", "手动补全命令参数"],
+  "newConcepts": ["权限字符串", "最小权限原则", "数字权限"],
+  "steps": [
     {
+      "id": 1,
+      "type": "observe",
+      "title": "只先观察权限现状",
+      "objective": "从详细列表中找到权限字符串和两个目标文件",
+      "instruction": "运行详细目录列表。先看每行最左侧的十个字符，再找部署脚本和机密文本对应的两行；暂时不要修改。",
+      "completion": "run",
+      "allowRun": true,
+      "introduces": [
+        {
+          "id": "permission-string",
+          "term": "权限字符串",
+          "explanation": "最左侧第一位表示对象类型，后九位按三组三字符排列：属主、属组、其他用户。每组里的 r/w/x 分别表示读、写、执行，- 表示没有该能力。"
+        }
+      ],
+      "uses": ["command-options"],
       "command": "ls -l",
-      "note": "先看懂现状：每行开头十个字符是权限位（r=读、w=写、x=执行，按属主/同组/其他人分三段），后面两列是属主和属组。deploy.sh 显示 rwxrwxrwx——任何人都能改它、执行它。"
+      "observation": "把两个文件权限的后三组各自分开读，判断属组和其他用户目前拥有什么。",
+      "reinforcement": "先把九位权限拆成三组，信息就不再拥挤。"
     },
     {
-      "command": "chmod 700 deploy.sh",
-      "note": "权限速查：4=r（读）、2=w（写）、1=x（执行），相加得到一位数字；7=rwx，6=rw-，0=---。\nchmod 700 表示只有属主能读写执行，其他人没有任何权限。"
+      "id": 2,
+      "type": "question",
+      "title": "识别最直接的风险",
+      "objective": "根据权限字符串判断不必要的能力",
+      "instruction": "只根据刚才看到的权限和文件用途作答。",
+      "completion": "answer",
+      "allowRun": false,
+      "uses": ["permission-string"],
+      "question": {
+        "prompt": "部署脚本当前最危险的地方是什么？",
+        "choices": [
+          { "id": "everyone-write", "label": "属组和其他用户也可以修改并执行它" },
+          { "id": "owner-read", "label": "属主可以读取自己的脚本" },
+          { "id": "filename", "label": "文件名带有 .sh" }
+        ],
+        "answer": "everyone-write",
+        "success": "正确。别人能修改可执行脚本，就可能把自己的命令塞进合法流程。"
+      },
+      "reinforcement": "风险来自“谁拥有了业务并不需要的能力”。"
     },
     {
-      "command": "chmod 600 secret.txt",
-      "note": "6=rw-。600 表示只有属主能读写。秘密文件不需要执行权限，更不需要给任何人看——这就是最小权限原则。"
+      "id": 3,
+      "type": "explain",
+      "title": "先写出最小权限目标",
+      "objective": "根据用途决定三类用户分别需要什么",
+      "instruction": "部署脚本只需属主读、写、执行；机密文本只需属主读、写。两者都不需要向属组和其他用户开放。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "least-privilege",
+          "term": "最小权限原则",
+          "explanation": "只授予完成工作所必需的能力。先根据用途写出谁需要读、写、执行，再选择修改值，而不是背一个数字答案。"
+        }
+      ],
+      "uses": ["permission-string"],
+      "reinforcement": "权限目标来自用途，不来自固定口诀。"
     },
     {
-      "command": "stat -c '%a %n' deploy.sh secret.txt",
-      "note": "stat 用数字形式显示权限位，复查最直观：700 和 600 就是本关的目标。确认无误后运行 check（本关不需要给 check 传参数）。"
+      "id": 4,
+      "type": "question",
+      "title": "把用途翻译成权限字符",
+      "objective": "在接触数字前确认两种目标字符串",
+      "instruction": "先用字符思考，避免一次同时学习太多表示法。",
+      "completion": "answer",
+      "allowRun": false,
+      "uses": ["permission-string", "least-privilege"],
+      "question": {
+        "prompt": "哪组描述同时符合两个文件的最小用途？",
+        "choices": [
+          { "id": "minimal", "label": "脚本：属主 rwx；文本：属主 rw-；其余两组都是 ---" },
+          { "id": "shared", "label": "两个文件都允许所有用户读写" },
+          { "id": "execute-secret", "label": "机密文本允许所有用户执行" }
+        ],
+        "answer": "minimal",
+        "success": "正确。先确定字符目标，下一步只需把每组字符换算成数字。"
+      },
+      "reinforcement": "字符目标正确，数字只是另一种写法。"
+    },
+    {
+      "id": 5,
+      "type": "explain",
+      "title": "再引入数字权限",
+      "objective": "把每组三个字符独立换算成一位数字",
+      "instruction": "每组中读=4、写=2、执行=1，把需要的能力相加：rwx 是 4+2+1，rw- 是 4+2，--- 是 0。三组分别换算后按属主、属组、其他用户顺序写成三位数。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "numeric-permissions",
+          "term": "数字权限",
+          "explanation": "一位数字描述一组 r/w/x：把需要的 4、2、1 相加。三位数不是整体计算，而是分别对应属主、属组、其他用户。"
+        }
+      ],
+      "uses": ["permission-string"],
+      "reinforcement": "逐组换算，比死记三位数更可靠。"
+    },
+    {
+      "id": 6,
+      "type": "partial-command",
+      "title": "独立换算部署脚本",
+      "objective": "根据字符目标填写 chmod 的数字和文件名",
+      "instruction": "把脚本目标的三组权限逐位换算，再填写数字与目标文件。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["numeric-permissions", "least-privilege"],
+      "commandTemplate": "chmod {{mode}} {{file}}",
+      "fields": [
+        { "id": "mode", "label": "脚本三位权限", "placeholder": "按 rwx / --- / --- 分组换算" },
+        { "id": "file", "label": "部署脚本文件名", "placeholder": "从 ls -l 输出中填写" }
+      ],
+      "observation": "重新运行 ls -l，确认属主一组保留 rwx，后两组都变为 ---。",
+      "commonErrors": ["三位数字的顺序始终是属主、属组、其他用户。"],
+      "reinforcement": "修改后立即回到权限字符串复核。"
+    },
+    {
+      "id": 7,
+      "type": "manual-command",
+      "title": "独立收紧机密文本",
+      "objective": "迁移换算方法完成第二个文件",
+      "instruction": "不再提供模板。根据“属主读写、其余无权限”自行输入完整修改命令。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["numeric-permissions", "least-privilege"],
+      "observation": "详细列表中，机密文本应只有属主一组显示 rw-。",
+      "commonErrors": ["普通文本不需要执行权限。"],
+      "reinforcement": "同一原则可以推导不同文件的权限。"
+    },
+    {
+      "id": 8,
+      "type": "checkpoint",
+      "title": "用两种表示复查",
+      "objective": "确认字符权限与数字权限表达同一状态",
+      "instruction": "用 ls -l 看字符形式，也可以用 stat 的数字输出复查。确认两者都符合前面写出的用途。",
+      "completion": "confirm",
+      "allowRun": false,
+      "uses": ["permission-string", "numeric-permissions"],
+      "observation": "我已确认脚本仅属主可读写执行，机密文本仅属主可读写。",
+      "reinforcement": "最小权限的核心是用途，表示法只是检查工具。"
     }
   ],
-  "concepts": [
-    {
-      "term": "最小权限原则",
-      "explanation": "每个文件、每个账号、每个服务，只授予完成本职工作所必需的最小权限，多一点都不给。这样即使某一处被攻破，攻击者能做的事也被限制在最小范围——这是所有安全加固的出发点。"
-    },
-    {
-      "term": "权限位与属主",
-      "explanation": "r（读）w（写）x（执行）按「属主 / 同组 / 其他人」三段排列，决定谁能对一个文件做什么。理解它是理解 Linux 安全的基石：绝大多数入侵后的破坏，都是借用了某个本不该拥有的写或执行权限。"
-    },
-    {
-      "term": "基线加固",
-      "explanation": "主动按一套安全基线（比如「脚本不该是 777、密钥不该人人可读」）扫描并收紧系统配置，而不是等出事再补救。本关的 baseline-report.txt 就是一次微型的基线扫描。"
-    }
-  ],
-  "takeaway": "你刚刚做了一次真实的「基线加固」：把权限过宽的文件收紧到最小可用。在安全运维里，这是每次上线前、每次巡检都要做的事——777 的脚本和人人可读的密钥，是真实入侵事件里最常被利用的低垂果实。记住这个原则：能不给的权限，一律不给。",
   "hints": [
-    "ls -l 每行的第一段（如 -rwxrwxrwx）是权限位，三组字符依次属于：属主、同组、其他人；第三、四列是属主和属组。",
-    "chmod 数字口诀：读=4、写=2、执行=1，相加得每一位。700 = 属主 rwx、其他人什么都没有；600 = 属主 rw、其他人什么都没有。",
-    "改完用 stat -c %a 文件名 复查，然后直接运行 check——它会自动检查两个文件的最终权限。"
+    {
+      "level": 1,
+      "kind": "direction",
+      "text": "先把权限字符串分成属主、属组、其他用户三组，再按文件用途删掉多余能力。"
+    },
+    {
+      "level": 2,
+      "kind": "tool",
+      "text": "ls -l 看字符权限，chmod 修改，stat 可以复查数字形式。"
+    },
+    {
+      "level": 3,
+      "kind": "structure",
+      "text": "chmod 的结构是“chmod 三位权限 文件名”；每一位分别把本组需要的读4、写2、执行1相加。"
+    }
   ],
-  "teaches": ["权限位与属主", "最小权限原则", "chmod 八进制表示法", "基线加固意识"],
-  "checkUsage": "check（自动检查文件最终权限）"
+  "verification": {
+    "usage": "check",
+    "instruction": "check 只检查两个文件的最终权限，不限制你用哪种修改方式。",
+    "placeholders": [],
+    "feedback": {
+      "empty": "本关验证不需要参数。",
+      "incorrect": "仍有文件权限不符合其用途；按反馈回到对应文件的三组权限检查。",
+      "success": "两个文件都已收紧到完成用途所需的最小权限。"
+    }
+  },
+  "completionSummary": {
+    "solved": "你从权限字符串判断风险，并按文件用途推导、修改和复查最小权限。",
+    "mastered": ["拆分权限字符串", "应用最小权限原则", "字符与数字权限互相验证"],
+    "next": "下一关会把观察对象从文件属性迁移到日志内容，先筛选，再组合计数。"
+  }
 }

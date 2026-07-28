@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createVirtualMachine } from '../src/composables/useVirtualMachine'
 import { useLabProgress } from '../src/composables/useLabProgress'
+import { getLevel } from '../src/data/levels'
 import type { BootStage, VirtualMachineController } from '../src/types/lab'
 
 class FakeController implements VirtualMachineController {
@@ -139,6 +140,31 @@ describe('virtual machine lifecycle', () => {
 
     expect(controller?.sent).toContain('\x03')
     expect(controller?.sent).toContain('cd "$HOME" && reset-level\n')
+    await vm.dispose()
+  })
+
+  it('环境 check 通过但教学步骤未完成时不解锁关卡', async () => {
+    let controller: FakeController | undefined
+    const vm = createVirtualMachine({
+      createController: (onStageChange) => {
+        controller = new FakeController(onStageChange)
+        return controller
+      },
+    })
+    const display: string[] = []
+    vm.onDisplay((data) => display.push(data))
+
+    await vm.boot()
+    controller?.emit('@@HASHTEAM:{"type":"ready","version":1}\n')
+    controller?.emit('@@HASHTEAM:{"type":"level-result","level":1,"status":"passed"}\n')
+
+    const progress = useLabProgress()
+    expect(progress.state.completedLevels).not.toContain(1)
+    expect(display.join('')).toContain('还需要完成右侧当前教学步骤')
+
+    for (const step of getLevel(1)!.steps) progress.completeStep(1, step.id)
+    controller?.emit('@@HASHTEAM:{"type":"level-result","level":1,"status":"passed"}\n')
+    expect(progress.state.completedLevels).toContain(1)
     await vm.dispose()
   })
 })

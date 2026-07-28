@@ -1,56 +1,180 @@
 {
   "$schema": "../challenge.schema.json",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": 5,
   "slug": "reading-logs",
   "name": "读懂日志",
-  "tagline": "日志入门：先学会把关键词捞出来",
-  "story": "权限收紧之后，值班同学丢给你一份认证日志 auth.log，说里面混着大量「失败的登录」。你第一次面对这样一份几百行的文件——别慌，看懂它不需要什么高深技巧，只需要一个叫 grep 的工具。这一步先学会「把想要的行筛出来、数清楚」，下一关我们再去回答「是谁干的」。",
+  "tagline": "搜索与管道：先看原始数据，再筛选和计数",
+  "storySummary": "认证日志混合了成功与失败记录，需要确认失败尝试的总数。",
+  "story": "值班同学给了你一份规模不大的训练日志。与其逐行人工计数，不如先识别失败记录共有的文字特征，再把筛选结果交给计数工具。",
   "goals": [
-    "用 cat / head 浏览 auth.log，了解日志长什么样",
-    "用 grep 把所有「失败的登录」筛出来",
-    "用 wc -l 数出失败登录一共有多少次",
-    "把次数交给 check 完成验证"
+    "浏览原始日志并找到失败记录的共同文字",
+    "用 grep 筛选相关行",
+    "把筛选结果通过管道交给行数统计",
+    "记录统计结果并完成验证"
   ],
-  "suggestedCommands": [
-    "head auth.log",
-    "grep \"Failed password\" auth.log",
-    "grep \"Failed password\" auth.log | wc -l"
-  ],
-  "guide": [
+  "prerequisites": ["使用 cat/head 观察文本", "理解命令选项", "从终端输出提取值"],
+  "newConcepts": ["引号与整体参数", "grep 行筛选", "管道"],
+  "steps": [
     {
+      "id": 1,
+      "type": "observe",
+      "title": "先看原始日志",
+      "objective": "辨认一行日志的基本结构和成功/失败差异",
+      "instruction": "先只看开头几行，不要立刻拼接分析命令。",
+      "completion": "run",
+      "allowRun": true,
+      "uses": ["command-options"],
       "command": "head auth.log",
-      "note": "日志通常很长，先用 head 看开头几行，摸清它的格式：每行一般有时间、主机、服务名，然后才是具体内容。"
+      "observation": "比较成功和失败行，在消息部分找出失败记录重复出现的文字。",
+      "reinforcement": "先看数据长什么样，工具选择才有依据。"
     },
     {
-      "command": "grep \"Failed password\" auth.log",
-      "note": "grep 是「按关键词筛选行」的工具：它把 auth.log 里所有含 Failed password 的行挑出来。失败的登录记录，恰好都带这个固定字样。"
+      "id": 2,
+      "type": "explain",
+      "title": "让搜索短语保持完整",
+      "objective": "理解为什么含空格的搜索词需要引号",
+      "instruction": "Shell 会用空格分隔参数。单引号和双引号都可以把含空格的短语包成一个参数；本关只需要知道它们外层不属于搜索内容。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "shell-quotes",
+          "term": "引号与整体参数",
+          "explanation": "引号把其中包含空格的文字交给命令作为一个整体参数。引号负责分组，真正搜索的是引号里面的文字。"
+        },
+        {
+          "id": "grep-filter",
+          "term": "grep 行筛选",
+          "explanation": "grep 从文件或输入中保留包含指定模式的整行。先检查筛选结果是否正确，再考虑统计。"
+        }
+      ],
+      "uses": ["command-anatomy"],
+      "reinforcement": "含空格的搜索短语要先成为一个完整参数。"
     },
     {
-      "command": "grep \"Failed password\" auth.log | wc -l",
-      "note": "在 grep 后面接一根管道 | 和 wc -l：wc -l 负责「数行数」。组合起来就是「先筛出失败登录，再数一数有几行」——也就是失败登录的总次数。把这个数字交给 check。"
+      "id": 3,
+      "type": "partial-command",
+      "title": "自己填写失败特征",
+      "objective": "根据原始日志补全 grep 的搜索短语",
+      "instruction": "填写你在失败行中观察到的共同短语。输入框会保留外层双引号。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["shell-quotes", "grep-filter"],
+      "commandTemplate": "grep \"{{keyword}}\" auth.log",
+      "fields": [
+        {
+          "id": "keyword",
+          "label": "失败记录共同短语",
+          "placeholder": "从原始日志复制，不含引号"
+        }
+      ],
+      "observation": "确认输出只剩失败记录，并且仍是一行对应一条记录。",
+      "commonErrors": ["不要把双引号重复填进输入框。", "搜索词大小写必须与日志一致。"],
+      "reinforcement": "grep 改变的是“保留哪些行”，不是日志本身。"
+    },
+    {
+      "id": 4,
+      "type": "question",
+      "title": "确认筛选是否可信",
+      "objective": "理解计数前必须验证输入",
+      "instruction": "根据 grep 的中间结果作答。",
+      "completion": "answer",
+      "allowRun": false,
+      "uses": ["grep-filter"],
+      "question": {
+        "prompt": "在开始计数前，什么现象说明筛选方向正确？",
+        "choices": [
+          { "id": "failed-only", "label": "输出每行都是失败记录，成功记录没有混入" },
+          { "id": "no-output", "label": "终端完全没有输出" },
+          { "id": "all-lines", "label": "输出与原文件所有行完全相同" }
+        ],
+        "answer": "failed-only",
+        "success": "正确。管道会放大上游结果，所以先验证 grep 很重要。"
+      },
+      "reinforcement": "错误的筛选接上统计，只会得到精确的错误答案。"
+    },
+    {
+      "id": 5,
+      "type": "explain",
+      "title": "把输出交给下一个命令",
+      "objective": "理解管道左右两边的输入输出关系",
+      "instruction": "管道符 | 把左边命令的标准输出直接作为右边命令的标准输入。wc -l 统计收到多少行；两者组合就是先筛选、再数行。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "pipeline",
+          "term": "管道",
+          "explanation": "| 左边产生数据，右边消费数据。每增加一段，都应该先观察上一段输出是否符合预期。"
+        }
+      ],
+      "uses": ["grep-filter"],
+      "reinforcement": "读管道时，从左到右追踪数据怎样变化。"
+    },
+    {
+      "id": 6,
+      "type": "partial-command",
+      "title": "补全管道后半段",
+      "objective": "独立选择行数统计命令",
+      "instruction": "保留刚才验证过的 grep 结构，填写管道右侧负责统计行数的命令。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["pipeline", "grep-filter", "shell-quotes"],
+      "commandTemplate": "grep \"{{keyword}}\" auth.log | {{counter}}",
+      "fields": [
+        { "id": "keyword", "label": "已验证的失败短语", "placeholder": "沿用上一结果" },
+        { "id": "counter", "label": "行数统计命令", "placeholder": "命令加统计行的选项" }
+      ],
+      "observation": "最终输出应从多行日志变成单个数字。",
+      "commonErrors": ["| 左右保留空格便于辨认；不要把统计命令写到文件名前。"],
+      "reinforcement": "筛选产生行，计数消费这些行。"
+    },
+    {
+      "id": 7,
+      "type": "checkpoint",
+      "title": "记录统计结果",
+      "objective": "区分命令、输出和下一次输入",
+      "instruction": "复制最终数字时，只选择数字本身，不要带提示符或空格。",
+      "completion": "confirm",
+      "allowRun": false,
+      "uses": ["terminal-prompt", "placeholder", "pipeline"],
+      "observation": "我已记录管道输出的单个数字，并确认它统计的是失败记录。",
+      "reinforcement": "可靠答案来自经过检查的每个中间结果。"
     }
   ],
-  "concepts": [
-    {
-      "term": "日志",
-      "explanation": "日志是系统自动记录下的「流水账」：谁在什么时候登录、哪个服务出了错、执行了什么操作。它不起眼，却是事后追查问题时最可靠的证据来源——系统不会「记得」，但日志会。"
-    },
-    {
-      "term": "grep 按关键词筛选",
-      "explanation": "grep 从一个文件（或一段输入）里挑出所有包含指定关键词的行。面对几百上千行的日志，人眼根本看不过来，grep 让你只看你关心的那一小部分——这是文本处理最常用的第一件工具。"
-    },
-    {
-      "term": "管道连接小工具",
-      "explanation": "一根 | 把「grep 筛出来的结果」直接交给「wc -l 去数」。这就是 Linux 的精髓：不靠一个什么都会的大程序，而是把各司其职的小工具串起来，组合出想要的功能。下一关你会把它用得更狠。"
-    }
-  ],
-  "takeaway": "你刚刚跨过了安全分析的第一道坎：面对一份几百行的陌生日志，不再发怵，而是能用 grep 把关键行筛出来、用 wc 数清楚。这是所有日志工作的起点——先把「有什么、有多少」摸清，才谈得上「是谁、为什么」。下一关，你就用这个本事去揪出攻击者。",
   "hints": [
-    "失败的登录记录里都包含固定字样 Failed password，用 grep 把它们筛出来。",
-    "在 grep 后面接 | wc -l 可以数出筛出来的行数，也就是失败登录的次数。",
-    "确认你数的是「失败」（Failed password）而不是全部登录；把数字交给 check，例如 check 42。"
+    {
+      "level": 1,
+      "kind": "direction",
+      "text": "先找失败行共同出现、成功行没有的短语；确认筛选正确后再计数。"
+    },
+    {
+      "level": 2,
+      "kind": "tool",
+      "text": "grep 负责保留匹配行，wc 的行数选项负责统计收到的行。"
+    },
+    {
+      "level": 3,
+      "kind": "structure",
+      "text": "结构是 grep 加引号包住的失败短语和日志文件，再用 | 接行数统计命令；关键词仍需由你从日志填写。"
+    }
   ],
-  "teaches": ["日志是什么", "grep 关键词筛选", "wc 计数", "管道的初步使用"],
-  "checkUsage": "check <失败登录的次数>"
+  "verification": {
+    "usage": "check <失败次数>",
+    "instruction": "用管道输出的数字替换占位符，不要重新手工数日志。",
+    "placeholders": [
+      { "token": "<失败次数>", "meaning": "筛选失败记录后由行数统计命令输出的数字" }
+    ],
+    "feedback": {
+      "empty": "还未提供失败次数。",
+      "incorrect": "统计结果不匹配；分别检查搜索短语、筛选输出和计数对象。",
+      "success": "你已从原始日志可靠地筛选并统计失败记录。"
+    }
+  },
+  "completionSummary": {
+    "solved": "你把原始日志变成匹配行，再把匹配行变成可验证的总数。",
+    "mastered": ["用引号保护含空格参数", "验证 grep 筛选结果", "理解管道输入输出", "用 wc 统计行数"],
+    "next": "下一关会复用这条管道，并逐段加入字段提取、排序、去重和次数排名。"
+  }
 }

@@ -1,8 +1,9 @@
 import type { LabProgress } from '../types/lab'
 
-export const PROGRESS_STORAGE_KEY = 'hashteam-lab-progress-v2'
+export const PROGRESS_STORAGE_KEY = 'hashteam-lab-progress-v3'
 export const LEGACY_PROGRESS_STORAGE_KEY = 'hashteam-lab-progress-v1'
-const MIGRATION_NOTICE_STORAGE_KEY = 'hashteam-lab-progress-v2-reset-notice'
+export const PREVIOUS_PROGRESS_STORAGE_KEY = 'hashteam-lab-progress-v2'
+const MIGRATION_NOTICE_STORAGE_KEY = 'hashteam-lab-progress-v3-reset-notice'
 
 /** 可注入的存储接口，便于在测试中使用内存实现 */
 export interface StorageLike {
@@ -95,6 +96,7 @@ export function createDefaultProgress(now: number = Date.now()): LabProgress {
     completedLevels: [],
     hintsUsed: {},
     guideSteps: {},
+    completedSteps: {},
     startedAt: now,
     updatedAt: now,
   }
@@ -125,6 +127,20 @@ function isValidProgress(value: unknown, totalLevels: number): value is LabProgr
   ) {
     return false
   }
+  if (typeof p.completedSteps !== 'object' || p.completedSteps === null) return false
+  if (
+    Object.entries(p.completedSteps).some(([rawLevel, steps]) => {
+      const level = Number(rawLevel)
+      return (
+        !isLevelNumber(level, totalLevels) ||
+        !Array.isArray(steps) ||
+        steps.some((step) => !Number.isInteger(step) || step < 1) ||
+        new Set(steps).size !== steps.length
+      )
+    })
+  ) {
+    return false
+  }
   if (!isValidTimestamp(p.startedAt) || !isValidTimestamp(p.updatedAt)) return false
   return true
 }
@@ -141,8 +157,12 @@ function isValidTimestamp(value: unknown): value is number {
 export function loadProgress(storage: StorageLike, totalLevels: number): LabProgress {
   const raw = storage.getItem(PROGRESS_STORAGE_KEY)
   if (raw === null) {
-    if (storage.getItem(LEGACY_PROGRESS_STORAGE_KEY) !== null) {
+    if (
+      storage.getItem(LEGACY_PROGRESS_STORAGE_KEY) !== null ||
+      storage.getItem(PREVIOUS_PROGRESS_STORAGE_KEY) !== null
+    ) {
       storage.removeItem(LEGACY_PROGRESS_STORAGE_KEY)
+      storage.removeItem(PREVIOUS_PROGRESS_STORAGE_KEY)
       storage.setItem(MIGRATION_NOTICE_STORAGE_KEY, '1')
     }
     return createDefaultProgress()
@@ -209,7 +229,23 @@ export function resetGuideStep(
   level: number,
 ): void {
   progress.guideSteps[level] = 0
+  progress.completedSteps[level] = []
   saveProgress(storage, progress)
+}
+
+/** 记录一步已经通过 UI 留下必要操作/判断证据。 */
+export function completeLearningStep(
+  storage: StorageLike,
+  progress: LabProgress,
+  level: number,
+  stepId: number,
+): number[] {
+  const completed = progress.completedSteps[level] ?? []
+  if (!completed.includes(stepId)) completed.push(stepId)
+  completed.sort((left, right) => left - right)
+  progress.completedSteps[level] = completed
+  saveProgress(storage, progress)
+  return completed
 }
 
 export function setCurrentLevel(storage: StorageLike, progress: LabProgress, level: number): void {

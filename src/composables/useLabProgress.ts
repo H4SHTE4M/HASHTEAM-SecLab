@@ -6,6 +6,7 @@ import {
   consumeProgressResetNotice,
   createSafeStorage,
   advanceGuideStep,
+  completeLearningStep,
   loadProgress,
   recordHint,
   resetGuideStep,
@@ -47,6 +48,7 @@ export function useLabProgress() {
     state.completedLevels = fresh.completedLevels
     state.hintsUsed = fresh.hintsUsed
     state.guideSteps = fresh.guideSteps
+    state.completedSteps = fresh.completedSteps
     state.startedAt = fresh.startedAt
     state.updatedAt = fresh.updatedAt
   }
@@ -68,6 +70,14 @@ export function useLabProgress() {
     resetGuideStep(storage, state, level)
   }
 
+  function completeStep(level: number, stepId: number): number[] {
+    return completeLearningStep(storage, state, level, stepId)
+  }
+
+  function completedStepsFor(level: number): number[] {
+    return state.completedSteps[level] ?? []
+  }
+
   function dismissProgressResetNotice(): void {
     progressResetNotice.value = false
   }
@@ -84,6 +94,8 @@ export function useLabProgress() {
     guideStepFor,
     advanceGuide,
     resetGuide,
+    completeStep,
+    completedStepsFor,
     dismissProgressResetNotice,
   }
 }

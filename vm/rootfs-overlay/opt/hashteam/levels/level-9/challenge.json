@@ -1,59 +1,201 @@
 {
   "$schema": "../challenge.schema.json",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": 9,
   "slug": "debug-endpoint",
   "name": "被遗忘的调试接口",
-  "tagline": "本地 Web 服务：信息泄露就在身边",
-  "story": "开发同学在虚拟机内部（127.0.0.1:8080）起了一个测试用的 Web 服务，首页空空如也，看起来没什么问题。但上线前忘记清理的调试文件，往往才是漏洞的起点。注意：本实验中的所有请求都只发往虚拟机内部，请勿对任何真实网站尝试。",
+  "tagline": "HTTP 与路径：让响应内容决定下一步",
+  "storySummary": "本机启动了一个待上线 Web 服务，需要从公开响应中检查是否泄露调试信息。",
+  "story": "所有请求都只允许发往训练虚拟机内部。服务入口和后续路径不直接给出：你要先从监听状态发现地址与端口，再根据每次 HTTP 响应中的线索继续探索。",
   "goals": [
-    "访问本地服务的首页，观察返回内容",
-    "查看 robots.txt，寻找被「隐藏」的路径",
-    "顺藤摸瓜找到泄露的调试令牌"
+    "从监听列表发现本机 Web 服务入口",
+    "理解 URL 的协议、地址、端口和路径",
+    "从公开响应逐步发现后续路径",
+    "记录最终泄露的调试令牌"
   ],
-  "suggestedCommands": [
-    "curl http://127.0.0.1:8080/",
-    "curl http://127.0.0.1:8080/robots.txt",
-    "curl http://127.0.0.1:8080/debug"
-  ],
-  "guide": [
+  "prerequisites": ["查看监听地址和端口", "根据输出填写参数", "记录并组合终端信息"],
+  "newConcepts": ["URL 组成", "HTTP 路径探索", "信息泄露"],
+  "steps": [
     {
-      "command": "curl http://127.0.0.1:8080/",
-      "note": "curl 直接发起一次 HTTP 请求，把首页内容拉回来。看起来空空如也——但一个服务暴露了什么，往往不在首页。"
+      "id": 1,
+      "type": "manual-command",
+      "title": "发现本机服务入口",
+      "objective": "复用上一关能力找出当前监听地址和端口",
+      "instruction": "自行运行监听查看命令。找出绑定在本机回环地址上的 Web 服务，记录地址和端口。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["listening-port", "command-options"],
+      "observation": "记录 Local Address 中冒号左右的地址与端口。",
+      "reinforcement": "服务入口来自运行状态，不来自故事答案。"
     },
     {
-      "command": "curl http://127.0.0.1:8080/robots.txt",
-      "note": "robots.txt 本是写给搜索引擎的「请勿收录」清单。问题是：凡是列在这里的路径，恰恰都是管理员「不想让人看到」的——等于主动把敏感路径公之于众。"
+      "id": 2,
+      "type": "explain",
+      "title": "把入口组成 URL",
+      "objective": "理解协议、地址、端口和路径各自作用",
+      "instruction": "URL 结构是“协议://地址:端口/路径”。http 是请求协议；127.0.0.1 表示当前虚拟机自身；端口来自监听输出；最后的 / 是首页路径。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "url-parts",
+          "term": "URL 组成",
+          "explanation": "协议决定怎样通信，地址决定哪台机器，端口决定哪个服务，路径决定请求该服务中的哪个资源。本实验地址只指向虚拟机自身。"
+        }
+      ],
+      "uses": ["listening-port"],
+      "reinforcement": "先分清 URL 四部分，再替换其中来自环境的值。"
     },
     {
-      "command": "curl http://127.0.0.1:8080/debug",
-      "note": "顺着 robots.txt 的提示访问 /debug。调试接口常把内部状态、甚至机密的存放位置直接暴露出来。它提到令牌备份在 backup.txt。"
+      "id": 3,
+      "type": "partial-command",
+      "title": "访问首页并观察响应",
+      "objective": "用监听输出补全本地 URL",
+      "instruction": "填写刚记录的地址和端口，保留末尾首页路径。curl 会把 HTTP 响应正文打印到终端。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["url-parts", "listening-port"],
+      "commandTemplate": "curl http://{{address}}:{{port}}/",
+      "fields": [
+        { "id": "address", "label": "本机监听地址", "placeholder": "从 Local Address 冒号左侧填写" },
+        { "id": "port", "label": "Web 服务端口", "placeholder": "从冒号右侧填写数字" }
+      ],
+      "observation": "首页内容很少；确认它是否直接给出敏感信息或后续路径。",
+      "commonErrors": ["冒号用于分隔地址和端口，末尾 / 表示首页。"],
+      "reinforcement": "空首页不代表服务没有其他资源。"
     },
     {
-      "command": "curl http://127.0.0.1:8080/backup.txt",
-      "note": "再访问 backup.txt，泄露的调试令牌就在里面。把令牌交给 check 过关。"
+      "id": 4,
+      "type": "question",
+      "title": "决定下一步探索方式",
+      "objective": "根据首页结果选择低风险、公开的发现入口",
+      "instruction": "首页没有直接答案时，从 Web 服务公开约定中寻找路径线索。",
+      "completion": "answer",
+      "allowRun": false,
+      "uses": ["url-parts"],
+      "question": {
+        "prompt": "下一步最合理的做法是什么？",
+        "choices": [
+          { "id": "public-guidance", "label": "查看服务公开的爬虫路径指引文件" },
+          { "id": "internet-scan", "label": "扫描互联网上的真实网站" },
+          { "id": "guess-token", "label": "直接猜测调试令牌" }
+        ],
+        "answer": "public-guidance",
+        "success": "正确。只在本机授权环境中，先查看公开路径线索，再由响应决定下一步。"
+      },
+      "reinforcement": "探索从公开、低风险信息开始。"
+    },
+    {
+      "id": 5,
+      "type": "explain",
+      "title": "理解路径和公开指引",
+      "objective": "知道公开爬虫指引可能反向暴露敏感路径",
+      "instruction": "URL 最后的路径选择服务资源。robots.txt 是公开的爬虫指引；它不能实施访问控制，写在其中的“不收录”路径仍可被任何访问者看到。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "http-path-exploration",
+          "term": "HTTP 路径探索",
+          "explanation": "同一地址和端口下可以有多个路径。应根据页面、公开约定和状态响应逐步探索，而不是无依据地照抄隐藏路线。"
+        },
+        {
+          "id": "information-disclosure",
+          "term": "信息泄露",
+          "explanation": "调试状态、内部路径、备份资源或令牌一旦出现在未受控响应中，就扩大了攻击面。隐藏名称不能替代访问控制。"
+        }
+      ],
+      "uses": ["url-parts"],
+      "reinforcement": "公开指引可以提供线索，但不是安全边界。"
+    },
+    {
+      "id": 6,
+      "type": "partial-command",
+      "title": "读取公开路径指引",
+      "objective": "补全 URL 路径并从响应发现候选入口",
+      "instruction": "沿用刚才的地址和端口，把公开爬虫指引文件名填入路径。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["url-parts", "http-path-exploration"],
+      "commandTemplate": "curl http://{{address}}:{{port}}/{{path}}",
+      "fields": [
+        { "id": "address", "label": "本机地址", "placeholder": "沿用监听输出" },
+        { "id": "port", "label": "服务端口", "placeholder": "沿用监听输出" },
+        { "id": "path", "label": "公开爬虫指引文件", "placeholder": "填写标准文件名，不含开头 /" }
+      ],
+      "observation": "记录响应列出的候选路径；此时仍不要假设哪条一定包含令牌。",
+      "reinforcement": "下一步路径来自服务器自己的公开响应。"
+    },
+    {
+      "id": 7,
+      "type": "manual-command",
+      "title": "访问响应中发现的候选路径",
+      "objective": "根据上一步输出自行构造请求",
+      "instruction": "选择一条候选路径，完整输入 curl 请求。若响应只是新线索，就继续按响应提到的资源探索；不要等待面板给出路径名。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["url-parts", "http-path-exploration", "information-disclosure"],
+      "observation": "判断响应是无关内容、调试状态，还是指向另一个遗留资源。",
+      "commonErrors": ["路径若已经以 / 开头，不要在 URL 中重复成 //。"],
+      "reinforcement": "响应内容决定下一步，而不是固定答案路线。"
+    },
+    {
+      "id": 8,
+      "type": "manual-command",
+      "title": "沿最后一条线索继续",
+      "objective": "独立访问响应提到的遗留资源",
+      "instruction": "如果上一响应提到了另一个资源，保持协议、地址和端口不变，只替换路径并完整输入命令。",
+      "completion": "input",
+      "allowRun": false,
+      "uses": ["url-parts", "http-path-exploration", "information-disclosure"],
+      "observation": "在响应中找出令牌标签，并只记录等号后的值。",
+      "reinforcement": "路径探索是一个由响应驱动的状态序列。"
+    },
+    {
+      "id": 9,
+      "type": "checkpoint",
+      "title": "确认泄露值和测试边界",
+      "objective": "准确提取令牌并牢记只测试授权本机",
+      "instruction": "确认令牌来自虚拟机本地响应，复制时没有标签、等号、HTML 或提示符。",
+      "completion": "confirm",
+      "allowRun": false,
+      "uses": ["information-disclosure", "terminal-prompt"],
+      "observation": "我已只记录令牌值，且所有请求都只发往当前训练虚拟机。",
+      "reinforcement": "安全探索必须同时尊重证据边界和授权边界。"
     }
   ],
-  "concepts": [
-    {
-      "term": "信息泄露",
-      "explanation": "系统把本不该公开的信息（调试状态、备份文件、内部路径、令牌）暴露给了访问者。它是 Web 最高发的漏洞类型之一，因为不需要高深技术，只要「多看几处」就可能有收获——攻击者和防守者都一样。"
-    },
-    {
-      "term": "robots.txt 的双刃剑",
-      "explanation": "robots.txt 用来告诉搜索引擎哪些路径不要收录，但它本身是公开可读的。把敏感路径写进去，等于给攻击者递上一张「藏宝图」。真正的防护靠访问控制，而不是「别告诉搜索引擎」。"
-    },
-    {
-      "term": "攻击面",
-      "explanation": "一个服务对外暴露的所有入口（页面、接口、文件）合起来就是它的攻击面。上线前忘删的调试接口和备份文件，都是在不必要地扩大攻击面——收窄它，是 Web 安全的基本功。"
-    }
-  ],
-  "takeaway": "你刚刚完成了一次黑盒的 Web 信息收集：不看任何源码，光靠 curl 逐路径探索，就从 robots.txt 一路摸到了泄露的调试令牌。这正是渗透测试的第一步——真实世界里，被遗忘的调试接口、备份文件、.git 目录，是最常被利用的低垂果实。你找到的 dbg-token，就是那种「不该出现在线上」的东西。",
   "hints": [
-    "curl 可以直接发起 HTTP 请求，先看看首页返回了什么。",
-    "robots.txt 本来是写给搜索引擎看的，但经常会暴露管理员不想被收录的路径。",
-    "robots.txt 里提到的路径都值得访问一遍，令牌就在其中一个里面。"
+    {
+      "level": 1,
+      "kind": "direction",
+      "text": "先从监听状态组成首页 URL；首页没有答案时，寻找 Web 服务公开的路径发现约定。"
+    },
+    {
+      "level": 2,
+      "kind": "tool",
+      "text": "netstat 找入口，curl 请求资源；robots.txt 可能列出不希望搜索引擎收录的候选路径。"
+    },
+    {
+      "level": 3,
+      "kind": "structure",
+      "text": "请求结构始终是 curl 加“http://本机地址:发现的端口/当前路径”；后续路径必须从上一条响应填写。"
+    }
   ],
-  "teaches": ["HTTP 基础", "信息泄露", "Web 安全观察能力", "只在授权的本地环境中测试"],
-  "checkUsage": "check <令牌>"
+  "verification": {
+    "usage": "check <令牌>",
+    "instruction": "提交最终响应中令牌标签后的值，不包含标签或等号。",
+    "placeholders": [
+      { "token": "<令牌>", "meaning": "沿响应线索找到的调试令牌值" }
+    ],
+    "feedback": {
+      "empty": "还未提供令牌。",
+      "incorrect": "令牌不匹配；回到公开入口，逐条根据响应线索检查路径和复制范围。",
+      "success": "你在授权本机环境中发现并确认了调试信息泄露。"
+    }
+  },
+  "completionSummary": {
+    "solved": "你从监听状态构造 URL，并由每次 HTTP 响应逐步定位泄露令牌。",
+    "mastered": ["拆解和构造 URL", "依据响应探索路径", "识别公开调试信息泄露", "遵守本地授权边界"],
+    "next": "最后一关会综合文件、权限、进程、端口和文本修改，完成发现—修复—复查。"
+  }
 }

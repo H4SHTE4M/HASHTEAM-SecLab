@@ -21,5 +21,5 @@ if [ "$given" = "$expected" ]; then
     echo "✓ 验证通过！你已经会回答三个最基本的问题：我是谁、我在哪、这里有什么。"
     exit 0
 fi
-echo "✗ 通行证不对。再认真读一遍：cat README"
+echo "✗ 通行证不对。重新确认说明文件中标签、真实值和复制范围。"
 exit 1
