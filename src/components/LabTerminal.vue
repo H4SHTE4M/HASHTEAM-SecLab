@@ -77,6 +77,14 @@ onMounted(() => {
     } catch {
       // 容器隐藏时 fit 可能失败，忽略
     }
+    // 跨断点缩放时容器最终尺寸在下一帧才稳定，再校正一次行列数
+    requestAnimationFrame(() => {
+      try {
+        fitAddon?.fit()
+      } catch {
+        // 同上
+      }
+    })
   })
   resizeObserver.observe(container)
 })

@@ -17,7 +17,21 @@ const dialogRef = ref<HTMLElement | null>(null)
 const primaryRef = ref<HTMLButtonElement | null>(null)
 const tutorialStep = ref(props.mode === null ? -1 : 0)
 const demoRun = ref(false)
+const highlightStyle = ref<Record<string, string>>({})
 let previouslyFocused: HTMLElement | null = null
+
+// 高亮框跟随 .terminal-pane 的实际位置：顶栏换行、布局跨断点时写死的 inset 会错位
+function updateHighlight(): void {
+  const pane = document.querySelector('.terminal-pane')
+  if (pane === null) return
+  const rect = pane.getBoundingClientRect()
+  highlightStyle.value = {
+    top: `${rect.top + 10}px`,
+    left: `${rect.left + 10}px`,
+    width: `${Math.max(rect.width - 20, 0)}px`,
+    height: `${Math.max(rect.height - 20, 0)}px`,
+  }
+}
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -69,18 +83,26 @@ function handleKeydown(event: KeyboardEvent): void {
 onMounted(() => {
   previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
   document.addEventListener('keydown', handleKeydown)
+  updateHighlight()
+  window.addEventListener('resize', updateHighlight)
   void nextTick(() => primaryRef.value?.focus())
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleKeydown)
+  window.removeEventListener('resize', updateHighlight)
   previouslyFocused?.focus()
 })
 </script>
 
 <template>
   <div class="onboarding-layer">
-    <div v-if="tutorialStep >= 0 && tutorialStep <= 1" class="terminal-highlight" aria-hidden="true">
+    <div
+      v-if="tutorialStep >= 0 && tutorialStep <= 1"
+      class="terminal-highlight"
+      :style="highlightStyle"
+      aria-hidden="true"
+    >
       <span>观察左侧真实终端</span>
     </div>
     <section
@@ -217,7 +239,7 @@ onBeforeUnmount(() => {
 
 .terminal-highlight {
   position: absolute;
-  inset: 68px 500px 20px 20px;
+  /* 位置由内联样式按 .terminal-pane 实际矩形给出，适配顶栏换行与布局断点 */
   border: 2px solid rgba(56, 189, 248, 0.65);
   border-radius: 12px;
   box-shadow: inset 0 0 30px rgba(56, 189, 248, 0.08);

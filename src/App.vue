@@ -187,6 +187,8 @@ function openHelp(): void {
 .terminal-pane {
   min-width: 0;
   min-height: 0;
+  /* xterm 在跨断点缩放后可能仍按旧高度渲染，裁剪掉未重排前溢出的内容 */
+  overflow: hidden;
   border-right: 1px solid #1c2a44;
 }
 
