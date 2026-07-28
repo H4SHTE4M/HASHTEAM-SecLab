@@ -41,6 +41,7 @@ download_verified() {
     fi
     mv "$destination.part" "$destination"
   fi
+  chmod 0644 "$destination"
 }
 
 download_verified \
@@ -136,6 +137,7 @@ tar -C "$OUTPUT" \
   -rf "$project_tar_part" .hashteam-source-id
 gzip -n -9 < "$project_tar_part" > "$project_archive_part"
 mv "$project_archive_part" "$project_archive"
+chmod 0644 "$project_archive"
 unlink "$file_list"
 unlink "$source_id_file"
 unlink "$project_tar_part"
@@ -157,6 +159,7 @@ unlink "$project_tar_part"
     "hashteam-seclab-project-source-${source_id}.tar.gz" \
     > "$(basename "$checksum_part")"
   mv "$(basename "$checksum_part")" "SHA256SUMS-${source_id}"
+  chmod 0644 "SHA256SUMS-${source_id}"
 )
 
 printf '%s\n' \
@@ -170,5 +173,6 @@ printf '%s\n' \
   "Verify with: sha256sum -c SHA256SUMS-$source_id" \
   > "$readme_part"
 mv "$readme_part" "$OUTPUT/README-${source_id}.txt"
+chmod 0644 "$OUTPUT/README-${source_id}.txt"
 
 echo "✓ 对应源码已准备：$OUTPUT（source ID: $source_id）"
