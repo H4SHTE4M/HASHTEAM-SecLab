@@ -72,8 +72,8 @@ onBeforeUnmount(() => {
       <div class="modal-body">
         <p>
           HASHTEAM 是一个由在校学生组成的网络安全实验室。这个「新手村」里的 Linux
-          环境完全运行在你的浏览器本地（基于 WebAssembly 的 x86 虚拟化），
-          不经过任何服务器，也不会对外发起网络请求。
+          环境在静态资源加载完成后完全运行在你的浏览器本地（基于 WebAssembly
+          的 x86 虚拟化）。虚拟机没有网卡，终端命令不会发送到服务器或访问公网。
         </p>
         <h3>实验室方向</h3>
         <ul>
@@ -87,6 +87,13 @@ onBeforeUnmount(() => {
         <p>
           本环境仅用于教学体验：所有实验都作用于随网页提供的隔离虚拟机。
           客户端关卡可以被分析和修改，因此它不适合作为有奖金或正式排名的比赛系统。
+        </p>
+        <h3>开源组件与对应源码</h3>
+        <p>
+          生产环境同时提供第三方许可证声明和 VM 对应源码：
+          <a href="./legal/THIRD_PARTY_NOTICES.md">第三方声明</a>
+          ·
+          <a href="./legal/SOURCE_CODE.md">源码获取说明</a>
         </p>
       </div>
     </div>
@@ -161,8 +168,27 @@ onBeforeUnmount(() => {
   color: #c7d3e8;
 }
 
+.modal-body a {
+  color: #7dd3fc;
+}
+
 .modal-body ul {
   margin: 0;
   padding-left: 20px;
+}
+
+@media (max-width: 520px) {
+  .modal-header {
+    padding: 12px 16px;
+  }
+
+  .modal-body {
+    padding: 16px;
+  }
+
+  .btn-close {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 </style>

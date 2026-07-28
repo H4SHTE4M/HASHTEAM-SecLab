@@ -2,6 +2,9 @@
   "name": "hashteam-web-lab",
   "version": "0.1.0",
   "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=20.19"
+  },
   "private": true,
   "description": "HASHTEAM Security Lab - 浏览器内运行的交互式 Linux 安全新手村",
   "type": "module",
@@ -15,6 +18,7 @@
     "test:vm": "pnpm validate:challenges && sh scripts/test-vm-checks.sh",
     "test:suid": "python3 scripts/verify-suid-initramfs.py public/vm/rootfs.cpio.gz",
     "test:integration": "pnpm validate:challenges && node scripts/integration-test.mjs",
+    "verify:dist": "node scripts/verify-dist.mjs",
     "build:vm": "sh vm/build.sh"
   },
   "dependencies": {
@@ -32,5 +36,13 @@
     "vite": "^6.0.7",
     "vitest": "^3.0.4",
     "vue-tsc": "^2.2.8"
+  },
+  "pnpm": {
+    "overrides": {
+      "brace-expansion@<=5.0.7": "5.0.8"
+    },
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

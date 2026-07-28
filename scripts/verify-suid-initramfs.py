@@ -4,11 +4,9 @@
 from __future__ import annotations
 
 import gzip
-import os
+import hashlib
 import stat
-import subprocess
 import sys
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,7 +19,7 @@ class Entry:
     data: bytes
 
 
-def parse_newc(payload: bytes) -> dict[str, Entry]:
+def parse_newc(payload: bytes) -> tuple[dict[str, Entry], bytes]:
     entries: dict[str, Entry] = {}
     offset = 0
 
@@ -48,7 +46,7 @@ def parse_newc(payload: bytes) -> dict[str, Entry]:
         offset = (offset + 3) & ~3
 
         if name == "TRAILER!!!":
-            return entries
+            return entries, payload[offset:]
         if name in entries:
             raise ValueError(f"duplicate initramfs entry: {name}")
         entries[name] = Entry(mode, uid, gid, data)
@@ -69,14 +67,24 @@ def main() -> int:
         return 2
 
     initramfs = Path(sys.argv[1])
-    entries = parse_newc(gzip.decompress(initramfs.read_bytes()))
+    entries, trailing = parse_newc(gzip.decompress(initramfs.read_bytes()))
+    require(
+        trailing.strip(b"\0") == b"",
+        "initramfs 在首个 CPIO 归档后仍有非零内容；拒绝未检查的串联归档",
+    )
 
     main_busybox = entries.get("bin/busybox")
     suid_busybox = entries.get("bin/busybox-suid")
     shell_link = entries.get("bin/sh")
+    init = entries.get("init")
+    passwd = entries.get("etc/passwd")
+    group = entries.get("etc/group")
     require(main_busybox is not None, "initramfs 缺少 bin/busybox")
     require(suid_busybox is not None, "initramfs 缺少 bin/busybox-suid")
     require(shell_link is not None, "initramfs 缺少 bin/sh")
+    require(init is not None, "initramfs 缺少 init")
+    require(passwd is not None, "initramfs 缺少 etc/passwd")
+    require(group is not None, "initramfs 缺少 etc/group")
 
     require(
         stat.S_IFMT(main_busybox.mode) == stat.S_IFREG
@@ -94,27 +102,50 @@ def main() -> int:
         stat.S_IFMT(shell_link.mode) == stat.S_IFLNK and shell_link.data == b"busybox",
         "bin/sh 必须是指向普通 busybox 的符号链接",
     )
+    privileged = [
+        name
+        for name, entry in entries.items()
+        if stat.S_IFMT(entry.mode) == stat.S_IFREG
+        and stat.S_IMODE(entry.mode) & (stat.S_ISUID | stat.S_ISGID)
+    ]
+    require(
+        privileged == ["bin/busybox-suid"],
+        f"initramfs 出现未授权的 SUID/SGID 文件：{privileged}",
+    )
+    require(
+        b"ln -sf /bin/busybox-suid /bin/su" in init.data
+        and b"busybox-suid /bin/passwd" not in init.data,
+        "init 必须只把 su 路由到最小 SUID helper",
+    )
+    require(
+        passwd.data
+        == (
+            b"root:x:0:0:root:/root:/bin/sh\n"
+            b"guest:x:1000:1000:guest:/home/guest:/bin/sh\n"
+        )
+        and group.data == b"root:x:0:\nguest:x:1000:\n"
+        and "etc/shadow" not in entries,
+        "root/guest 账号、组或锁定边界与审核基线不一致",
+    )
 
     elf = suid_busybox.data
     require(elf[:7] == b"\x7fELF\x01\x01\x01", "SUID helper 不是 32 位小端 ELF")
     require(int.from_bytes(elf[18:20], "little") == 3, "SUID helper 不是 i386 ELF")
 
-    with tempfile.TemporaryDirectory(prefix="hashteam-suid-") as tmp:
-        binary = Path(tmp, "busybox-suid")
-        binary.write_bytes(elf)
-        os.chmod(binary, 0o755)
-        applets = subprocess.run(
-            [binary, "--list"],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        ).stdout.splitlines()
-
-    require(applets == ["passwd", "su"], f"SUID applet 白名单错误：{applets}")
+    checksum_file = Path(__file__).resolve().parents[1] / "vm" / "busybox-suid.sha256"
+    checksum_fields = checksum_file.read_text(encoding="utf-8").split()
+    require(
+        len(checksum_fields) == 2 and checksum_fields[1] == "bin/busybox-suid",
+        "SUID helper 校验文件格式无效",
+    )
+    actual_sha256 = hashlib.sha256(elf).hexdigest()
+    require(
+        actual_sha256 == checksum_fields[0],
+        f"SUID helper 未通过审核锁定哈希：{actual_sha256}",
+    )
     print(
         "✓ SUID initramfs：普通 busybox 0755，helper 4755 root:root，"
-        "且 applet 严格为 passwd/su"
+        "唯一特权文件与 su-only 审核哈希一致，且无未检查的串联归档"
     )
     return 0
 
@@ -122,6 +153,6 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         sys.exit(main())
-    except (AssertionError, OSError, ValueError, subprocess.SubprocessError) as error:
+    except (AssertionError, OSError, ValueError) as error:
         print(f"✗ SUID initramfs 校验失败：{error}", file=sys.stderr)
         sys.exit(1)

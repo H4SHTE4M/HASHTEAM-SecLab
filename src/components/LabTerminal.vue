@@ -62,25 +62,10 @@ onMounted(() => {
   terminal.open(container)
   fitAddon.fit()
 
-  // 串口是真实 tty：Ctrl+C 直接透传为 \x03；有选中文本时 Ctrl+C 复制
-  terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
-    if (event.type !== 'keydown' || terminal === null) return true
-    const key = event.key.toLowerCase()
-    if (event.ctrlKey && key === 'c' && terminal.hasSelection()) {
-      event.preventDefault()
-      navigator.clipboard.writeText(terminal.getSelection()).catch(() => undefined)
-      return false
-    }
-    if (event.ctrlKey && key === 'v') {
-      event.preventDefault()
-      navigator.clipboard
-        .readText()
-        .then((text) => terminal?.paste(text))
-        .catch(() => undefined)
-      return false
-    }
-    return true
-  })
+  // xterm.js 自带 ClipboardEvent 处理：有选区时 Ctrl+C 复制、否则作为
+  // \x03 发送给真实 tty，粘贴则读取事件中的 clipboardData。不要在这里
+  // 无条件拦截快捷键调用 navigator.clipboard，否则权限拒绝或非安全上下文
+  // 会同时破坏 xterm 的原生降级路径。
 
   terminal.onData((data) => emit('input', data))
   terminal.focus()

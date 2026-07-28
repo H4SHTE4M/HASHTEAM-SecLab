@@ -1,7 +1,10 @@
 node_modules/
 dist/
 vm/.cache/
+__pycache__/
+*.pyc
 *.log
+!vm/rootfs-overlay/opt/hashteam/levels/level-3/expected/app.log
 .DS_Store
 # Playwright MCP 调试产物（截图/控制台日志）
 .playwright-mcp/

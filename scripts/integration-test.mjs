@@ -100,23 +100,26 @@ async function main() {
     await waitFor(/first-light/)
   })
 
-  await step('SUID 边界：仅 su/passwd，普通命令进入独立 helper', async () => {
+  await step('VM 内核运行版本与发布锁定值一致（Linux 6.12.98）', async () => {
+    send('uname -r')
+    await waitFor(/6\.12\.98/)
+  })
+
+  await step('SUID 边界：仅 su，错误密码不能改变 guest 身份', async () => {
     send("stat -c 'SUID=%a:%u:%g' /bin/busybox-suid")
     await waitFor(/SUID=4755:0:0/)
-    send("echo APPLETS=$(/bin/busybox-suid --list | tr '\\n' ',')")
-    await waitFor(/APPLETS=passwd,su,/)
+    send('/bin/busybox-suid --help')
+    await waitFor(/Usage: su /)
 
-    // /etc/profile 的别名必须覆盖主 BusyBox ash 的内建 applet；进入密码
-    // 提示即证明 su/passwd 已通过独立 helper 的 SUID 检查。
+    // /etc/profile 的别名必须覆盖主 BusyBox ash 的内建 applet。不能只验证
+    // 出现提示：还要证明错误密码失败，并且进程仍是普通 guest。
     send('su -c id')
     await waitFor(/Password:/)
-    emulator.serial0_send('\x03')
+    emulator.serial0_send('definitely-wrong\n')
+    await waitFor(/su: incorrect password/)
     await waitFor(/guest@hashteam:/)
-
-    send('passwd')
-    await waitFor(/Old password:/)
-    emulator.serial0_send('\x03')
-    await waitFor(/guest@hashteam:/)
+    send('id')
+    await waitFor(/uid=1000\(guest\) gid=1000\(guest\)/)
   })
 
   await step('第 1 关：错误答案失败', async () => {
@@ -241,7 +244,7 @@ async function main() {
     goToLevel(10)
     await waitFor(/"level-ready","level":10\}/)
     send('check')
-    await waitFor(/还有 6 项检查/)
+    await waitFor(/还有 7 项检查/)
     send("sed -i 's/debug=true/debug=false/' server.conf")
     send("sed -i 's/allow_guest=true/allow_guest=false/' server.conf")
     send("sed -i 's/listen=0.0.0.0/listen=127.0.0.1/' server.conf")

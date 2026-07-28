@@ -11,7 +11,7 @@ const DEFAULT_READY_TIMEOUT_MS = 60_000
 export interface VirtualMachineOptions {
   /** 控制器工厂可注入，便于验证失败重试、监听释放等生命周期行为。 */
   createController?: (onStageChange: (stage: BootStage) => void) => VirtualMachineController
-  /** Linux 发出 ready 协议前的最长等待时间。 */
+  /** 从加载首个静态资源到 Linux 发出 ready 协议的全流程最长等待时间。 */
   readyTimeoutMs?: number
 }
 
@@ -148,18 +148,31 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     })
     protocol.onMessage(handleMessage)
 
+    const deadline = Date.now() + readyTimeoutMs
+    const timeoutMessage =
+      `实验环境启动超过 ${Math.ceil(readyTimeoutMs / 1000)} 秒仍未就绪，` +
+      '请检查网络和启动日志后重试。'
+    let startTimer: number | null = null
     try {
-      await nextController.start()
+      const startTimeout = new Promise<never>((_resolve, reject) => {
+        startTimer = window.setTimeout(() => reject(new Error(timeoutMessage)), readyTimeoutMs)
+      })
+      try {
+        await Promise.race([nextController.start(), startTimeout])
+      } finally {
+        if (startTimer !== null) window.clearTimeout(startTimer)
+        startTimer = null
+      }
       if (generation !== currentGeneration) return
       // 极快环境或测试控制器可能在 start() resolve 前已发出 ready。
       if (hasReachedReady()) return
+      const remainingMs = deadline - Date.now()
+      if (remainingMs <= 0) throw new Error(timeoutMessage)
       readyTimer = window.setTimeout(() => {
-        void failCurrentBoot(
-          `Linux 启动超过 ${Math.ceil(readyTimeoutMs / 1000)} 秒仍未就绪，请检查启动日志后重试。`,
-          currentGeneration,
-        )
-      }, readyTimeoutMs)
+        void failCurrentBoot(timeoutMessage, currentGeneration)
+      }, remainingMs)
     } catch (error) {
+      if (startTimer !== null) window.clearTimeout(startTimer)
       if (generation !== currentGeneration) return
       const message = error instanceof Error ? error.message : String(error)
       await failCurrentBoot(message, currentGeneration)

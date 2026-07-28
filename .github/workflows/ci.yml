@@ -18,15 +18,17 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 20
+          node-version: '20.19'
           cache: pnpm
 
       - name: Install dependencies
@@ -35,14 +37,5 @@ jobs:
       - name: Install VM test dependency
         run: sudo apt-get update && sudo apt-get install --yes busybox-static
 
-      - name: Run unit and component tests
-        run: pnpm test
-
-      - name: Run VM shell checks
-        run: pnpm test:vm
-
-      - name: Run real VM integration test
-        run: pnpm test:integration
-
-      - name: Build production bundle
-        run: pnpm build
+      - name: Run complete release verification
+        run: bash scripts/verify-build.sh

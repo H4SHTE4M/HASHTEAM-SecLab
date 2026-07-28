@@ -1,8 +1,7 @@
 export PATH=/usr/local/bin:/bin:/usr/bin:/sbin
 export PS1='\u@hashteam:\w\$ '
 umask 022
-# 主 busybox 的 ash 会优先执行内建 applet，显式路由需要独立二进制的命令。
+# 主 BusyBox 的 ash 会优先执行内建 applet，显式路由到最小 SUID helper。
 alias su='/bin/su'
-alias passwd='/bin/passwd'
 # busybox ash 自带 help 内建命令会遮蔽 PATH，用别名指向实验帮助。
 alias help='cat /etc/hashteam/help.txt'

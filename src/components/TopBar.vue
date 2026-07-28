@@ -90,7 +90,7 @@ onBeforeUnmount(() => {
         :aria-label="confirming ? '再次点击以确认重新开始' : '重新开始全部关卡'"
         @click="handleResetAll"
       >
-        {{ confirming ? '确认重新开始？' : '重新开始' }}
+        {{ confirming ? '再次确认' : '重新开始' }}
       </button>
       <button type="button" class="btn btn-ghost" @click="emit('about')">关于实验室</button>
     </nav>
@@ -102,11 +102,12 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 24px;
-  height: 56px;
-  padding: 0 20px;
+  min-height: 56px;
+  padding: 8px 20px;
   background: #0d1526;
   border-bottom: 1px solid #1c2a44;
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .brand {
@@ -156,6 +157,8 @@ onBeforeUnmount(() => {
 .actions {
   margin-left: auto;
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -178,6 +181,7 @@ onBeforeUnmount(() => {
 }
 
 .btn {
+  min-height: 38px;
   padding: 6px 14px;
   font-size: 13px;
   color: #c7d3e8;
@@ -215,14 +219,10 @@ onBeforeUnmount(() => {
   color: #c7d3e8;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 1050px) {
   .topbar {
-    height: auto;
-    min-height: 56px;
-    padding: 8px 12px;
     gap: 8px 12px;
     flex-wrap: wrap;
-    box-sizing: border-box;
   }
 
   .brand-sub {
@@ -237,16 +237,42 @@ onBeforeUnmount(() => {
     width: 100%;
     margin-left: 0;
   }
+}
+
+@media (max-width: 600px) {
+  .topbar {
+    padding: 8px 12px;
+  }
+
+  .actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 
   .btn,
   .mode-picker {
-    flex: 1;
+    min-width: 0;
+    min-height: 44px;
     padding-inline: 8px;
     white-space: nowrap;
   }
 
   .mode-picker {
     justify-content: center;
+  }
+
+  .mode-picker select {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 360px) {
+  .brand-name {
+    font-size: 14px;
+  }
+
+  .progress-label {
+    display: none;
   }
 }
 </style>

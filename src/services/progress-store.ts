@@ -109,6 +109,9 @@ function isValidProgress(value: unknown, totalLevels: number): value is LabProgr
   if (!Array.isArray(p.completedLevels)) return false
   if (p.completedLevels.some((level) => !isLevelNumber(level, totalLevels))) return false
   if (new Set(p.completedLevels).size !== p.completedLevels.length) return false
+  const completedInOrder = [...p.completedLevels].sort((left, right) => left - right)
+  if (completedInOrder.some((level, index) => level !== index + 1)) return false
+  if (p.currentLevel > Math.min(completedInOrder.length + 1, totalLevels)) return false
   if (typeof p.hintsUsed !== 'object' || p.hintsUsed === null) return false
   if (
     Object.entries(p.hintsUsed).some(([rawLevel, count]) => {
@@ -173,6 +176,7 @@ export function loadProgress(storage: StorageLike, totalLevels: number): LabProg
   } catch {
     // 损坏的存档：从头开始
   }
+  storage.removeItem(PROGRESS_STORAGE_KEY)
   return createDefaultProgress()
 }
 

@@ -79,11 +79,16 @@
 
 开发环境：
 
-- Node.js ≥ 18（建议 20+）与 pnpm 10
+- Node.js ≥ 20.19 与 pnpm 10
 - Python 3（打包 initramfs）
-- 重新构建 VM 资源时：make、curl、tar、sha256sum，以及 i386 交叉编译器；
+- 重新构建 VM 资源时：make、curl、tar、gzip、sha256sum、`dpkg-deb`、
+  GNU `date`，以及 i386 交叉编译器；
   默认使用 `/opt/32/bin/i686-aosc-linux-gnu-`，也可通过
-  `BUSYBOX_CROSS_COMPILE` 指定
+  `BUSYBOX_CROSS_COMPILE` 指定。已审核的精确 AOSC `gcc+32`、
+  `binutils+32`、`glibc+32` 与 `linux+api+32` 版本和编译器文件哈希记录在
+  `vm/suid-toolchain.lock`；AOSC 的 `32subsystem` 是该 32 位开发环境的
+  官方元包。工具链不匹配时构建会在生成 SUID 二进制前失败，而不是静默更新
+  审核哈希
 - 仅当需要**重新构建内核**时，额外需要：gcc、flex、bison、bc、xz
 
 运行环境（用户侧）：见「浏览器兼容性」一节，无需安装任何东西。
@@ -108,6 +113,7 @@ pnpm test:vm            # Linux 检查脚本测试（需要 busybox，见下）
 pnpm test:suid          # 校验 initramfs 中 SUID helper 的权限与 applet 白名单
 pnpm test:integration   # 端到端测试：Node 无头启动真实虚拟机通关全部 10 关
 pnpm build              # vue-tsc 严格类型检查 + 生产构建（输出 dist/）
+pnpm verify:dist        # 校验内容寻址 VM 资产及其 SHA-256 清单
 ./scripts/verify-build.sh  # 一键完成：资源检查 + 全部测试 + 构建
 ```
 
@@ -123,9 +129,9 @@ pnpm build              # vue-tsc 严格类型检查 + 生产构建（输出 dis
 
 | 组件 | 来源 | 许可证 | 体积 |
 | --- | --- | --- | --- |
-| 内核 bzImage | 自构建：kernel.org `linux-6.12.96`，`tinyconfig` + 最小特性集（串口控制台 / initramfs / tmpfs / IPv4 回环 / **无网卡驱动**） | GPLv2 | ≈ 1.3 MB |
-| 用户态 busybox | Debian `busybox-static` 1.38.0-3（i386 静态链接） | GPLv2 | ≈ 1.0 MB（打进 initramfs） |
-| SUID helper | 源码构建 BusyBox 1.38.0（i386 静态链接，严格仅含 `su/passwd`） | GPLv2 | ≈ 1.0 MB（打进 initramfs） |
+| 内核 bzImage | 自构建：kernel.org `linux-6.12.98`，`tinyconfig` + 最小特性集（串口控制台 / initramfs / tmpfs / IPv4 回环 / **无网卡驱动**） | GPLv2 | ≈ 1.3 MB |
+| 用户态 busybox | Debian `busybox-static` 1.38.0-3（i386，静态链接 Debian glibc 2.42-17） | GPLv2 / LGPLv2.1+ | ≈ 1.0 MB（打进 initramfs） |
+| SUID helper | 源码构建 BusyBox 1.38.0（i386，静态链接 AOSC glibc 2.42，严格仅含 `su`，口令数据库保持锁定） | GPLv2 / LGPLv2.1+ | ≈ 1.0 MB（打进 initramfs） |
 | initramfs | 本项目 `vm/rootfs-overlay/` + 两个 busybox，`scripts/pack-initramfs.py` 打包（确定性、显式权限） | 本项目 | ≈ 1.6 MB（gzip） |
 | v86 运行时 | npm `v86` 包（libv86.js / v86.wasm） | BSD-2-Clause | ≈ 2.5 MB |
 | SeaBIOS | Debian `seabios` 包（bios-256k.bin） | LGPLv3 | 256 KB |
@@ -211,17 +217,30 @@ pnpm build              # vue-tsc 严格类型检查 + 生产构建（输出 dis
 ## 10. 静态部署方法
 
 ```bash
-pnpm build     # 输出 dist/（约 7.4 MB，含全部虚拟机资源）
+bash scripts/verify-build.sh
+# 输出 dist/，并验证内容寻址 VM 资产的 SHA-256 清单
 ```
 
 `dist/` 是纯静态目录（构建使用相对路径 `base: './'`），
 可直接部署到任意静态托管：GitHub Pages、Nginx、对象存储、校园网静态空间等，
 **包括任意子路径**下，无需服务端重写规则。
 
-注意：首次加载会下载约 7MB 资源，建议托管方开启 gzip/br 与长缓存
-（`v86.wasm`、`bzImage`、`rootfs.cpio.gz` 内容稳定，适合强缓存）。
+注意：首次加载会下载约 7MB 资源，建议托管方对带内容哈希的
+`vm-assets/<hash>/` 和 `assets/` 启用不可变长缓存，对 `index.html` 与
+`vm-assets.json` 禁止缓存。
 构建会为整组 VM 资源计算统一内容哈希并附加到 URL；任一资源更新都会整体
 切换缓存版本，避免运行时、内核与 rootfs 新旧混用。
+
+生产发布还应运行 `scripts/prepare-corresponding-source.sh dist/sources`，
+将 Linux、BusyBox、两套静态链接 glibc、SeaBIOS 和本项目的完整对应源码放在同站
+`/sources/`；
+项目源码包与 `SHA256SUMS-<Git 提交>` 按 release 永久保留。许可证和源码获取说明见
+[第三方声明](THIRD_PARTY_NOTICES.md) 与 [对应源码说明](SOURCE_CODE.md)。
+
+项目自带的生产发布脚本和 Nginx 配置位于本机 `.deploy/`：它采用独立
+release 目录、共享内容寻址 VM 资源、原子软链接切换和失败自动回滚。
+发布前必须保持 Git 工作区干净，并完整通过发布门禁；详细步骤见
+`.deploy/DEPLOY_PLAN.md`。
 
 ## 11. 已知限制
 
@@ -296,14 +315,16 @@ hashteam-web-lab/
 ├── tests/              # vitest 单元测试（协议解析、进度持久化）
 ├── vm/
 │   ├── build.sh        # 虚拟机资源构建（内核 + initramfs + v86 资源）
-│   ├── busybox-suid.config # 仅启用 su/passwd 的最小 BusyBox 配置
+│   ├── busybox-suid.config # 仅启用 su 的最小 BusyBox 配置
 │   └── rootfs-overlay/ # initramfs 内容；每关目录含 manifest、脚本和素材
 └── scripts/
     ├── validate-challenges.mjs # 构建前校验关卡配置和目录完整性
     ├── pack-initramfs.py    # 确定性 cpio 打包（显式权限位）
     ├── verify-suid-initramfs.py # 校验 SUID 权限与 applet 白名单
-    ├── test-vm-checks.sh    # Linux 检查脚本测试（54 项断言）
+    ├── test-vm-checks.sh    # Linux 检查脚本与绕过回归测试
     ├── integration-test.mjs # 端到端：Node 无头启动真实 VM 通关 10 关
+    ├── prepare-corresponding-source.sh # 准备 GPL/LGPL 对应源码
+    ├── verify-dist.mjs      # 校验生产 VM 资产清单和 SHA-256
     ├── prepare-vm-assets.sh # vm/build.sh 的便捷入口
     └── verify-build.sh      # 一键验证：资源 + 测试 + 构建
 ```

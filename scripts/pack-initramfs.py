@@ -105,7 +105,7 @@ def collect_entries(root: str, busybox_path: str | None, busybox_suid_path: str 
             add("bin/busybox", stat.S_IFREG | 0o755, 0, 0, fh.read())
     add("bin/sh", stat.S_IFLNK | 0o777, 0, 0, b"busybox", "")
 
-    # 最小 SUID busybox：只含 su/passwd，权限 4755，放在独立路径
+    # 最小 SUID busybox：只含 su，权限 4755，放在独立路径
     if busybox_suid_path is not None:
         with open(busybox_suid_path, "rb") as fh:
             add("bin/busybox-suid", stat.S_IFREG | 0o4755, 0, 0, fh.read())
@@ -167,7 +167,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", required=True, help="rootfs-overlay 目录")
     parser.add_argument("--busybox", default=None, help="busybox 静态二进制路径（完整的 applet 集合）")
-    parser.add_argument("--busybox-suid", default=None, help="最小 SUID busybox 路径（仅含 su/passwd）")
+    parser.add_argument("--busybox-suid", default=None, help="最小 SUID busybox 路径（仅含 su）")
     parser.add_argument("--out", required=True, help="输出 .cpio.gz 路径")
     args = parser.parse_args()
 

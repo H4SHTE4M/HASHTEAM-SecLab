@@ -1,43 +1,45 @@
 #!/bin/sh
-# 第 10 关验证：配置内容、文件权限与真实监听状态
+# 第 10 关验证：配置唯一性、文件权限与目标 httpd 的真实监听状态。
 set -u
 
 CONF="$HOME/server.conf"
 PORT="${HASHTEAM_SECURE_PORT:-9090}"
+DOCROOT="$HOME/www"
 
-if [ ! -f "$CONF" ]; then
-    echo "✗ 找不到服务配置。根据目录盘点结果检查文件是否被误删。"
+if [ ! -f "$CONF" ] || [ -L "$CONF" ]; then
+    echo "✗ 找不到有效的服务配置。根据目录盘点结果检查文件是否被误删。"
     exit 1
 fi
 
-get_value() {
-    sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*\([^[:space:]#]*\).*/\1/p" "$CONF" |
-        tail -n 1
+get_values() {
+    sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*\([^[:space:]#]*\).*/\1/p" "$CONF"
 }
 
 errors=0
 
-check_disabled() {
-    value=$(get_value "$1")
-    if [ "$value" = "false" ]; then
-        echo "  ✓ $1 已关闭"
+check_single_value() {
+    key="$1"
+    expected="$2"
+    description="$3"
+    values=$(get_values "$key")
+    count=$(printf '%s\n' "$values" | sed '/^$/d' | wc -l | tr -d ' ')
+    if [ "$count" = "1" ] && [ "$values" = "$expected" ]; then
+        echo "  ✓ $description"
+    elif [ "$count" -gt 1 ]; then
+        echo "  ✗ $key 出现了 $count 次；重复配置会产生歧义"
+        errors=$((errors + 1))
     else
-        echo "  ✗ $1 仍未关闭（当前：${value:-缺失}）"
+        echo "  ✗ $key 当前为 ${values:-缺失}，期望 $expected"
         errors=$((errors + 1))
     fi
 }
 
 echo "正在复查配置内容 ..."
-check_disabled debug
-check_disabled allow_guest
-
-listen=$(get_value listen)
-if [ "$listen" = "127.0.0.1" ]; then
-    echo "  ✓ 配置中的监听范围已收紧到本机"
-else
-    echo "  ✗ 配置中的监听范围仍不符合内部服务用途（当前：${listen:-缺失}）"
-    errors=$((errors + 1))
-fi
+check_single_value debug false "debug 已关闭"
+check_single_value allow_guest false "allow_guest 已关闭"
+check_single_value listen 127.0.0.1 "监听范围已收紧到本机"
+check_single_value port "$PORT" "服务端口与运行说明一致"
+check_single_value document_root "$DOCROOT" "内容目录与运行说明一致"
 
 mode=$(stat -c %a "$CONF" 2>/dev/null || echo missing)
 if [ "$mode" = "600" ]; then
@@ -60,8 +62,34 @@ if printf '%s\n' "$listeners" | grep -q "0.0.0.0:$PORT "; then
     errors=$((errors + 1))
 fi
 
+matching_httpd=0
+for proc in /proc/[0-9]*; do
+    [ -r "$proc/cmdline" ] || continue
+    cmdline=$(tr '\0' ' ' < "$proc/cmdline" 2>/dev/null || true)
+    case "$cmdline" in
+        *httpd*"-p 127.0.0.1:$PORT"*"-h $DOCROOT"*)
+            matching_httpd=1
+            break
+            ;;
+    esac
+done
+if [ "$matching_httpd" -eq 1 ]; then
+    echo "  ✓ 监听进程是使用目标端口和内容目录启动的 httpd"
+else
+    echo "  ✗ 未找到按运行说明启动的 httpd；仅占用端口不能通过"
+    errors=$((errors + 1))
+fi
+
+page=$(wget -q -O - "http://127.0.0.1:$PORT/" 2>/dev/null || true)
+if printf '%s\n' "$page" | grep -q "internal service ready"; then
+    echo "  ✓ 目标内容目录能够返回预期页面"
+else
+    echo "  ✗ 当前监听服务没有返回目标内容目录中的页面"
+    errors=$((errors + 1))
+fi
+
 if [ "$errors" -eq 0 ]; then
-    echo "✓ 配置、权限和运行状态均已通过复查。"
+    echo "✓ 配置、权限、目标进程和运行状态均已通过复查。"
     echo "  你完成了发现、修复、重启、验证的安全闭环。"
     exit 0
 fi

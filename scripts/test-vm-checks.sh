@@ -42,7 +42,7 @@ trap 'stop_test_httpd; rm -rf "$WORK"' EXIT
 # 统一的 applet 环境：尽量使用 busybox（贴近 VM 内行为）
 STUB="$WORK/stub-bin"
 mkdir -p "$STUB"
-for app in sh grep sed awk tr cat cp mkdir rm kill sleep printf tail head sort uniq base64 strings od dd cut wc \
+for app in sh grep sed awk tr cat cmp cp mkdir rm kill sleep printf tail head sort uniq base64 strings od dd cut wc \
     httpd wget chmod stat ps netstat mv; do
     ln -sf "$BUSYBOX" "$STUB/$app"
 done
@@ -117,6 +117,15 @@ run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-3/init.sh" >/dev/null
 if [ -f "$SB/home/guest/inbox/app.log" ]; then ok "inbox 中待整理文件已就绪"; else bad "待整理文件缺失"; fi
 OUT=$(run_check "$SB") && RC=0 || RC=$?
 expect_eq "未整理时验证失败" "$RC" "1"
+# 旧判题漏洞回归：创建目标路径和空文件、但保留原文件，必须失败。
+mkdir -p "$SB/home/guest/inbox/logs" "$SB/home/guest/inbox/scripts" "$SB/home/guest/inbox/secrets"
+: > "$SB/home/guest/inbox/logs/app.log"
+: > "$SB/home/guest/inbox/scripts/backup.sh"
+: > "$SB/home/guest/inbox/scripts/deploy.sh"
+: > "$SB/home/guest/inbox/secrets/api.key"
+OUT=$(run_check "$SB") && RC=0 || RC=$?
+expect_eq "mkdir + touch 不能伪造移动结果" "$RC" "1"
+rm -rf "$SB/home/guest/inbox/logs" "$SB/home/guest/inbox/scripts" "$SB/home/guest/inbox/secrets"
 (
     cd "$SB/home/guest/inbox"
     mkdir -p logs scripts secrets
@@ -124,7 +133,7 @@ expect_eq "未整理时验证失败" "$RC" "1"
     mv backup.sh deploy.sh scripts/
 )
 OUT=$(run_check "$SB") && RC=0 || RC=$?
-expect_contains "$OUT" "仍有 1 处未归位" "还有 1 处"
+expect_contains "$OUT" "缺文件且原件仍在时报告 2 处" "还有 2 处"
 (
     cd "$SB/home/guest/inbox"
     mv api.key secrets/
@@ -235,9 +244,9 @@ expect_contains "$PORTS" "reset-level 后 31337 重新监听" ":31337 "
 "$STUB/kill" "$PID" 2>/dev/null || true
 
 echo "—— 第 9 关 ——"
-# 沙箱 8080 常被平台占用，默认改用 18081；调用方可在并行任务中覆盖端口。
-# （注意：18080 在某些 WSL 环境被系统级端口保留/拦截，无法 bind，故用 18081。）
-export HASHTEAM_HTTP_PORT="${HASHTEAM_HTTP_PORT:-18081}"
+# 沙箱 8080 常被平台占用；默认按当前测试进程选择专用高位端口，
+# 调用方仍可在并行任务中显式覆盖。
+export HASHTEAM_HTTP_PORT="${HASHTEAM_HTTP_PORT:-$((18000 + ($$ % 1000)))}"
 sandbox 9
 SB="$SB_DIR"
 run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-9/init.sh" >/dev/null
@@ -262,7 +271,7 @@ expect_eq "reset-level 后服务恢复并通过" "$RC" "0"
 stop_test_httpd
 
 echo "—— 第 10 关 ——"
-export HASHTEAM_SECURE_PORT="${HASHTEAM_SECURE_PORT:-19091}"
+export HASHTEAM_SECURE_PORT="${HASHTEAM_SECURE_PORT:-$((20000 + ($$ % 1000)))}"
 sandbox 10
 SB="$SB_DIR"
 run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-10/init.sh" >/dev/null
@@ -271,10 +280,10 @@ PORTS=$("$STUB/netstat" -tln)
 expect_contains "$PORTS" "初始服务监听所有接口" "0.0.0.0:${HASHTEAM_SECURE_PORT} "
 OUT=$(run_check "$SB") && RC=0 || RC=$?
 expect_eq "未完成综合状态验证失败" "$RC" "1"
-expect_contains "$OUT" "按检查项报告待修复数量" "还有 6 项检查"
+expect_contains "$OUT" "按检查项报告待修复数量" "还有 7 项检查"
 cd "$SB/home/guest" && PATH="$STUB:$PATH" "$STUB/sed" -i 's/debug=true/debug=false/' server.conf
 OUT=$(run_check "$SB") && RC=0 || RC=$?
-expect_contains "$OUT" "只修配置一项仍有多类问题" "还有 5 项检查"
+expect_contains "$OUT" "只修配置一项仍有多类问题" "还有 6 项检查"
 # 方法 1：sed + chmod + 服务重启
 cd "$SB/home/guest" && PATH="$STUB:$PATH" "$STUB/sed" -i 's/allow_guest=true/allow_guest=false/' server.conf && PATH="$STUB:$PATH" "$STUB/sed" -i 's/listen=0.0.0.0/listen=127.0.0.1/' server.conf
 "$STUB/chmod" 600 "$SB/home/guest/server.conf"
@@ -285,6 +294,10 @@ HOME="$SB/home/guest" PATH="$STUB:$PATH" "$STUB/httpd" -p "127.0.0.1:${HASHTEAM_
 sleep 1
 if OUT=$(run_check "$SB"); then RC=0; else RC=$?; fi
 expect_eq "配置、权限和运行状态全部修复后通过" "$RC" "0"
+# 旧判题漏洞回归：追加重复“安全值”不能掩盖前面的冲突配置。
+printf '\ndebug=true\ndebug=false\n' >> "$SB/home/guest/server.conf"
+OUT=$(run_check "$SB") && RC=0 || RC=$?
+expect_eq "重复配置不能用最后一个安全值绕过" "$RC" "1"
 stop_test_httpd
 sleep 1
 # 方法 2：整体重写文件 + 符号权限（不同但合法的方法）
@@ -297,8 +310,14 @@ cat > "$SB2/home/guest/server.conf" <<'CONF'
 debug=false
 allow_guest=false
 listen=127.0.0.1
+port=__PORT__
+document_root=__DOCROOT__
 max_connections=100
 CONF
+sed -i \
+    -e "s|__PORT__|$HASHTEAM_SECURE_PORT|" \
+    -e "s|__DOCROOT__|$SB2/home/guest/www|" \
+    "$SB2/home/guest/server.conf"
 "$STUB/chmod" u=rw,go= "$SB2/home/guest/server.conf"
 PID=$(cat "$SB2/home/guest/.hashteam/level-10-httpd.pid")
 "$STUB/kill" "$PID" 2>/dev/null || true

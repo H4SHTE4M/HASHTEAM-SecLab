@@ -63,6 +63,7 @@ function toggleLogs(): void {
     class="loading-overlay"
     :role="stage === 'error' ? 'alert' : 'status'"
     :aria-live="stage === 'error' ? 'assertive' : 'polite'"
+    aria-atomic="false"
     :aria-busy="stage !== 'error'"
     aria-label="Linux 实验环境启动状态"
   >
@@ -94,7 +95,13 @@ function toggleLogs(): void {
           >
             {{ showLogs ? '▾' : '▸' }} 启动日志 ({{ logs.length }})
           </button>
-          <div v-if="showLogs" id="boot-log-list" ref="logContainer" class="log-list">
+          <div
+            v-if="showLogs"
+            id="boot-log-list"
+            ref="logContainer"
+            class="log-list"
+            aria-live="off"
+          >
             <p v-if="logs.length === 0" class="log-empty">暂无日志</p>
             <div
               v-for="entry in logs.slice(-80)"
@@ -129,12 +136,18 @@ function toggleLogs(): void {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 16px;
+  overflow-y: auto;
+  box-sizing: border-box;
+  overscroll-behavior: contain;
   background: rgba(7, 11, 20, 0.92);
   backdrop-filter: blur(2px);
 }
 
 .loading-card {
   width: min(420px, 90vw);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
   padding: 32px;
   box-sizing: border-box;
   background: #0f1830;
@@ -172,7 +185,7 @@ function toggleLogs(): void {
   gap: 12px;
   padding: 10px 4px;
   font-size: 14px;
-  color: #66779a;
+  color: #8b9bbb;
   transition: color 0.2s ease;
 }
 
@@ -211,7 +224,7 @@ function toggleLogs(): void {
 .loading-note {
   margin: 20px 0 0;
   font-size: 12px;
-  color: #66779a;
+  color: #8b9bbb;
   text-align: center;
   line-height: 1.6;
 }
@@ -284,7 +297,7 @@ function toggleLogs(): void {
 
 .log-empty {
   margin: 0;
-  color: #66779a;
+  color: #8b9bbb;
 }
 
 .log-line {
@@ -314,5 +327,16 @@ function toggleLogs(): void {
 
 .log-line.log-error .log-text {
   color: #ff9eb0;
+}
+
+@media (max-width: 520px) {
+  .loading-card {
+    padding: 24px 20px;
+  }
+
+  .btn-retry,
+  .log-toggle {
+    min-height: 44px;
+  }
 }
 </style>

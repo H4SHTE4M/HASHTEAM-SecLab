@@ -49,9 +49,10 @@ function push(level: BootLogEntry['level'], source: string, text: string): void 
   emit()
 }
 
-/** 记录一条日志：写入总线 + 同步打到浏览器 console */
+/** 记录一条日志。生产环境只把警告/错误写入 console，避免泄露终端内容。 */
 export function log(source: string, text: string, level: BootLogEntry['level'] = 'info'): void {
   push(level, source, text)
+  if (!import.meta.env.DEV && level === 'info') return
   const prefix = `[hashteam:${source}]`
   const msg = `${prefix} ${text}`
   if (level === 'error') console.error(msg)

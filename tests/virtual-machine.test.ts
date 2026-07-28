@@ -125,6 +125,36 @@ describe('virtual machine lifecycle', () => {
     expect(controller?.stopCount).toBe(1)
   })
 
+  it('资源加载本身悬挂时也会按同一总时限失败，并允许创建新控制器重试', async () => {
+    vi.useFakeTimers()
+    const controllers: FakeController[] = []
+    let attempt = 0
+    const vm = createVirtualMachine({
+      readyTimeoutMs: 10,
+      createController: (onStageChange) => {
+        const controller = new FakeController(onStageChange)
+        if (attempt++ === 0) {
+          controller.start = vi.fn(async () => new Promise<void>(() => undefined))
+        }
+        controllers.push(controller)
+        return controller
+      },
+    })
+
+    const firstBoot = vm.boot()
+    await vi.advanceTimersByTimeAsync(11)
+    await firstBoot
+
+    expect(vm.stage.value).toBe('error')
+    expect(vm.errorMessage.value).toContain('实验环境启动超过')
+    expect(controllers[0].stopCount).toBe(1)
+
+    await vm.boot()
+    controllers[1].emit('@@HASHTEAM:{"type":"ready","version":1}\n')
+    expect(vm.stage.value).toBe('ready')
+    await vm.dispose()
+  })
+
   it('重置关卡前先回到 HOME，避免停留在被重建的子目录', async () => {
     let controller: FakeController | undefined
     const vm = createVirtualMachine({

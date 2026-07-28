@@ -51,11 +51,11 @@ describe('lab-progress（基于 localStorage）', () => {
 
   it('重复完成同一关不重复写入', () => {
     const p = loadProgress(window.localStorage, TOTAL)
-    expect(completeLevel(window.localStorage, p, 2)).toBe(true)
-    expect(completeLevel(window.localStorage, p, 2)).toBe(false)
-    expect(p.completedLevels).toEqual([2])
+    expect(completeLevel(window.localStorage, p, 1)).toBe(true)
+    expect(completeLevel(window.localStorage, p, 1)).toBe(false)
+    expect(p.completedLevels).toEqual([1])
     const reloaded = loadProgress(window.localStorage, TOTAL)
-    expect(reloaded.completedLevels).toEqual([2])
+    expect(reloaded.completedLevels).toEqual([1])
   })
 
   it('多关完成按编号排序保存', () => {
@@ -75,6 +75,9 @@ describe('lab-progress（基于 localStorage）', () => {
 
   it('切换当前关卡并持久化', () => {
     const p = loadProgress(window.localStorage, TOTAL)
+    for (let level = 1; level <= 4; level += 1) {
+      completeLevel(window.localStorage, p, level)
+    }
     setCurrentLevel(window.localStorage, p, 5)
     const reloaded = loadProgress(window.localStorage, TOTAL)
     expect(reloaded.currentLevel).toBe(5)
@@ -151,6 +154,8 @@ describe('lab-progress（基于 localStorage）', () => {
   it('拒绝重复关卡、非法提示次数和非有限时间戳', () => {
     const invalidRecords = [
       { currentLevel: 1, completedLevels: [1, 1], hintsUsed: {}, guideSteps: {}, completedSteps: {}, startedAt: 1, updatedAt: 1 },
+      { currentLevel: 3, completedLevels: [1, 3], hintsUsed: {}, guideSteps: {}, completedSteps: {}, startedAt: 1, updatedAt: 1 },
+      { currentLevel: 5, completedLevels: [1, 2], hintsUsed: {}, guideSteps: {}, completedSteps: {}, startedAt: 1, updatedAt: 1 },
       { currentLevel: 1, completedLevels: [], hintsUsed: { 2: -1 }, guideSteps: {}, completedSteps: {}, startedAt: 1, updatedAt: 1 },
       { currentLevel: 1, completedLevels: [], hintsUsed: { 99: 1 }, guideSteps: {}, completedSteps: {}, startedAt: 1, updatedAt: 1 },
       { currentLevel: 1, completedLevels: [], hintsUsed: {}, guideSteps: { 1: -1 }, completedSteps: {}, startedAt: 1, updatedAt: 1 },
@@ -194,8 +199,8 @@ describe('lab-progress（基于 localStorage）', () => {
       removeItem: (k) => void map.delete(k),
     }
     const p = loadProgress(mem, TOTAL)
-    completeLevel(mem, p, 6)
-    expect(loadProgress(mem, TOTAL).completedLevels).toEqual([6])
+    completeLevel(mem, p, 1)
+    expect(loadProgress(mem, TOTAL).completedLevels).toEqual([1])
   })
 
   it('localStorage 在运行中失效时自动降级到内存副本', () => {

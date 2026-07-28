@@ -43,11 +43,13 @@ const currentCompletedSteps = computed(() =>
 let unsubscribeDisplay: (() => void) | null = null
 
 onMounted(() => {
-  // 显示文本 → 终端；终端输入 → 虚拟机串口
-  unsubscribeDisplay = vm.onDisplay((data) => {
-    terminalRef.value?.write(data)
-  })
-  void vm.boot()
+  if (!showCompletion.value) {
+    // 显示文本 → 终端；终端输入 → 虚拟机串口
+    unsubscribeDisplay = vm.onDisplay((data) => {
+      terminalRef.value?.write(data)
+    })
+    void vm.boot()
+  }
 })
 
 onBeforeUnmount(() => {
@@ -73,6 +75,9 @@ function handleRunDemo(): void {
 function handleNextLevel(): void {
   if (isLastLevel.value) {
     showCompletion.value = true
+    unsubscribeDisplay?.()
+    unsubscribeDisplay = null
+    void vm.dispose()
     return
   }
   vm.gotoLevel(progress.state.currentLevel + 1)
@@ -96,18 +101,29 @@ function handleCompleteOnboarding(): void {
   showOnboarding.value = false
   terminalRef.value?.focus()
 }
+
+function openAbout(): void {
+  showOnboarding.value = false
+  showAbout.value = true
+}
+
+function openHelp(): void {
+  showAbout.value = false
+  showOnboarding.value = true
+}
 </script>
 
 <template>
   <div class="app-shell">
     <TopBar
+      v-if="!showCompletion"
       :completed-count="progress.state.completedLevels.length"
       :total="TOTAL_LEVELS"
       :mode="currentMode"
       @reset-level="handleResetLevel"
       @reset-all="handleResetAll"
-      @about="showAbout = true"
-      @help="showOnboarding = true"
+      @about="openAbout"
+      @help="openHelp"
       @change-mode="preferences.setMode"
     />
 
@@ -134,14 +150,14 @@ function handleCompleteOnboarding(): void {
     <CompletionPage v-else @restart="handleResetAll" />
 
     <LoadingScreen
-      v-if="vm.stage.value !== 'ready'"
+      v-if="!showCompletion && vm.stage.value !== 'ready'"
       :stage="vm.stage.value"
       :error-message="vm.errorMessage.value"
       @retry="vm.boot"
     />
     <AboutModal v-if="showAbout" @close="showAbout = false" />
     <OnboardingDialog
-      v-if="vm.stage.value === 'ready' && showOnboarding"
+      v-if="!showCompletion && vm.stage.value === 'ready' && showOnboarding"
       :mode="preferences.state.mode"
       :progress-reset-notice="progress.progressResetNotice.value"
       @select-mode="preferences.setMode"
@@ -175,9 +191,20 @@ function handleCompleteOnboarding(): void {
 }
 
 @media (max-width: 900px) {
+  .app-shell {
+    /* 横屏手机、浏览器高倍缩放时，顶部工具栏可能占去大半视口。
+       让应用自身可滚动，避免固定 100dvh 把任务面板压成 0 高度。 */
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+
   .layout {
+    flex: 0 0 auto;
+    min-height: calc(100dvh - 56px);
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(320px, 45vh) 1fr;
+    grid-template-rows:
+      clamp(180px, 45vh, 320px)
+      minmax(320px, 1fr);
   }
 
   .terminal-pane {

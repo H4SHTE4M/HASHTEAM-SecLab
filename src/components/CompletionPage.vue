@@ -87,7 +87,7 @@ const emit = defineEmits<{
 
 .direction-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   gap: 14px;
   margin-bottom: 40px;
   text-align: left;
@@ -137,6 +137,7 @@ const emit = defineEmits<{
 }
 
 .btn-restart {
+  min-height: 44px;
   padding: 12px 36px;
   font-size: 15px;
   font-weight: 600;
@@ -149,5 +150,23 @@ const emit = defineEmits<{
 
 .btn-restart:hover {
   background: #5ccbf9;
+}
+
+@media (max-width: 520px) {
+  .completion-page {
+    padding: 32px 16px;
+  }
+
+  .title {
+    font-size: clamp(26px, 9vw, 34px);
+  }
+
+  .intro {
+    margin-bottom: 28px;
+  }
+
+  .ctf-note {
+    padding: 18px;
+  }
 }
 </style>

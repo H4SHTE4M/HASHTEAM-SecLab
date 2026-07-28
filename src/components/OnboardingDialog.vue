@@ -211,7 +211,6 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: flex-end;
   padding: 20px;
-  pointer-events: none;
   background: rgba(5, 9, 18, 0.12);
   box-sizing: border-box;
 }
@@ -241,7 +240,6 @@ onBeforeUnmount(() => {
   max-height: calc(100vh - 40px);
   overflow-y: auto;
   padding: 25px;
-  pointer-events: auto;
   color: #c7d3e8;
   background: rgba(15, 24, 48, 0.98);
   border: 1px solid #2b4268;
@@ -532,6 +530,12 @@ kbd {
 
   .key-grid {
     grid-template-columns: 1fr;
+  }
+
+  .demo-command,
+  .btn-skip,
+  .btn-primary {
+    min-height: 44px;
   }
 }
 </style>

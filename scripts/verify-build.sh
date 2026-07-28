@@ -4,11 +4,40 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-echo "==> 1/6 检查虚拟机静态资源"
+echo "==> 1/8 检查源码文件权限"
+permission_errors=0
+while IFS= read -r -d '' file; do
+    [ -f "$file" ] || continue
+    expected_mode=644
+    case "$file" in
+        scripts/*.sh | \
+        scripts/*.py | \
+        scripts/validate-challenges.mjs | \
+        scripts/verify-dist.mjs | \
+        vm/build.sh | \
+        vm/rootfs-overlay/init | \
+        vm/rootfs-overlay/opt/hashteam/levels/*/*.sh | \
+        vm/rootfs-overlay/usr/local/bin/*)
+            expected_mode=755
+            ;;
+    esac
+    actual_mode="$(stat -c '%a' -- "$file")"
+    if [ "$actual_mode" != "$expected_mode" ]; then
+        printf '  ✗ %s 权限为 %s，预期 %s\n' "$file" "$actual_mode" "$expected_mode" >&2
+        permission_errors=1
+    fi
+done < <(git ls-files --cached --others --exclude-standard -z)
+[ "$permission_errors" -eq 0 ]
+
+echo "==> 2/8 审计依赖漏洞"
+pnpm audit --audit-level low
+
+echo "==> 3/8 检查虚拟机静态资源"
 missing=0
 for f in \
     public/v86/libv86.js \
     public/v86/v86.wasm \
+    public/v86/v86-fallback.wasm \
     public/v86/bios/seabios-256k.bin \
     public/vm/bzImage \
     public/vm/rootfs.cpio.gz; do
@@ -21,25 +50,21 @@ for f in \
 done
 [ "$missing" -eq 0 ]
 
-echo "==> 2/6 SUID BusyBox 边界检查"
+echo "==> 4/8 SUID BusyBox 边界检查"
 pnpm test:suid
 
-echo "==> 3/6 前端单元测试（vitest）"
+echo "==> 5/8 前端单元测试（vitest）"
 pnpm test
 
-echo "==> 4/6 Linux 检查脚本测试"
-if [ -n "${BUSYBOX:-}" ] || [ -x "$ROOT/vm/.cache/busybox" ] \
-    || [ -x /tmp/busybox ] || command -v busybox >/dev/null 2>&1; then
-    bash scripts/test-vm-checks.sh
-else
-    echo "  跳过：未找到 busybox 静态二进制（设置 BUSYBOX=/path/to/busybox 可启用）"
-fi
+echo "==> 6/8 Linux 检查脚本测试"
+pnpm test:vm
 
-echo "==> 5/6 端到端集成测试（Node 无头启动真实虚拟机）"
+echo "==> 7/8 端到端集成测试（Node 无头启动真实虚拟机）"
 node scripts/integration-test.mjs
 
-echo "==> 6/6 前端生产构建"
+echo "==> 8/8 前端生产构建"
 pnpm build
+pnpm verify:dist
 
 echo
 echo "==> 全部验证通过。构建产物："

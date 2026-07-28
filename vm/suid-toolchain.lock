@@ -1,0 +1,17 @@
+format=1
+distribution=AOSC OS optenv32
+packages=gcc+32=14.3.0;binutils+32=2.46.0;glibc+32=2.42;linux+api+32=6.12.7
+gcc_package_version=14.3.0
+binutils_package_version=2.46.0
+glibc_package_version=2.42
+linux_api_package_version=6.12.7
+glibc_aosc_commit=2570129622
+glibc_acbs_version=20251231
+glibc_recipe_commit=1ad214e98e26cc3cc3bcfcf240a3fc2fbf18a83e
+glibc_recipe_tree=cc85b5bac4c55cf5b58ef475c0b2df4ea42a1947
+glibc_source_sha256=d1775e32e4628e64ef930f435b67bb63af7599acb6be2b335b9f19f16509f17f
+gcc_version=i686-aosc-linux-gnu-gcc (GCC) 14.3.0 20250523 (AOSC OS, optenv(32))
+ld_version=GNU ld (GNU Binutils) 2.46.0.20260210
+gcc_sha256=a791daecf0a00a888b4791026da452ea320ab066a32ee7a05ef071c11d2129fc
+cc1_sha256=6d8f4c6f10064c69905ae859e61545eae0a40b0261aa06f73f7c530a83d19342
+ld_sha256=2e46094c9318c4e2b69203f12ef93e3623fec21a66633489fd80870c23f25f41

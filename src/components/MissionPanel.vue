@@ -1126,4 +1126,36 @@ input[type='text'],
   margin-top: 14px;
   padding: 11px;
 }
+
+@media (max-width: 600px) {
+  .mode-badge,
+  .command-run,
+  .structured-form button,
+  .manual-form button,
+  .question button,
+  .checkpoint button,
+  .verification-form button,
+  .btn-evidence,
+  .btn-advance,
+  .btn-next,
+  .btn-hint {
+    min-height: 44px;
+  }
+
+  .structured-form input,
+  .manual-form input,
+  .verification-form input {
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+
+  .question label,
+  .checkpoint label,
+  .story-details summary,
+  .goals-block details summary,
+  .errors-details summary {
+    min-height: 44px;
+    align-items: center;
+  }
+}
 </style>

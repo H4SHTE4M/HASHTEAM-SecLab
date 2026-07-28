@@ -2,6 +2,7 @@
 # 第 3 关：搬家与整理（cd / mkdir / mv）
 set -eu
 cd "$HOME"
+LEVEL_DIR="${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}/level-3"
 rm -f .message notes.txt
 mkdir -p inbox
 rm -rf inbox/logs inbox/scripts inbox/secrets
@@ -17,25 +18,10 @@ cat > todo.txt <<'T_EOF'
 操作前先确认位置；整理完成后逐个目录复查。
 T_EOF
 
-cat > inbox/app.log <<'A_EOF'
-2024-07-12 08:00:01 INFO  服务启动
-2024-07-12 08:00:02 INFO  加载配置完成
-2024-07-12 08:01:40 WARN  磁盘使用率超过 80%
-A_EOF
-
-cat > inbox/backup.sh <<'B_EOF'
-#!/bin/sh
-echo "正在备份数据目录 ..."
-B_EOF
-
-cat > inbox/deploy.sh <<'D_EOF'
-#!/bin/sh
-echo "正在部署 ..."
-D_EOF
-
-cat > inbox/api.key <<'K_EOF'
-API_KEY=sk-training-9f3c7a2e
-K_EOF
+cp "$LEVEL_DIR/expected/app.log" inbox/app.log
+cp "$LEVEL_DIR/expected/backup.sh" inbox/backup.sh
+cp "$LEVEL_DIR/expected/deploy.sh" inbox/deploy.sh
+cp "$LEVEL_DIR/expected/api.key" inbox/api.key
 
 echo "──────────────────────────────────────────────"
 echo " 第 3 关 · 搬家与整理"

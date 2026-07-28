@@ -13,13 +13,18 @@
 #   vm/build.sh --skip-kernel   只重建 initramfs 与资源（复用已有内核）
 #
 # 环境变量（均有默认值）：
-#   KERNEL_VERSION     内核版本（默认 6.12.96）
+#   KERNEL_VERSION     内核版本（默认 6.12.98）
 #   KERNEL_MIRROR      内核源码镜像（默认阿里云，可换成 cdn.kernel.org）
-#   DEBIAN_MIRROR      Debian 软件源（默认 deb.debian.org）
+#   DEBIAN_MIRROR      Debian 软件源（默认 https://deb.debian.org/debian）
 #   BUSYBOX_DEB        busybox-static 包名（默认 1.38.0-3 i386）
+#   BUSYBOX_DEB_SHA256 对应 Debian 包 SHA-256
+#   KERNEL_SOURCE_SHA256
+#                      对应 Linux 源码包 SHA-256
+#   SEABIOS_DEB_SHA256 对应 SeaBIOS Debian 包 SHA-256
 #   BUSYBOX_CROSS_COMPILE
 #                      SUID BusyBox 交叉编译器前缀（默认 /opt/32/bin/i686-aosc-linux-gnu-）
-#   SOURCE_DATE_EPOCH  SUID BusyBox 可复现构建时间戳（默认 0）
+#                      精确版本及工具哈希锁定在 vm/suid-toolchain.lock
+#   SOURCE_DATE_EPOCH  BusyBox 与内核的可复现构建时间戳（默认 0）
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -28,16 +33,30 @@ OVERLAY="$ROOT/vm/rootfs-overlay"
 OUT_VM="$ROOT/public/vm"
 OUT_V86="$ROOT/public/v86"
 
-KERNEL_VERSION="${KERNEL_VERSION:-6.12.96}"
+KERNEL_VERSION="${KERNEL_VERSION:-6.12.98}"
 KERNEL_MIRROR="${KERNEL_MIRROR:-https://mirrors.aliyun.com/linux-kernel}"
-DEBIAN_MIRROR="${DEBIAN_MIRROR:-http://deb.debian.org/debian}"
+DEBIAN_MIRROR="${DEBIAN_MIRROR:-https://deb.debian.org/debian}"
 BUSYBOX_DEB="${BUSYBOX_DEB:-busybox-static_1.38.0-3_i386.deb}"
 SEABIOS_DEB="${SEABIOS_DEB:-seabios_1.16.3-2_all.deb}"
+BUSYBOX_DEB_SHA256="${BUSYBOX_DEB_SHA256:-22e5889c9e8d1c44f928860873e1d63265017e4c5dc93c79520f5d398f065659}"
+BUSYBOX_GLIBC_BUILT_USING="glibc (= 2.42-17)"
+KERNEL_SOURCE_SHA256="${KERNEL_SOURCE_SHA256:-a62b6a2d207ff72510e5f47156b7078e1e71797357412411b8e4fff97fc8f4c7}"
+SEABIOS_DEB_SHA256="${SEABIOS_DEB_SHA256:-2b590534250b940f43222eeab9a8f57f337a9d9a73fc412a43ab8cd07a7e56f6}"
 BUSYBOX_VERSION="1.38.0"
 BUSYBOX_SOURCE_SHA256="34f9ea6ff8636f2c9241153b9114eefa9e65674a45318ae1ef95bb5f31c53bb2"
 BUSYBOX_CROSS_COMPILE="${BUSYBOX_CROSS_COMPILE:-/opt/32/bin/i686-aosc-linux-gnu-}"
 BUSYBOX_SUID_CONFIG="$ROOT/vm/busybox-suid.config"
+BUSYBOX_SUID_CHECKSUM="$ROOT/vm/busybox-suid.sha256"
+BUSYBOX_TOOLCHAIN_LOCK="$ROOT/vm/suid-toolchain.lock"
+AOSC_GLIBC_RECIPE="$ROOT/vm/toolchain-source/aosc-glibc32"
 BUSYBOX_BUILD_EPOCH="${SOURCE_DATE_EPOCH:-0}"
+export KBUILD_BUILD_USER="${KBUILD_BUILD_USER:-hashteam}"
+export KBUILD_BUILD_HOST="${KBUILD_BUILD_HOST:-reproducible-builder}"
+if [ -z "${KBUILD_BUILD_TIMESTAMP:-}" ]; then
+    KBUILD_BUILD_TIMESTAMP="$(LC_ALL=C date -u -d "@${SOURCE_DATE_EPOCH:-0}")"
+fi
+export KBUILD_BUILD_TIMESTAMP
+export KBUILD_BUILD_VERSION="${KBUILD_BUILD_VERSION:-1}"
 
 SKIP_KERNEL=0
 [ "${1:-}" = "--skip-kernel" ] && SKIP_KERNEL=1
@@ -49,17 +68,43 @@ cd "$WORK"
 
 log() { echo "==> $*"; }
 
-# ---------- 1. busybox 静态用户态 ----------
-if [ ! -f "$WORK/busybox" ]; then
-    log "下载 busybox-static（i386，静态链接，GPLv2）"
-    curl -fSL --retry 3 -o busybox.deb "$DEBIAN_MIRROR/pool/main/b/busybox/$BUSYBOX_DEB"
-    rm -rf busybox-pkg && dpkg-deb -x busybox.deb busybox-pkg
-    cp busybox-pkg/usr/bin/busybox "$WORK/busybox"
-else
-    log "复用缓存的 busybox"
-fi
+verify_sha256() {
+    local expected="$1"
+    local file="$2"
+    printf '%s  %s\n' "$expected" "$file" | sha256sum -c -
+}
 
-# ---------- 1b. 最小 SUID busybox（严格仅含 su/passwd）----------
+download_verified() {
+    local url="$1"
+    local output="$2"
+    local expected="$3"
+    local download
+    download="$(mktemp "$WORK/download.XXXXXX")"
+    curl -fSL --retry 3 -o "$download" "$url"
+    verify_sha256 "$expected" "$download"
+    mv "$download" "$output"
+}
+
+# ---------- 1. busybox 静态用户态 ----------
+if ! verify_sha256 "$BUSYBOX_DEB_SHA256" "$WORK/busybox.deb" >/dev/null 2>&1; then
+    log "下载 busybox-static（i386，静态链接，GPLv2）"
+    download_verified \
+        "$DEBIAN_MIRROR/pool/main/b/busybox/$BUSYBOX_DEB" \
+        "$WORK/busybox.deb" \
+        "$BUSYBOX_DEB_SHA256"
+fi
+verify_sha256 "$BUSYBOX_DEB_SHA256" "$WORK/busybox.deb" >/dev/null
+rm -rf busybox-pkg
+dpkg-deb -x busybox.deb busybox-pkg
+_busybox_built_using="$(dpkg-deb -f busybox.deb Built-Using)"
+[ "$_busybox_built_using" = "$BUSYBOX_GLIBC_BUILT_USING" ] || {
+    echo "错误：busybox-static 的 Built-Using 已变化：$_busybox_built_using" >&2
+    echo "必须先更新并审查对应 glibc 源码归档" >&2
+    exit 1
+}
+cp busybox-pkg/usr/bin/busybox "$WORK/busybox"
+
+# ---------- 1b. 最小 SUID busybox（严格仅含 su）----------
 BUSYBOX_SUID="$WORK/busybox-suid"
 BUSYBOX_SOURCE_ARCHIVE="$WORK/busybox-$BUSYBOX_VERSION.tar.bz2"
 
@@ -67,28 +112,96 @@ BUSYBOX_SOURCE_ARCHIVE="$WORK/busybox-$BUSYBOX_VERSION.tar.bz2"
     echo "错误：缺少 $BUSYBOX_SUID_CONFIG" >&2
     exit 1
 }
+[ -f "$BUSYBOX_SUID_CHECKSUM" ] || {
+    echo "错误：缺少 $BUSYBOX_SUID_CHECKSUM" >&2
+    exit 1
+}
 command -v "${BUSYBOX_CROSS_COMPILE}gcc" >/dev/null 2>&1 || {
     echo "错误：找不到 ${BUSYBOX_CROSS_COMPILE}gcc；请设置 BUSYBOX_CROSS_COMPILE" >&2
     exit 1
 }
+[ -f "$BUSYBOX_TOOLCHAIN_LOCK" ] || {
+    echo "错误：缺少 $BUSYBOX_TOOLCHAIN_LOCK" >&2
+    exit 1
+}
+[ -f "$AOSC_GLIBC_RECIPE/SHA256SUMS" ] || {
+    echo "错误：缺少 AOSC glibc+32 对应源码校验清单" >&2
+    exit 1
+}
+(
+    cd "$AOSC_GLIBC_RECIPE"
+    sha256sum -c SHA256SUMS >/dev/null
+) || {
+    echo "错误：AOSC glibc+32 对应源码配方与审核值不一致" >&2
+    exit 1
+}
+
+toolchain_lock_value() {
+    local key="$1"
+    sed -n "s/^${key}=//p" "$BUSYBOX_TOOLCHAIN_LOCK"
+}
+
+_expected_gcc_version="$(toolchain_lock_value gcc_version)"
+_expected_ld_version="$(toolchain_lock_value ld_version)"
+_expected_gcc_sha256="$(toolchain_lock_value gcc_sha256)"
+_expected_cc1_sha256="$(toolchain_lock_value cc1_sha256)"
+_expected_ld_sha256="$(toolchain_lock_value ld_sha256)"
+_actual_gcc_version="$(LC_ALL=C "${BUSYBOX_CROSS_COMPILE}gcc" --version | sed -n '1p')"
+_actual_ld_version="$(LC_ALL=C "${BUSYBOX_CROSS_COMPILE}ld" --version | sed -n '1p')"
+_cc1_path="$("${BUSYBOX_CROSS_COMPILE}gcc" -print-prog-name=cc1)"
+
+[ "$_actual_gcc_version" = "$_expected_gcc_version" ] &&
+[ "$_actual_ld_version" = "$_expected_ld_version" ] &&
+[ -f "$_cc1_path" ] || {
+    echo "错误：SUID BusyBox 工具链版本与 vm/suid-toolchain.lock 不一致" >&2
+    echo "  GCC: $_actual_gcc_version" >&2
+    echo "  LD:  $_actual_ld_version" >&2
+    exit 1
+}
+verify_sha256 "$_expected_gcc_sha256" "${BUSYBOX_CROSS_COMPILE}gcc" >/dev/null
+verify_sha256 "$_expected_cc1_sha256" "$_cc1_path" >/dev/null
+verify_sha256 "$_expected_ld_sha256" "${BUSYBOX_CROSS_COMPILE}ld" >/dev/null
+
+for _package_check in \
+    "gcc+32:gcc_package_version" \
+    "binutils+32:binutils_package_version" \
+    "glibc+32:glibc_package_version" \
+    "linux+api+32:linux_api_package_version"; do
+    _package_name="${_package_check%%:*}"
+    _lock_key="${_package_check#*:}"
+    _actual_package_version="$(dpkg-query -W -f='${Version}' "$_package_name")"
+    [ "$_actual_package_version" = "$(toolchain_lock_value "$_lock_key")" ] || {
+        echo "错误：$_package_name 版本与 vm/suid-toolchain.lock 不一致" >&2
+        exit 1
+    }
+done
+for _metadata_check in \
+    "X-AOSC-Commit:glibc_aosc_commit" \
+    "X-AOSC-ACBS-Version:glibc_acbs_version"; do
+    _metadata_field="${_metadata_check%%:*}"
+    _lock_key="${_metadata_check#*:}"
+    _actual_metadata="$(dpkg-query -W -f="\${${_metadata_field}}" glibc+32)"
+    [ "$_actual_metadata" = "$(toolchain_lock_value "$_lock_key")" ] || {
+        echo "错误：glibc+32 的 $_metadata_field 与审核记录不一致" >&2
+        exit 1
+    }
+done
+log "SUID 工具链锁定校验通过：$(toolchain_lock_value packages)"
 
 if ! printf '%s  %s\n' "$BUSYBOX_SOURCE_SHA256" "$BUSYBOX_SOURCE_ARCHIVE" \
     | sha256sum -c - >/dev/null 2>&1; then
     log "下载并校验 busybox 源码 $BUSYBOX_VERSION"
-    _busybox_download="$(mktemp "$WORK/busybox-source.XXXXXX")"
-    trap 'rm -f "$_busybox_download"' EXIT
-    curl -fSL --retry 3 -o "$_busybox_download" \
-        "https://busybox.net/downloads/busybox-$BUSYBOX_VERSION.tar.bz2"
-    printf '%s  %s\n' "$BUSYBOX_SOURCE_SHA256" "$_busybox_download" | sha256sum -c -
-    mv "$_busybox_download" "$BUSYBOX_SOURCE_ARCHIVE"
-    trap - EXIT
+    download_verified \
+        "https://busybox.net/downloads/busybox-$BUSYBOX_VERSION.tar.bz2" \
+        "$BUSYBOX_SOURCE_ARCHIVE" \
+        "$BUSYBOX_SOURCE_SHA256"
 fi
 
 _busybox_build="$(mktemp -d "$WORK/busybox-suid-build.XXXXXX")"
 trap 'rm -rf "$_busybox_build"' EXIT
 tar -xf "$BUSYBOX_SOURCE_ARCHIVE" -C "$_busybox_build" --strip-components=1
 
-log "配置并编译最小 SUID busybox（仅 su + passwd）"
+log "配置并编译最小 SUID busybox（仅 su）"
 env SOURCE_DATE_EPOCH="$BUSYBOX_BUILD_EPOCH" TZ=UTC \
     make -C "$_busybox_build" allnoconfig >/dev/null
 while IFS= read -r _config_line; do
@@ -126,24 +239,41 @@ env SOURCE_DATE_EPOCH="$BUSYBOX_BUILD_EPOCH" TZ=UTC \
     make -C "$_busybox_build" -j"$(nproc)" \
         CROSS_COMPILE="$BUSYBOX_CROSS_COMPILE" >/dev/null
 
-_suid_applets="$("$_busybox_build/busybox" --list)"
-if [ "$_suid_applets" != "$(printf 'passwd\nsu')" ]; then
+_suid_applets="$(
+    sed -n 's/^#define APPLET_NO_\([^ ]*\).*/\1/p' \
+        "$_busybox_build/include/applet_tables.h" |
+        LC_ALL=C sort
+)"
+if [ "$_suid_applets" != "su" ]; then
     echo "错误：SUID busybox applet 白名单不匹配：" >&2
     printf '%s\n' "$_suid_applets" >&2
     exit 1
 fi
 cp "$_busybox_build/busybox" "$BUSYBOX_SUID"
+_expected_suid_sha256="$(awk 'NF >= 2 && $2 == "bin/busybox-suid" { print $1 }' "$BUSYBOX_SUID_CHECKSUM")"
+[ -n "$_expected_suid_sha256" ] || {
+    echo "错误：SUID helper 校验文件格式无效" >&2
+    exit 1
+}
+verify_sha256 "$_expected_suid_sha256" "$BUSYBOX_SUID" >/dev/null || {
+    echo "错误：SUID helper 与审核锁定值不一致；请先审查工具链/配置变化，再更新校验值" >&2
+    exit 1
+}
 rm -rf "$_busybox_build"
 trap - EXIT
 
 # ---------- 2. 定制 32 位内核 ----------
 if [ "$SKIP_KERNEL" -eq 0 ]; then
-    if [ ! -d "linux-$KERNEL_VERSION" ]; then
+    if ! verify_sha256 "$KERNEL_SOURCE_SHA256" "linux-$KERNEL_VERSION.tar.xz" >/dev/null 2>&1; then
         log "下载内核源码 linux-$KERNEL_VERSION"
-        curl -fSL --retry 3 -C - -o "linux-$KERNEL_VERSION.tar.xz" \
-            "$KERNEL_MIRROR/v6.x/linux-$KERNEL_VERSION.tar.xz"
-        tar -xf "linux-$KERNEL_VERSION.tar.xz"
+        download_verified \
+            "$KERNEL_MIRROR/v6.x/linux-$KERNEL_VERSION.tar.xz" \
+            "linux-$KERNEL_VERSION.tar.xz" \
+            "$KERNEL_SOURCE_SHA256"
     fi
+    verify_sha256 "$KERNEL_SOURCE_SHA256" "linux-$KERNEL_VERSION.tar.xz" >/dev/null
+    rm -rf "linux-$KERNEL_VERSION"
+    tar -xf "linux-$KERNEL_VERSION.tar.xz"
     cd "linux-$KERNEL_VERSION"
     log "生成 tinyconfig 并启用实验所需的最小特性集"
     make ARCH=i386 tinyconfig
@@ -152,6 +282,7 @@ if [ "$SKIP_KERNEL" -eq 0 ]; then
         --enable DEVTMPFS --enable PROC_FS --enable SYSFS --enable TMPFS \
         --enable TTY --enable SERIAL_8250 --enable SERIAL_8250_CONSOLE \
         --enable PRINTK --enable UNIX --enable NET --enable INET \
+        --disable IPV6 \
         --enable BINFMT_ELF --enable BINFMT_SCRIPT --enable SHMEM \
         --enable EPOLL --enable FUTEX --enable EVENTFD --enable TIMERFD \
         --enable SIGNALFD --enable INOTIFY_USER --enable PROC_SYSCTL \
@@ -184,12 +315,17 @@ cp "$ROOT/node_modules/v86/build/libv86.js" "$OUT_V86/"
 cp "$ROOT/node_modules/v86/build/v86.wasm" "$OUT_V86/"
 cp "$ROOT/node_modules/v86/build/v86-fallback.wasm" "$OUT_V86/"
 
-if [ ! -f "$OUT_V86/bios/seabios-256k.bin" ]; then
-    log "下载 SeaBIOS（LGPLv3）"
-    curl -fSL --retry 3 -o seabios.deb "$DEBIAN_MIRROR/pool/main/s/seabios/$SEABIOS_DEB"
-    rm -rf seabios-pkg && dpkg-deb -x seabios.deb seabios-pkg
-    cp seabios-pkg/usr/share/seabios/bios-256k.bin "$OUT_V86/bios/seabios-256k.bin"
+if ! verify_sha256 "$SEABIOS_DEB_SHA256" "$WORK/seabios.deb" >/dev/null 2>&1; then
+    log "下载并校验 SeaBIOS（LGPLv3）"
+    download_verified \
+        "$DEBIAN_MIRROR/pool/main/s/seabios/$SEABIOS_DEB" \
+        "$WORK/seabios.deb" \
+        "$SEABIOS_DEB_SHA256"
 fi
+verify_sha256 "$SEABIOS_DEB_SHA256" "$WORK/seabios.deb" >/dev/null
+rm -rf seabios-pkg
+dpkg-deb -x seabios.deb seabios-pkg
+cp seabios-pkg/usr/share/seabios/bios-256k.bin "$OUT_V86/bios/seabios-256k.bin"
 
 log "构建完成，产物体积："
 du -h "$OUT_VM/bzImage" "$OUT_VM/rootfs.cpio.gz" \
