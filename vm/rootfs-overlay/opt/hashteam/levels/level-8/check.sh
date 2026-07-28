@@ -22,5 +22,5 @@ if netstat -tln 2>/dev/null | grep -q ":$PORT "; then
     echo "✗ 端口对了，但异常进程还在运行。回到进程列表确认它的 PID，再结束它。"
     exit 1
 fi
-echo "✓ 异常进程已清除！ps 发现异常、netstat 确认端口、kill 收尾——这就是应急三板斧。"
+echo "✓ 异常进程已清除！你完成了发现异常、确认端口、结束进程和复核状态。"
 exit 0

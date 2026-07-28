@@ -13,7 +13,7 @@
     "把筛选结果通过管道交给行数统计",
     "记录统计结果并完成验证"
   ],
-  "prerequisites": ["使用 cat/head 观察文本", "理解命令选项", "从终端输出提取值"],
+  "prerequisites": ["使用 cat 观察文本", "理解命令选项", "从终端输出提取值"],
   "newConcepts": ["引号与整体参数", "grep 行筛选", "管道"],
   "steps": [
     {
@@ -21,7 +21,7 @@
       "type": "observe",
       "title": "先看原始日志",
       "objective": "辨认一行日志的基本结构和成功/失败差异",
-      "instruction": "先只看开头几行，不要立刻拼接分析命令。",
+      "instruction": "先运行观察示例。head 默认显示文件开头十行，适合先了解日志格式；此时不要急着拼接分析命令。",
       "completion": "run",
       "allowRun": true,
       "uses": ["command-options"],
@@ -34,7 +34,7 @@
       "type": "explain",
       "title": "让搜索短语保持完整",
       "objective": "理解为什么含空格的搜索词需要引号",
-      "instruction": "Shell 会用空格分隔参数。单引号和双引号都可以把含空格的短语包成一个参数；本关只需记住：引号本身不属于搜索内容。",
+      "instruction": "Shell 会用空格分隔参数。本关统一用双引号把含空格的搜索短语作为一个参数；引号负责划定边界，本身不属于搜索内容。单引号与双引号处理特殊内容的方式并不完全相同。",
       "completion": "acknowledge",
       "allowRun": false,
       "introduces": [
@@ -46,7 +46,7 @@
         {
           "id": "grep-filter",
           "term": "grep 行筛选",
-          "explanation": "grep 从文件或输入中保留包含指定模式的整行。先检查筛选结果是否正确，再考虑统计。"
+          "explanation": "grep 从文件或输入中保留包含指定文字的整行。先检查筛选结果是否正确，再考虑统计。"
         }
       ],
       "uses": ["command-anatomy"],
@@ -90,9 +90,9 @@
           { "id": "all-lines", "label": "输出与原文件所有行完全相同" }
         ],
         "answer": "failed-only",
-        "success": "正确。管道会放大上游结果，所以先验证 grep 很重要。"
+        "success": "正确。后续命令会继续处理 grep 的输出，所以必须先确认筛选结果。"
       },
-      "reinforcement": "错误的筛选接上统计，只会得到精确的错误答案。"
+      "reinforcement": "只有筛选结果正确，后面的统计才有意义。"
     },
     {
       "id": 5,

@@ -271,10 +271,10 @@ PORTS=$("$STUB/netstat" -tln)
 expect_contains "$PORTS" "初始服务监听所有接口" "0.0.0.0:${HASHTEAM_SECURE_PORT} "
 OUT=$(run_check "$SB") && RC=0 || RC=$?
 expect_eq "未完成综合状态验证失败" "$RC" "1"
-expect_contains "$OUT" "按观察面报告待修复数量" "还有 6 个观察面"
+expect_contains "$OUT" "按检查项报告待修复数量" "还有 6 项检查"
 cd "$SB/home/guest" && PATH="$STUB:$PATH" "$STUB/sed" -i 's/debug=true/debug=false/' server.conf
 OUT=$(run_check "$SB") && RC=0 || RC=$?
-expect_contains "$OUT" "只修配置一项仍有多类问题" "还有 5 个观察面"
+expect_contains "$OUT" "只修配置一项仍有多类问题" "还有 5 项检查"
 # 方法 1：sed + chmod + 服务重启
 cd "$SB/home/guest" && PATH="$STUB:$PATH" "$STUB/sed" -i 's/allow_guest=true/allow_guest=false/' server.conf && PATH="$STUB:$PATH" "$STUB/sed" -i 's/listen=0.0.0.0/listen=127.0.0.1/' server.conf
 "$STUB/chmod" 600 "$SB/home/guest/server.conf"

@@ -318,7 +318,10 @@ function stepTypeLabel(type: LearningStep['type']): string {
 
           <p class="step-instruction">{{ currentStep.instruction }}</p>
 
-          <div v-if="currentStep.observation" class="observation-box">
+          <div
+            v-if="currentStep.observation && currentStep.type !== 'checkpoint'"
+            class="observation-box"
+          >
             <span>运行后观察</span>
             <p>{{ currentStep.observation }}</p>
           </div>
@@ -382,7 +385,7 @@ function stepTypeLabel(type: LearningStep['type']): string {
             class="manual-form"
             @submit.prevent="runManualCommand"
           >
-            <label :for="`manual-${level.id}-${currentStep.id}`">完整输入命令</label>
+            <label :for="`manual-${level.id}-${currentStep.id}`">输入要运行的命令</label>
             <input
               :id="`manual-${level.id}-${currentStep.id}`"
               v-model="manualCommand"
@@ -412,8 +415,15 @@ function stepTypeLabel(type: LearningStep['type']): string {
             </button>
           </div>
 
+          <p
+            v-if="['partial-command', 'manual-command'].includes(currentStep.type)"
+            class="command-note"
+          >
+            需要多条命令时可以继续在终端操作；全部核对完成后再确认本步。
+          </p>
+
           <button
-            v-else-if="currentStep.completion === 'acknowledge' && !currentStepResolved"
+            v-if="currentStep.completion === 'acknowledge' && !currentStepResolved"
             type="button"
             class="btn-evidence"
             @click="rememberStepCompletion"
@@ -431,7 +441,7 @@ function stepTypeLabel(type: LearningStep['type']): string {
             class="btn-evidence"
             @click="confirmObservation"
           >
-            我已运行并核对上面的观察点
+            我已完成操作并核对观察点
           </button>
 
           <p v-if="commandError || answerError" class="inline-error" role="alert">
@@ -803,6 +813,13 @@ input {
   display: flex;
   flex-direction: column;
   gap: 9px;
+}
+
+.command-note {
+  margin: 8px 0 0;
+  color: #7d8aa5;
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .command-template {

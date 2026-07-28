@@ -22,7 +22,7 @@
       "type": "manual-command",
       "title": "盘点交接文件",
       "objective": "从目录中找到配置与运行说明",
-      "instruction": "先列出当前目录，再自行读取服务配置和运行说明。不要只根据文件名判断风险。",
+      "instruction": "本步需要连续完成盘点：先列出当前目录，再分别读取服务配置和运行说明。核对全部输出后再继续，不要只根据文件名判断风险。",
       "completion": "input",
       "allowRun": false,
       "uses": ["command-anatomy"],
@@ -34,7 +34,7 @@
       "type": "manual-command",
       "title": "搜索可能扩大暴露面的配置",
       "objective": "复用 grep 定位调试、访客和监听相关行",
-      "instruction": "用 grep 每次搜索一个关键词，或采用其他方式查看配置。根据名称和值判断哪些设置不适合内部生产服务。",
+      "instruction": "用 grep 每次搜索一个关键词，或采用其他方式查看配置。根据配置名称和值，判断哪些设置不适合准备上线的内部服务。",
       "completion": "input",
       "allowRun": false,
       "uses": ["grep-filter", "shell-quotes"],
@@ -58,7 +58,7 @@
       "type": "manual-command",
       "title": "核对运行中的服务",
       "objective": "把配置中的监听设置与真实端口状态对照",
-      "instruction": "自行查看进程与 TCP 监听列表。用运行说明中的端口定位服务，再比较监听地址是否与内部用途一致。",
+      "instruction": "本步需要核对两类运行状态：分别查看进程和 TCP 监听列表。用运行说明中的端口定位服务，再判断监听地址是否符合内部用途。",
       "completion": "input",
       "allowRun": false,
       "uses": ["process-pid", "listening-port", "remediation-verification"],
@@ -105,7 +105,7 @@
         {
           "id": "sed-substitution",
           "term": "sed 替换结构",
-          "explanation": "sed 的 s/旧内容/新内容/ 表示替换；-i 才会原地修改文件。它只是可选工具，也可以使用 vi 或其他已掌握方式完成同一状态。"
+          "explanation": "sed 的 s/旧内容/新内容/ 表示替换；-i 才会原地修改文件。sed 只是可选工具，也可以使用其他熟悉的编辑方式完成同一状态。"
         }
       ],
       "uses": ["pipeline", "shell-quotes"],
@@ -118,7 +118,7 @@
       "type": "manual-command",
       "title": "独立修改配置内容",
       "objective": "把安全基线翻译成实际配置值",
-      "instruction": "选择 sed、vi 或其他方式，关闭不必要的布尔功能，并把监听地址收紧到本机。可以分多条命令完成，但不提供唯一完整答案。",
+      "instruction": "选择 sed 或其他熟悉的编辑方式，关闭不必要的布尔功能，并把监听地址收紧到本机。你可以在本步连续运行多条命令；修改并复查全部目标后再继续。",
       "completion": "input",
       "allowRun": false,
       "uses": ["secure-config-baseline", "sed-substitution"],
@@ -148,7 +148,7 @@
       "type": "manual-command",
       "title": "让运行状态应用新配置",
       "objective": "停止旧进程，并按运行说明在本机地址重启服务",
-      "instruction": "用之前记录的 PID 结束旧服务，再根据运行说明完整输入启动命令。地址和端口必须来自已修复配置与现场说明。",
+      "instruction": "本步需要连续完成停止和启动：先用记录的 PID 结束旧服务，再根据运行说明启动服务。地址和端口必须来自已修复配置与现场说明；完成后继续核对进程和监听状态。",
       "completion": "input",
       "allowRun": false,
       "uses": ["process-pid", "listening-port", "secure-config-baseline"],
@@ -159,16 +159,16 @@
     {
       "id": 10,
       "type": "explain",
-      "title": "用原始观察面完成闭环",
+      "title": "回到原始检查项完成闭环",
       "objective": "理解发现、修复、复查必须覆盖同一组证据",
-      "instruction": "回到最初的四个观察面：配置内容、文件权限、进程、监听地址。全部符合目标，才说明问题不是“看起来改了”，而是环境状态真的改变。",
+      "instruction": "回到最初的四项检查：配置内容、文件权限、进程和监听地址。四项都符合目标，才能证明环境状态已经真正改变。",
       "completion": "acknowledge",
       "allowRun": false,
       "introduces": [
         {
           "id": "security-remediation-loop",
           "term": "修复闭环",
-          "explanation": "发现证据、制定目标、实施修复、回到同一观察面复核。最终验证检查环境状态，不强制唯一命令。"
+          "explanation": "先发现证据并制定目标，再实施修复，最后回到相同的检查项复核。最终验证只检查环境状态，不强制使用唯一命令。"
         }
       ],
       "uses": ["remediation-verification", "secure-config-baseline"],
@@ -184,14 +184,14 @@
       "allowRun": false,
       "uses": ["security-remediation-loop", "permission-string", "listening-port"],
       "observation": "配置已关闭非必要能力，文件仅属主读写，服务已按本机地址重新监听。",
-      "reinforcement": "你已经完成了跨文件、权限、进程和网络状态的综合迁移。"
+      "reinforcement": "你已经能够把配置、权限、进程和监听状态放在一起核对。"
     }
   ],
   "hints": [
     {
       "level": 1,
       "kind": "direction",
-      "text": "把问题分成四个观察面：配置值、文件权限、服务进程、监听范围；逐项建立修复前后对照。"
+      "text": "把问题分成四项检查：配置值、文件权限、服务进程和监听范围；逐项对照修复前后的状态。"
     },
     {
       "level": 2,
@@ -210,12 +210,12 @@
     "placeholders": [],
     "feedback": {
       "empty": "本关验证不需要参数。",
-      "incorrect": "至少一个观察面仍未达到基线；按反馈回到配置、权限或运行状态定位。",
+      "incorrect": "至少一项检查仍未达到基线；按反馈回到配置、权限或运行状态定位。",
       "success": "配置、权限和服务运行状态均已完成加固与复查。"
     }
   },
   "completionSummary": {
-    "solved": "你从多个观察面发现风险，修改配置与权限，重启服务并验证真实状态。",
+    "solved": "你从多项检查中发现风险，修改配置与权限，重启服务并验证真实状态。",
     "mastered": ["综合读取与搜索", "按用途制定安全基线", "用 sed 或编辑器修改文本", "让配置进入运行状态", "完成发现—修复—复查闭环"],
     "next": "你已经完成新手村；后续可以把同一方法迁移到真实的授权运维与安全研究任务。"
   }

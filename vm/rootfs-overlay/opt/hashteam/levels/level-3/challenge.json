@@ -21,7 +21,7 @@
       "type": "manual-command",
       "title": "先读现场说明",
       "objective": "复用 cat，找到待整理目录和分类要求",
-      "instruction": "主目录里有一份待办文件。先用 ls 找到它，再完整输入读取命令。",
+      "instruction": "主目录里有一份待办文件。先运行 ls 找到文件名，再在本步输入读取命令；两次输出都核对完成后再继续。",
       "completion": "input",
       "allowRun": false,
       "uses": ["command-anatomy"],
@@ -51,7 +51,7 @@
       "type": "partial-command",
       "title": "进入并确认现场",
       "objective": "把待办中的目录名填入 cd",
-      "instruction": "填写待整理目录名并运行，然后自己用 pwd 和 ls 观察位置与文件。",
+      "instruction": "填写待整理目录名并运行。进入目录后，再在终端运行 pwd 和 ls，分别核对当前位置和待整理文件。",
       "completion": "input",
       "allowRun": false,
       "uses": ["relative-path"],
@@ -84,7 +84,7 @@
           "placeholder": "按空格分隔三个名称"
         }
       ],
-      "observation": "再次 ls，确认三个新目录都出现且原文件仍在。",
+      "observation": "在终端再次运行 ls，确认三个新目录都已出现，原文件仍留在当前目录。",
       "reinforcement": "一个命令可以接收多个并列参数。"
     },
     {
@@ -119,7 +119,7 @@
         { "id": "source", "label": "日志源文件", "placeholder": "从 ls 输出中选择" },
         { "id": "target", "label": "日志目标目录", "placeholder": "填写对应分类目录" }
       ],
-      "observation": "用 ls 和目标目录的列表确认源位置不再有该文件、目标中已经出现。",
+      "observation": "分别查看当前目录和日志目录：原位置不应再有该文件，日志目录中应能看到它。",
       "commonErrors": ["源和目标顺序不要颠倒。"],
       "reinforcement": "移动后要同时观察原位置和目标位置。"
     },
@@ -128,13 +128,13 @@
       "type": "manual-command",
       "title": "独立完成剩余整理",
       "objective": "迁移刚学会的源/目标关系完成脚本和密钥归类",
-      "instruction": "不再提供命令模板。自己输入一条或多条命令，把剩余文件放入正确目录；可以采用任何能得到目标结构的方法。",
+      "instruction": "不再提供命令模板。你可以在本步连续运行一条或多条命令，把剩余文件放入正确目录；完成全部整理并核对后再继续。",
       "completion": "input",
       "allowRun": false,
       "uses": ["source-target", "relative-path", "command-anatomy"],
       "observation": "最终顶层只留下三个分类目录，各目录中的文件数量与待办一致。",
       "commonErrors": ["一次移动多个源时，最后一个参数必须是共同目标目录。"],
-      "reinforcement": "你已经从示范过渡到独立组合文件操作。"
+      "reinforcement": "同一组源与目标关系，可以用不同命令组合完成。"
     },
     {
       "id": 8,

@@ -66,5 +66,5 @@ if [ "$errors" -eq 0 ]; then
     exit 0
 fi
 
-echo "还有 $errors 个观察面未达到内部服务基线。请按上方分类反馈定位。"
+echo "还有 $errors 项检查未达到内部服务基线。请按上方分类反馈定位。"
 exit 1

@@ -171,7 +171,7 @@ async function main() {
     await waitFor(/"level-result","level":5,"status":"passed"/)
   })
 
-  await step('第 6 关：日志分析找出攻击者', async () => {
+  await step('第 6 关：日志分析定位最高频来源', async () => {
     goToLevel(6)
     await waitFor(/"level-ready","level":6\}/)
     send("grep 'Failed password' auth.log | awk '{print $11}' | sort | uniq -c | sort -nr | head")
@@ -222,7 +222,7 @@ async function main() {
     goToLevel(10)
     await waitFor(/"level-ready","level":10\}/)
     send('check')
-    await waitFor(/还有 6 个观察面/)
+    await waitFor(/还有 6 项检查/)
     send("sed -i 's/debug=true/debug=false/' server.conf")
     send("sed -i 's/allow_guest=true/allow_guest=false/' server.conf")
     send("sed -i 's/listen=0.0.0.0/listen=127.0.0.1/' server.conf")

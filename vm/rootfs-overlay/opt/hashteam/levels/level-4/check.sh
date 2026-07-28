@@ -23,7 +23,7 @@ check_perm "$HOME/deploy.sh" 700
 check_perm "$HOME/secret.txt" 600
 
 if [ "$errors" -eq 0 ]; then
-    echo "✓ 权限收紧完成！最小权限原则：只给完成工作所必需的权限，多一点都不行。"
+    echo "✓ 权限收紧完成！最小权限原则：只保留完成工作所必需的权限。"
     exit 0
 fi
 echo "还有 $errors 处权限不符合用途。回到三组权限逐组检查。"

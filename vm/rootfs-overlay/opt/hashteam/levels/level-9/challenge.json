@@ -5,7 +5,7 @@
   "slug": "debug-endpoint",
   "name": "被遗忘的调试接口",
   "tagline": "HTTP 与路径：让响应内容决定下一步",
-  "storySummary": "本机启动了一个待上线 Web 服务，需要从公开响应中检查是否泄露调试信息。",
+  "storySummary": "训练虚拟机内启动了一个待上线 Web 服务，需要从公开响应中检查是否泄露调试信息。",
   "story": "所有请求都只允许发往训练虚拟机内部。服务入口和后续路径不直接给出：你要先从监听状态发现地址与端口，再根据每次 HTTP 响应中的线索继续探索。",
   "goals": [
     "从监听列表发现本机 Web 服务入口",
@@ -21,7 +21,7 @@
       "type": "manual-command",
       "title": "发现本机服务入口",
       "objective": "复用上一关能力找出当前监听地址和端口",
-      "instruction": "自行运行监听查看命令。找出绑定在本机回环地址上的 Web 服务，记录地址和端口。",
+      "instruction": "自行运行监听查看命令。找出新出现的 Web 服务监听行，记录 Local Address（本地地址）中的地址和端口。",
       "completion": "input",
       "allowRun": false,
       "uses": ["listening-port", "command-options"],
@@ -69,14 +69,14 @@
       "type": "question",
       "title": "决定下一步探索方式",
       "objective": "根据首页结果选择低风险、公开的发现入口",
-      "instruction": "首页没有直接答案时，从 Web 服务公开约定中寻找路径线索。",
+      "instruction": "首页没有直接答案时，先从 Web 服务公开的路径指引中寻找线索。",
       "completion": "answer",
       "allowRun": false,
       "uses": ["url-parts"],
       "question": {
         "prompt": "下一步最合理的做法是什么？",
         "choices": [
-          { "id": "public-guidance", "label": "查看服务公开的爬虫路径指引文件" },
+          { "id": "public-guidance", "label": "查看服务公开的爬虫访问指引" },
           { "id": "internet-scan", "label": "扫描互联网上的真实网站" },
           { "id": "guess-token", "label": "直接猜测调试令牌" }
         ],
@@ -97,12 +97,12 @@
         {
           "id": "http-path-exploration",
           "term": "HTTP 路径探索",
-          "explanation": "同一地址和端口下可以有多个路径。应根据页面、公开约定和状态响应逐步探索，而不是无依据地照抄隐藏路线。"
+          "explanation": "同一地址和端口下可以有多个路径。应根据页面、公开约定和响应内容逐步探索，而不是无依据地猜测隐藏路线。"
         },
         {
           "id": "information-disclosure",
           "term": "信息泄露",
-          "explanation": "调试状态、内部路径、备份资源或令牌一旦出现在未受控响应中，就扩大了攻击面。隐藏名称不能替代访问控制。"
+          "explanation": "调试状态、内部路径、备份资源或令牌一旦出现在无需授权即可访问的响应中，就扩大了攻击面。隐藏名称不能替代访问控制。"
         }
       ],
       "uses": ["url-parts"],
@@ -121,7 +121,7 @@
       "fields": [
         { "id": "address", "label": "本机地址", "placeholder": "沿用监听输出" },
         { "id": "port", "label": "服务端口", "placeholder": "沿用监听输出" },
-        { "id": "path", "label": "公开爬虫指引文件", "placeholder": "填写标准文件名，不含开头 /" }
+        { "id": "path", "label": "爬虫访问指引文件名", "placeholder": "填写标准文件名，不含开头 /" }
       ],
       "observation": "记录响应列出的候选路径；此时仍不要假设哪条一定包含令牌。",
       "reinforcement": "下一步路径来自服务器自己的公开响应。"
@@ -149,7 +149,7 @@
       "allowRun": false,
       "uses": ["url-parts", "http-path-exploration", "information-disclosure"],
       "observation": "在响应中找出令牌标签，并只记录等号后的值。",
-      "reinforcement": "路径探索是一个由响应驱动的状态序列。"
+      "reinforcement": "每次根据上一条响应决定下一步，才能保留完整的线索来源。"
     },
     {
       "id": 9,

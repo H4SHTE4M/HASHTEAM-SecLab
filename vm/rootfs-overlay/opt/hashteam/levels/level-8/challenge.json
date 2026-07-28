@@ -38,7 +38,7 @@
       "type": "observe",
       "title": "查看正在运行的程序",
       "objective": "从进程列表定位额外的用户网络服务",
-      "instruction": "运行进程列表，重点比较 COMMAND 一列和本关基线。",
+      "instruction": "运行进程列表，重点比较 COMMAND（命令）一列和本关基线。",
       "completion": "run",
       "allowRun": true,
       "uses": ["process-pid"],
@@ -98,8 +98,8 @@
       "fields": [
         { "id": "options", "label": "监听查看组合选项", "placeholder": "组合 -t、-l、-n" }
       ],
-      "observation": "排除已知系统项，记录陌生监听行冒号后的端口数字。",
-      "commonErrors": ["端口来自 Local Address 一列，不是 PID。"],
+      "observation": "排除已知系统项，记录陌生监听行中 Local Address（本地地址）冒号后的端口数字。",
+      "commonErrors": ["端口来自 Local Address（本地地址）一列，不是 PID。"],
       "reinforcement": "关键端口必须从当前环境输出发现。"
     },
     {
@@ -127,8 +127,8 @@
       "id": 7,
       "type": "manual-command",
       "title": "独立结束异常进程",
-      "objective": "使用实际 PID 完成处置",
-      "instruction": "自己输入完整 kill 命令。PID 必须来自 ps 输出；不要输入尖括号，也不要把端口当 PID。",
+      "objective": "停止可疑的 HTTP 服务",
+      "instruction": "根据 ps 结果完整输入 kill 命令。使用进程的 PID，不要输入尖括号，也不要把端口号当成 PID。",
       "completion": "input",
       "allowRun": false,
       "uses": ["process-pid", "placeholder"],
@@ -148,7 +148,7 @@
         {
           "id": "remediation-verification",
           "term": "进程处置复核",
-          "explanation": "操作成功提示不等于风险消失。应回到最初的观察面，确认进程和网络状态都恢复到基线。"
+          "explanation": "操作成功提示不等于风险消失。应重新检查最初发现问题的进程和网络状态，确认它们都已恢复到基线。"
         }
       ],
       "uses": ["process-pid", "listening-port"],

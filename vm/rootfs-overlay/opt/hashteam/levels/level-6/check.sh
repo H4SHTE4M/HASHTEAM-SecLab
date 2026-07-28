@@ -18,9 +18,9 @@ if ! grep -q "$given" "$LOG"; then
 fi
 if [ "$given" = "$expected" ]; then
     echo "✓ 正确！$given 是失败登录次数最多的来源 IP。"
-    echo "  你刚才做的就是安全运维的日常：从日志中定位攻击者。"
+    echo "  你已经从日志中定位了失败登录最频繁的来源。"
     exit 0
 fi
 echo "✗ $given 不是失败次数最多的 IP。"
-echo "  回到单列地址、分组次数和数字降序三个中间结果定位问题。"
+echo "  回到单列地址、分组计数和数字降序三个中间结果定位问题。"
 exit 1

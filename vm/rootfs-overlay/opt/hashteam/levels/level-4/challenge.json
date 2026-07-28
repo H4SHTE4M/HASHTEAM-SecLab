@@ -27,7 +27,7 @@
         {
           "id": "permission-string",
           "term": "权限字符串",
-          "explanation": "最左侧第一位表示对象类型，后九位按三组三字符排列：属主、属组、其他用户。每组里的 r/w/x 分别表示读、写、执行，- 表示没有该能力。"
+          "explanation": "最左侧第一位表示对象类型，后九位按三组三字符排列：属主（文件所有者）、属组（文件所属用户组）、其他用户。每组里的 r/w/x 分别表示读、写、执行，- 表示没有该能力。"
         }
       ],
       "uses": ["command-options"],
@@ -149,7 +149,7 @@
       "type": "checkpoint",
       "title": "用两种表示复查",
       "objective": "确认字符权限与数字权限表达同一状态",
-      "instruction": "用 ls -l 看字符形式，也可以用 stat 的数字输出复查。确认两者都符合前面写出的用途。",
+      "instruction": "先用 ls -l 查看字符形式；如需核对数字形式，可以运行 stat -c %a 文件名。确认两种表示都符合前面确定的用途。",
       "completion": "confirm",
       "allowRun": false,
       "uses": ["permission-string", "numeric-permissions"],
