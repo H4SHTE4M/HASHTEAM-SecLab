@@ -160,6 +160,7 @@ export default defineConfig(({ command }) => {
     plugins: [vue(), vmAssetsPlugin(vmBundle, sourceId)],
     define: {
       __VM_ASSET_BASE__: JSON.stringify(vmAssetBase),
+      __SOURCE_ID__: JSON.stringify(sourceId),
     },
     build: {
       target: 'es2020',
