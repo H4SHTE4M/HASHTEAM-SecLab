@@ -16,6 +16,7 @@ const VM_ASSETS = {
 } as const
 
 const LEGAL_FILES = ['SOURCE_CODE.md', 'THIRD_PARTY_NOTICES.md'] as const
+const EDGEONE_CONFIG_FILE = 'edgeone.json'
 
 interface VmAssetBundle {
   hash: string
@@ -129,6 +130,16 @@ function vmAssetsPlugin(bundle: VmAssetBundle, sourceId: string): Plugin {
           source: legalSource,
         })
       }
+      const edgeOneConfigSource = readFileSync(
+        path.resolve(process.cwd(), EDGEONE_CONFIG_FILE),
+        'utf8',
+      )
+      JSON.parse(edgeOneConfigSource)
+      this.emitFile({
+        type: 'asset',
+        fileName: EDGEONE_CONFIG_FILE,
+        source: edgeOneConfigSource,
+      })
       this.emitFile({
         type: 'asset',
         fileName: 'vm-assets.json',

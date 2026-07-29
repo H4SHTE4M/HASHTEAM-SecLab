@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Build the source directory that accompanies production VM binaries.
+# Optionally download and verify the source set corresponding to the VM build.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUTPUT="${1:-$ROOT/dist/sources}"
+OUTPUT="${1:-$ROOT/vm/.cache/corresponding-source}"
 
 commit="$(git -C "$ROOT" rev-parse HEAD)"
 source_id="$commit"

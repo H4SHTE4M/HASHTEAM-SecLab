@@ -54,8 +54,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash scripts/prepare-corresponding-source.sh dist/sources
-
           release_archive="$RUNNER_TEMP/hashteam-production-release.tar"
           tar \
             --sort=name \
@@ -116,29 +114,10 @@ jobs:
         run: |
           set -euo pipefail
           release_archive="$RUNNER_TEMP/production-release/hashteam-production-release.tar"
-          [[ "$EXPECTED_RELEASE_SHA256" =~ ^[a-f0-9]{64}$ ]]
-          printf '%s  %s\n' "$EXPECTED_RELEASE_SHA256" "$release_archive" |
-            sha256sum --check --strict -
-
-          if tar -tf "$release_archive" |
-            grep -Eq '(^/|(^|/)\.\.(/|$))'; then
-            echo "ERROR: 发布包包含越界路径" >&2
-            exit 1
-          fi
-
-          install -d -m 0755 dist
-          tar \
-            --extract \
-            --file "$release_archive" \
-            --directory dist \
-            --no-same-owner \
-            --no-same-permissions
-
-          if find dist -type l -print -quit | grep -q .; then
-            echo "ERROR: 发布包不允许包含符号链接" >&2
-            exit 1
-          fi
-          node scripts/verify-dist.mjs
+          bash scripts/verify-release-archive.sh \
+            "$release_archive" \
+            "$EXPECTED_RELEASE_SHA256" \
+            "$GITHUB_SHA"
 
       - name: Install deployment transport
         run: |
@@ -235,3 +214,92 @@ jobs:
           DEPLOY_URL="$DEPLOY_URL" \
             timeout --signal=TERM --kill-after=90s 42m \
               bash scripts/deploy-release.sh
+
+  deploy_edgeone:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs:
+      - verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    environment:
+      name: production
+      url: https://seclabtest.lwzheng.tech
+    concurrency:
+      group: hashteam-edgeone-production
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout deployment code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '20.19'
+          cache: pnpm
+
+      - name: Install locked deployment CLI
+        run: pnpm install --frozen-lockfile
+
+      - name: Download verified production release
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: production-release-${{ github.sha }}
+          path: ${{ runner.temp }}/production-release
+
+      - name: Verify and extract production release
+        shell: bash
+        env:
+          EXPECTED_RELEASE_SHA256: ${{ needs.verify.outputs.release_sha256 }}
+        run: |
+          set -euo pipefail
+          release_archive="$RUNNER_TEMP/production-release/hashteam-production-release.tar"
+          bash scripts/verify-release-archive.sh \
+            "$release_archive" \
+            "$EXPECTED_RELEASE_SHA256" \
+            "$GITHUB_SHA"
+
+      # 此步骤之后不再运行任何第三方 Action。Token 只注入本步骤，CLI
+      # 返回后立即从环境删除，再执行不含凭据的自定义域名验收。
+      - name: Deploy EdgeOne Production and verify custom domain
+        shell: bash
+        env:
+          EDGEONE_API_TOKEN: ${{ secrets.EDGEONE_API_TOKEN }}
+          EDGEONE_PAGES_API_REGION: china
+          EDGEONE_PROJECT_NAME: seclabtest
+          EDGEONE_PROJECT_ID: makers-iehfqellwnxf
+          EDGEONE_DEPLOY_URL: https://seclabtest.lwzheng.tech
+          EXPECTED_SOURCE_ID: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          edgeone_phase=deploy
+          cleanup_edgeone_token() {
+            status=$?
+            trap - EXIT
+            unset EDGEONE_API_TOKEN EDGEONE_PAGES_API_TOKEN
+            if [[ "$status" -ne 0 && "$edgeone_phase" == "deploy" ]]; then
+              echo "ERROR: EdgeOne Production 发布失败。" >&2
+              echo "恢复：在 Makers 控制台手工重部署 seclabtest 的上一成功 Production 版本；Nginx 主站未受影响。" >&2
+            fi
+            exit "$status"
+          }
+          trap cleanup_edgeone_token EXIT
+
+          : "${EDGEONE_API_TOKEN:?missing EdgeOne production API token}"
+          node scripts/verify-edgeone-project.mjs
+          NODE_OPTIONS="--import=$GITHUB_WORKSPACE/scripts/guard-edgeone-project.mjs" \
+          pnpm exec edgeone makers deploy dist \
+            -n "$EDGEONE_PROJECT_NAME" \
+            -e production \
+            -t "$EDGEONE_API_TOKEN"
+
+          unset EDGEONE_API_TOKEN EDGEONE_PAGES_API_TOKEN
+          edgeone_phase=verify
+          bash scripts/verify-edgeone-production.sh

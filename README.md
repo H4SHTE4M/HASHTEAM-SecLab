@@ -231,17 +231,19 @@ bash scripts/verify-build.sh
 构建会为整组 VM 资源计算统一内容哈希并附加到 URL；任一资源更新都会整体
 切换缓存版本，避免运行时、内核与 rootfs 新旧混用。
 
-生产发布还应运行 `scripts/prepare-corresponding-source.sh dist/sources`，
-将 Linux、BusyBox、两套静态链接 glibc、SeaBIOS 和本项目的完整对应源码放在同站
-`/sources/`；
-项目源码包与 `SHA256SUMS-<Git 提交>` 按 release 永久保留。许可证和源码获取说明见
+生产法律声明会嵌入本次完整 Git SHA，并链接到 GitHub 上不可变的 commit tree 与
+下载归档。固定提交包含精确第三方源码 URL、SHA-256、构建配置、静态重链接材料和
+`scripts/prepare-corresponding-source.sh`；需要本地副本的用户可自行运行该脚本。
+生产 artifact 不再携带 `sources/`。许可证和源码获取说明见
 [第三方声明](THIRD_PARTY_NOTICES.md) 与 [对应源码说明](SOURCE_CODE.md)。
 
 推送到受保护的 `main` 后，GitHub Actions 会在无生产凭据的 `verify` job
-完成全部门禁、对应源码准备和发布包 SHA-256 固化；只有验证成功的 artifact
-才会进入 `production` Environment 的 `deploy` job。部署使用无 sudo 的专用
-SSH 账号，采用独立 release、共享内容寻址 VM 资源、原子软链接切换和失败自动
-回滚。PR（包括 fork PR）不会运行部署 job，也不会获得生产 Secret。
+完成全部门禁与发布包 SHA-256 固化；同一个约 8 MiB 的确定性 artifact 随后并行
+进入 `production` Environment 的 Nginx 原子发布和 EdgeOne Makers Production
+发布。Nginx 使用无 sudo 的专用 SSH 账号、独立 release、共享内容寻址 VM 资源、
+原子软链接切换和失败自动回滚；EO 固定部署到 `seclabtest`
+（`makers-iehfqellwnxf`），并通过 `https://seclabtest.lwzheng.tech` 验收。
+PR（包括 fork PR）不会运行部署 job，也不会获得生产 Secret。
 
 受版本控制的日常原子发布逻辑位于 `scripts/deploy-release.sh`；服务器账号初始化、
 GitHub Environment、密钥轮换和故障恢复见
@@ -329,8 +331,12 @@ hashteam-web-lab/
     ├── verify-suid-initramfs.py # 校验 SUID 权限与 applet 白名单
     ├── test-vm-checks.sh    # Linux 检查脚本与绕过回归测试
     ├── integration-test.mjs # 端到端：Node 无头启动真实 VM 通关 10 关
-    ├── prepare-corresponding-source.sh # 准备 GPL/LGPL 对应源码
-    ├── deploy-release.sh   # CI/CD 原子发布、校验和失败回滚
+    ├── prepare-corresponding-source.sh # 可选下载并校验 GPL/LGPL 对应源码
+    ├── deploy-release.sh   # Nginx 原子发布、校验和失败回滚
+    ├── verify-release-archive.sh # 两个发布目标共用的 artifact 校验
+    ├── verify-edgeone-project.mjs # EO 项目名称/ID 防误建预检
+    ├── guard-edgeone-project.mjs # CLI 进程内禁止项目创建/API 回退
+    ├── verify-edgeone-production.sh # EO 自定义域名完整验收
     ├── provision-deploy-user.sh # 一次性初始化无 sudo 部署账号
     ├── verify-dist.mjs      # 校验生产 VM 资产清单和 SHA-256
     ├── prepare-vm-assets.sh # vm/build.sh 的便捷入口

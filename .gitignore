@@ -8,6 +8,7 @@ __pycache__/
 !vm/rootfs-overlay/opt/hashteam/levels/level-5/auth.log
 !vm/rootfs-overlay/opt/hashteam/levels/level-6/auth.log
 .DS_Store
+.env
 # Playwright MCP 调试产物（截图/控制台日志）
 .playwright-mcp/
 
