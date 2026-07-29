@@ -1,20 +1,28 @@
-name: CI
+name: CI and production deploy
 
 on:
   push:
+    branches:
+      - main
   pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # PR 验证可以被新提交取代；main 的生产发布不得在中途被取消。
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    outputs:
+      release_sha256: ${{ steps.package_release.outputs.release_sha256 }}
 
     steps:
       - name: Checkout
@@ -39,3 +47,187 @@ jobs:
 
       - name: Run complete release verification
         run: bash scripts/verify-build.sh
+
+      - name: Package verified production release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        id: package_release
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/prepare-corresponding-source.sh dist/sources
+
+          release_archive="$RUNNER_TEMP/hashteam-production-release.tar"
+          tar \
+            --sort=name \
+            --mtime='@0' \
+            --owner=0 \
+            --group=0 \
+            --numeric-owner \
+            -C dist \
+            -cf "$release_archive" \
+            .
+
+          release_sha256="$(sha256sum "$release_archive" | cut -d ' ' -f 1)"
+          [[ "$release_sha256" =~ ^[a-f0-9]{64}$ ]]
+          printf 'release_sha256=%s\n' "$release_sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Upload verified production release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: production-release-${{ github.sha }}
+          path: ${{ runner.temp }}/hashteam-production-release.tar
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          include-hidden-files: false
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs:
+      - verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    environment:
+      name: production
+      url: ${{ vars.DEPLOY_URL }}
+    concurrency:
+      group: hashteam-production
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout deployment code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Download verified production release
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: production-release-${{ github.sha }}
+          path: ${{ runner.temp }}/production-release
+
+      - name: Verify and extract production release
+        shell: bash
+        env:
+          EXPECTED_RELEASE_SHA256: ${{ needs.verify.outputs.release_sha256 }}
+        run: |
+          set -euo pipefail
+          release_archive="$RUNNER_TEMP/production-release/hashteam-production-release.tar"
+          [[ "$EXPECTED_RELEASE_SHA256" =~ ^[a-f0-9]{64}$ ]]
+          printf '%s  %s\n' "$EXPECTED_RELEASE_SHA256" "$release_archive" |
+            sha256sum --check --strict -
+
+          if tar -tf "$release_archive" |
+            grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+            echo "ERROR: 发布包包含越界路径" >&2
+            exit 1
+          fi
+
+          install -d -m 0755 dist
+          tar \
+            --extract \
+            --file "$release_archive" \
+            --directory dist \
+            --no-same-owner \
+            --no-same-permissions
+
+          if find dist -type l -print -quit | grep -q .; then
+            echo "ERROR: 发布包不允许包含符号链接" >&2
+            exit 1
+          fi
+          node scripts/verify-dist.mjs
+
+      - name: Install deployment transport
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes rsync
+
+      # 此步骤之后不再运行任何第三方 Action。私钥只存在于本步骤环境和
+      # runner 临时文件中，并在步骤退出时由 trap 删除。
+      - name: Deploy atomically and verify production
+        shell: bash
+        env:
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+          DEPLOY_KEY_FINGERPRINT: ${{ vars.DEPLOY_KEY_FINGERPRINT }}
+          DEPLOY_HOSTNAME: ${{ vars.DEPLOY_HOSTNAME }}
+          DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+          DEPLOY_URL: ${{ vars.DEPLOY_URL }}
+        run: |
+          set -euo pipefail
+
+          : "${DEPLOY_SSH_PRIVATE_KEY:?missing production SSH private key}"
+          : "${DEPLOY_SSH_KNOWN_HOSTS:?missing pinned SSH host key}"
+          : "${DEPLOY_KEY_FINGERPRINT:?missing deployment key fingerprint}"
+          : "${DEPLOY_HOSTNAME:?missing deployment hostname}"
+          : "${DEPLOY_PORT:?missing deployment port}"
+          : "${DEPLOY_USER:?missing deployment user}"
+          : "${DEPLOY_PATH:?missing deployment path}"
+          : "${DEPLOY_URL:?missing deployment URL}"
+
+          [[ "$DEPLOY_HOSTNAME" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$DEPLOY_PORT" =~ ^[0-9]{1,5}$ ]]
+          deploy_port_decimal="$((10#$DEPLOY_PORT))"
+          (( deploy_port_decimal >= 1 && deploy_port_decimal <= 65535 ))
+          [[ "$DEPLOY_USER" =~ ^[A-Za-z0-9._-]+$ ]]
+          [[ "$DEPLOY_KEY_FINGERPRINT" =~ ^SHA256:[A-Za-z0-9+/]+$ ]]
+
+          ssh_dir="$HOME/.ssh"
+          private_key_file="$ssh_dir/hashteam-production"
+          known_hosts_file="$ssh_dir/hashteam-production-known-hosts"
+          ssh_config_file="$ssh_dir/config"
+
+          cleanup_deploy_credentials() {
+            unset DEPLOY_SSH_PRIVATE_KEY DEPLOY_SSH_KNOWN_HOSTS
+            if [[ -f "$private_key_file" ]]; then
+              unlink "$private_key_file"
+            fi
+          }
+          trap cleanup_deploy_credentials EXIT
+
+          umask 077
+          install -d -m 0700 "$ssh_dir"
+          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > "$private_key_file"
+          printf '%s\n' "$DEPLOY_SSH_KNOWN_HOSTS" > "$known_hosts_file"
+          chmod 0600 "$private_key_file" "$known_hosts_file"
+
+          actual_key_fingerprint="$(
+            ssh-keygen -y -f "$private_key_file" |
+              ssh-keygen -lf - |
+              awk '{print $2}'
+          )"
+          [[ "$actual_key_fingerprint" == "$DEPLOY_KEY_FINGERPRINT" ]] || {
+            echo "ERROR: GitHub Secret 中的部署私钥指纹不匹配" >&2
+            exit 1
+          }
+          ssh-keygen \
+            -F "[$DEPLOY_HOSTNAME]:$DEPLOY_PORT" \
+            -f "$known_hosts_file" \
+            >/dev/null
+
+          cat > "$ssh_config_file" <<SSH_CONFIG
+          Host hashteam-production
+              HostName $DEPLOY_HOSTNAME
+              Port $DEPLOY_PORT
+              User $DEPLOY_USER
+              IdentityFile $private_key_file
+              IdentitiesOnly yes
+              BatchMode yes
+              StrictHostKeyChecking yes
+              UserKnownHostsFile $known_hosts_file
+              LogLevel ERROR
+          SSH_CONFIG
+          chmod 0600 "$ssh_config_file"
+
+          unset DEPLOY_SSH_PRIVATE_KEY DEPLOY_SSH_KNOWN_HOSTS
+
+          DEPLOY_HOST=hashteam-production \
+          DEPLOY_EXPECTED_USER="$DEPLOY_USER" \
+          DEPLOY_PATH="$DEPLOY_PATH" \
+          DEPLOY_URL="$DEPLOY_URL" \
+            bash scripts/deploy-release.sh
