@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-echo "==> 1/8 检查源码文件权限"
+echo "==> 1/9 检查源码文件权限"
 permission_errors=0
 while IFS= read -r -d '' file; do
     [ -f "$file" ] || continue
@@ -29,10 +29,10 @@ while IFS= read -r -d '' file; do
 done < <(git ls-files --cached --others --exclude-standard -z)
 [ "$permission_errors" -eq 0 ]
 
-echo "==> 2/8 审计依赖漏洞"
+echo "==> 2/9 审计依赖漏洞"
 pnpm audit --audit-level low
 
-echo "==> 3/8 检查虚拟机静态资源"
+echo "==> 3/9 检查虚拟机静态资源"
 missing=0
 for f in \
     public/v86/libv86.js \
@@ -50,19 +50,22 @@ for f in \
 done
 [ "$missing" -eq 0 ]
 
-echo "==> 4/8 SUID BusyBox 边界检查"
+echo "==> 4/9 SUID BusyBox 边界检查"
 pnpm test:suid
 
-echo "==> 5/8 前端单元测试（vitest）"
+echo "==> 5/9 前端单元测试（vitest）"
 pnpm test
 
-echo "==> 6/8 Linux 检查脚本测试"
+echo "==> 6/9 Linux 检查脚本测试"
 pnpm test:vm
 
-echo "==> 7/8 端到端集成测试（Node 无头启动真实虚拟机）"
+echo "==> 7/9 部署锁租约测试"
+bash scripts/test-deploy-lock.sh
+
+echo "==> 8/9 端到端集成测试（Node 无头启动真实虚拟机）"
 node scripts/integration-test.mjs
 
-echo "==> 8/8 前端生产构建"
+echo "==> 9/9 前端生产构建"
 pnpm build
 pnpm verify:dist
 

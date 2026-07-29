@@ -117,9 +117,19 @@ ssh cn-tencent sudo bash /tmp/hashteam-provision-deploy-user.sh \
 具有仓库写权限的用户可以从 Actions 页面运行 `workflow_dispatch`，但仅允许选择
 `main`。这不会绕过测试、Environment 分支限制或线上健康检查。
 
-如果进程被强制终止并遗留 `/var/www/hashteam/.deploy-lock`，先确认没有部署仍在
-运行，再通过手工运维账号核对锁内 `owner`，只删除该锁文件和空锁目录。不要对
-部署根目录使用递归通配删除。
+发布锁是带租约的远端目录：部署期间每 30 秒刷新一次 `heartbeat`，180 秒没有
+心跳才视为过期。新发布遇到有效租约时最多等待 300 秒；确认过期后会先把锁原子
+移动到本次 token 对应的隔离目录，重新核对 owner、租约和目录内容，再只删除
+`owner`、`heartbeat`、`heartbeat.next` 与空目录。出现未知文件、符号链接、
+owner 变化或心跳恢复时一律拒绝自动删除。
+
+workflow 的部署 job 硬上限为 45 分钟，部署脚本另有 42 分钟软上限。软上限先发送
+`TERM`，为信号 trap 释放租约和 SSH 凭据预留三分钟；即使 runner 直接失联、来不及
+执行 trap，下一次发布也会在租约过期后自动恢复。
+
+如果锁结构损坏而无法自动恢复，先确认没有部署仍在运行，再通过手工运维账号核对
+锁内 owner 和 heartbeat，只删除已确认的锁文件和空锁目录。不要对部署根目录使用
+递归通配删除。
 
 Actions Secret 无法读回。密钥疑似泄露时，应立即：
 

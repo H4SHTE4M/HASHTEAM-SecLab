@@ -218,6 +218,9 @@ jobs:
               IdentityFile $private_key_file
               IdentitiesOnly yes
               BatchMode yes
+              ConnectTimeout 15
+              ServerAliveInterval 15
+              ServerAliveCountMax 4
               StrictHostKeyChecking yes
               UserKnownHostsFile $known_hosts_file
               LogLevel ERROR
@@ -230,4 +233,5 @@ jobs:
           DEPLOY_EXPECTED_USER="$DEPLOY_USER" \
           DEPLOY_PATH="$DEPLOY_PATH" \
           DEPLOY_URL="$DEPLOY_URL" \
-            bash scripts/deploy-release.sh
+            timeout --signal=TERM --kill-after=90s 42m \
+              bash scripts/deploy-release.sh
