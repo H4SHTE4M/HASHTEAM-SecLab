@@ -1,8 +1,9 @@
-import type { LabProgress } from '../types/lab'
+import type { LabProgress, LevelCompletionRecord } from '../types/lab'
 
-export const PROGRESS_STORAGE_KEY = 'hashteam-lab-progress-v3'
+export const PROGRESS_STORAGE_KEY = 'hashteam-lab-progress-v4'
 export const LEGACY_PROGRESS_STORAGE_KEY = 'hashteam-lab-progress-v1'
 export const PREVIOUS_PROGRESS_STORAGE_KEY = 'hashteam-lab-progress-v2'
+export const MIGRATABLE_PROGRESS_STORAGE_KEY = 'hashteam-lab-progress-v3'
 const MIGRATION_NOTICE_STORAGE_KEY = 'hashteam-lab-progress-v3-reset-notice'
 
 /** 可注入的存储接口，便于在测试中使用内存实现 */
@@ -97,6 +98,8 @@ export function createDefaultProgress(now: number = Date.now()): LabProgress {
     hintsUsed: {},
     guideSteps: {},
     completedSteps: {},
+    guidedAssistanceLevels: [],
+    completionRecords: {},
     startedAt: now,
     updatedAt: now,
   }
@@ -144,6 +147,30 @@ function isValidProgress(value: unknown, totalLevels: number): value is LabProgr
   ) {
     return false
   }
+  if (!Array.isArray(p.guidedAssistanceLevels)) return false
+  if (
+    p.guidedAssistanceLevels.some((level) => !isLevelNumber(level, totalLevels)) ||
+    new Set(p.guidedAssistanceLevels).size !== p.guidedAssistanceLevels.length
+  ) {
+    return false
+  }
+  if (typeof p.completionRecords !== 'object' || p.completionRecords === null) return false
+  if (
+    Object.entries(p.completionRecords).some(([rawLevel, record]) => {
+      const level = Number(rawLevel)
+      if (!isLevelNumber(level, totalLevels) || !p.completedLevels?.includes(level)) return true
+      if (typeof record !== 'object' || record === null) return true
+      const value = record as Partial<LevelCompletionRecord>
+      return (
+        !['guided', 'challenge', 'mixed'].includes(value.path ?? '') ||
+        !Number.isInteger(value.hintsUsed) ||
+        (value.hintsUsed ?? -1) < 0 ||
+        (value.hintsUsed ?? 4) > 3
+      )
+    })
+  ) {
+    return false
+  }
   if (!isValidTimestamp(p.startedAt) || !isValidTimestamp(p.updatedAt)) return false
   return true
 }
@@ -160,6 +187,27 @@ function isValidTimestamp(value: unknown): value is number {
 export function loadProgress(storage: StorageLike, totalLevels: number): LabProgress {
   const raw = storage.getItem(PROGRESS_STORAGE_KEY)
   if (raw === null) {
+    const previousRaw = storage.getItem(MIGRATABLE_PROGRESS_STORAGE_KEY)
+    if (previousRaw !== null) {
+      try {
+        const previous: unknown = JSON.parse(previousRaw)
+        if (typeof previous === 'object' && previous !== null) {
+          const migrated = {
+            ...previous,
+            guidedAssistanceLevels: [],
+            completionRecords: {},
+          }
+          if (isValidProgress(migrated, totalLevels)) {
+            storage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(migrated))
+            storage.removeItem(MIGRATABLE_PROGRESS_STORAGE_KEY)
+            return migrated
+          }
+        }
+      } catch {
+        // 损坏的 v3 存档不能迁移，按全新进度处理。
+      }
+      storage.removeItem(MIGRATABLE_PROGRESS_STORAGE_KEY)
+    }
     if (
       storage.getItem(LEGACY_PROGRESS_STORAGE_KEY) !== null ||
       storage.getItem(PREVIOUS_PROGRESS_STORAGE_KEY) !== null
@@ -196,17 +244,26 @@ export function saveProgress(storage: StorageLike, progress: LabProgress): void 
  * 标记关卡完成。
  * @returns true 表示新完成；false 表示该关卡此前已完成（不重复写入）
  */
-export function completeLevel(storage: StorageLike, progress: LabProgress, level: number): boolean {
+export function completeLevel(
+  storage: StorageLike,
+  progress: LabProgress,
+  level: number,
+  record: LevelCompletionRecord,
+): boolean {
   if (progress.completedLevels.includes(level)) return false
   progress.completedLevels.push(level)
   progress.completedLevels.sort((a, b) => a - b)
+  progress.completionRecords[level] = {
+    path: record.path,
+    hintsUsed: Math.min(3, Math.max(0, Math.round(record.hintsUsed))),
+  }
   saveProgress(storage, progress)
   return true
 }
 
 /** 记录一次提示使用，返回该关卡累计使用的提示数 */
 export function recordHint(storage: StorageLike, progress: LabProgress, level: number): number {
-  const used = (progress.hintsUsed[level] ?? 0) + 1
+  const used = Math.min((progress.hintsUsed[level] ?? 0) + 1, 3)
   progress.hintsUsed[level] = used
   saveProgress(storage, progress)
   return used
@@ -227,14 +284,31 @@ export function advanceGuideStep(
   return next
 }
 
-export function resetGuideStep(
+export function resetLevelAttempt(
   storage: StorageLike,
   progress: LabProgress,
   level: number,
 ): void {
+  delete progress.hintsUsed[level]
   progress.guideSteps[level] = 0
   progress.completedSteps[level] = []
+  progress.guidedAssistanceLevels = progress.guidedAssistanceLevels.filter(
+    (assistedLevel) => assistedLevel !== level,
+  )
   saveProgress(storage, progress)
+}
+
+/** 记录本关已经展示过引导内容；重复记录不产生额外写入。 */
+export function markGuidedAssistance(
+  storage: StorageLike,
+  progress: LabProgress,
+  level: number,
+): boolean {
+  if (progress.guidedAssistanceLevels.includes(level)) return false
+  progress.guidedAssistanceLevels.push(level)
+  progress.guidedAssistanceLevels.sort((left, right) => left - right)
+  saveProgress(storage, progress)
+  return true
 }
 
 /** 记录一步已经通过 UI 留下必要操作/判断证据。 */

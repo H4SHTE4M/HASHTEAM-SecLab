@@ -1,10 +1,47 @@
 <script setup lang="ts">
-import { CTF_POSITIONING, LAB_DIRECTIONS } from '../data/levels'
+import { computed } from 'vue'
+import { CTF_POSITIONING, LAB_DIRECTIONS, LEVELS } from '../data/levels'
+import type { CompletionPath, LevelCompletionRecord } from '../types/lab'
 import AppIcon from './AppIcon.vue'
+
+const props = defineProps<{
+  completionRecords: Record<number, LevelCompletionRecord>
+}>()
 
 const emit = defineEmits<{
   (e: 'restart'): void
 }>()
+
+const pathCounts = computed(() => {
+  const counts: Record<CompletionPath, number> = {
+    guided: 0,
+    challenge: 0,
+    mixed: 0,
+  }
+  Object.values(props.completionRecords).forEach((record) => {
+    counts[record.path] += 1
+  })
+  return counts
+})
+
+const noHintChallenges = computed(
+  () =>
+    Object.values(props.completionRecords).filter(
+      (record) => record.path === 'challenge' && record.hintsUsed === 0,
+    ).length,
+)
+
+function recordLabel(record?: LevelCompletionRecord): string {
+  if (!record) return '历史完成'
+  const path =
+    record.path === 'challenge'
+      ? '挑战通关'
+      : record.path === 'mixed'
+        ? '混合完成'
+        : '引导通关'
+  const hints = record.hintsUsed === 0 ? '未使用提示' : `${record.hintsUsed} 层提示`
+  return `${path} · ${hints}`
+}
 </script>
 
 <template>
@@ -17,6 +54,24 @@ const emit = defineEmits<{
         权限收紧、日志分析、编码还原、进程排查、Web 信息收集和配置修复——
         这正是安全工作的日常缩影。
       </p>
+
+      <section class="completion-records">
+        <h2>你的完成路径</h2>
+        <div class="record-stats">
+          <span><strong>{{ pathCounts.challenge }}</strong> 挑战通关</span>
+          <span><strong>{{ pathCounts.guided }}</strong> 引导通关</span>
+          <span><strong>{{ pathCounts.mixed }}</strong> 混合完成</span>
+          <span><strong>{{ noHintChallenges }}</strong> 无提示挑战</span>
+        </div>
+        <ul class="record-list">
+          <li v-for="level in LEVELS" :key="level.id">
+            <span>第 {{ level.id }} 关 · {{ level.name }}</span>
+            <strong :class="completionRecords[level.id]?.path">
+              {{ recordLabel(completionRecords[level.id]) }}
+            </strong>
+          </li>
+        </ul>
+      </section>
 
       <section class="directions">
         <h2>实验室在做什么</h2>
@@ -88,11 +143,78 @@ const emit = defineEmits<{
 }
 
 .directions h2,
+.completion-records h2,
 .ctf-note h2 {
   font-size: 14px;
   font-weight: 720;
   color: var(--text-muted);
   margin: 0 0 18px;
+}
+
+.completion-records {
+  margin-bottom: 40px;
+}
+
+.record-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.record-stats span {
+  padding: 13px 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  background: var(--surface-1);
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: 8px;
+}
+
+.record-stats strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--text-primary);
+  font-size: 20px;
+}
+
+.record-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+  list-style: none;
+}
+
+.record-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  background: var(--surface-1);
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: 7px;
+}
+
+.record-list strong {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.record-list strong.challenge {
+  color: var(--accent-violet);
+}
+
+.record-list strong.guided {
+  color: var(--accent-green);
+}
+
+.record-list strong.mixed {
+  color: var(--accent-amber);
 }
 
 .direction-grid {
@@ -203,6 +325,11 @@ const emit = defineEmits<{
     margin-bottom: 30px;
   }
 
+  .record-stats,
+  .record-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .ctf-note {
     margin-bottom: 30px;
     padding: 16px 18px;
@@ -216,6 +343,11 @@ const emit = defineEmits<{
 
   .congrats-badge {
     padding-inline: 12px;
+  }
+
+  .record-stats,
+  .record-list {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

@@ -4,6 +4,7 @@ import { nextTick } from 'vue'
 import { describe, expect, it } from 'vitest'
 import AboutModal from '../src/components/AboutModal.vue'
 import LoadingScreen from '../src/components/LoadingScreen.vue'
+import CompletionPage from '../src/components/CompletionPage.vue'
 import LevelRail from '../src/components/LevelRail.vue'
 import MissionPanel from '../src/components/MissionPanel.vue'
 import OnboardingDialog from '../src/components/OnboardingDialog.vue'
@@ -170,12 +171,17 @@ describe('accessible components', () => {
         levels,
         currentLevel: 1,
         completedLevels: [1],
+        completionRecords: {
+          1: { path: 'challenge', hintsUsed: 1 },
+        },
       },
     })
 
     const buttons = wrapper.findAll('.level-button')
     expect(buttons[0].attributes('aria-current')).toBe('step')
     expect(buttons[0].classes()).toContain('completed')
+    expect(buttons[0].classes()).toContain('challenge-completed')
+    expect(buttons[0].attributes('aria-label')).toContain('挑战模式完成，展开 1 层提示')
     expect(buttons[1].attributes('disabled')).toBeUndefined()
     expect(buttons[2].attributes('disabled')).toBeDefined()
 
@@ -255,7 +261,7 @@ describe('accessible components', () => {
     expect(wrapper.emitted('complete-step')?.[0]).toEqual([1, 3])
   })
 
-  it('挑战模式共享同一步骤目标，但默认隐藏模板，第三层提示后才显示结构', async () => {
+  it('挑战模式隐藏全部教学步骤，只保留目标、提示与开放的最终验证', async () => {
     const wrapper = mount(MissionPanel, {
       props: missionProps({
         mode: 'challenge',
@@ -264,15 +270,22 @@ describe('accessible components', () => {
       }),
     })
 
-    expect(wrapper.text()).toContain('填写真实文件名')
+    expect(wrapper.get('.challenge-brief').text()).toContain('自由探索')
+    expect(wrapper.find('.current-action').exists()).toBe(false)
+    expect(wrapper.find('.concept-card').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('填写真实文件名')
+    expect(wrapper.text()).not.toContain('根据 ls 输出填写')
     expect(wrapper.find('.command-template').exists()).toBe(false)
-    expect(wrapper.get('.manual-form').text()).toContain('挑战模式')
+    expect(wrapper.get('.verification').classes()).not.toContain('locked')
+    expect(wrapper.find('.verification-form').exists()).toBe(true)
     await wrapper.get('.btn-hint').trigger('click')
     expect(wrapper.emitted('use-hint')?.[0]).toEqual([1])
 
     await wrapper.setProps({ hintsUsed: 3 })
-    expect(wrapper.get('.command-template').text()).toContain('cat {{file}}')
+    expect(wrapper.find('.command-template').exists()).toBe(false)
     expect(wrapper.text()).toContain('最高级提示仍保留')
+    await wrapper.get('.btn-switch-guided').trigger('click')
+    expect(wrapper.emitted('change-mode')?.[0]).toEqual(['guided'])
   })
 
   it('分层提示按方向、工具、结构顺序展开，获取提示不会跳过步骤', async () => {
@@ -333,6 +346,7 @@ describe('accessible components', () => {
       props: missionProps({
         completed: true,
         completedSteps: [1, 2, 3, 4],
+        completionRecord: { path: 'challenge', hintsUsed: 2 },
       }),
     })
 
@@ -340,7 +354,27 @@ describe('accessible components', () => {
     expect(wrapper.text()).toContain('你完成了真实环境检查')
     expect(wrapper.text()).toContain('你实际掌握了')
     expect(wrapper.text()).toContain('下一关继续复用观察能力')
+    expect(wrapper.text()).toContain('挑战通关 · 展开 2 层提示')
     expect(wrapper.find('.current-action').exists()).toBe(false)
     expect(wrapper.get('.btn-next').text()).toContain('准备好后进入第 2 关')
+  })
+
+  it('总结页统计挑战、引导、混合与无提示挑战记录', () => {
+    const wrapper = mount(CompletionPage, {
+      props: {
+        completionRecords: {
+          1: { path: 'challenge', hintsUsed: 0 },
+          2: { path: 'mixed', hintsUsed: 2 },
+          3: { path: 'guided', hintsUsed: 1 },
+        },
+      },
+    })
+
+    expect(wrapper.get('.record-stats').text()).toContain('1 挑战通关')
+    expect(wrapper.get('.record-stats').text()).toContain('1 引导通关')
+    expect(wrapper.get('.record-stats').text()).toContain('1 混合完成')
+    expect(wrapper.get('.record-stats').text()).toContain('1 无提示挑战')
+    expect(wrapper.get('.record-list').text()).toContain('挑战通关 · 未使用提示')
+    expect(wrapper.get('.record-list').text()).toContain('混合完成 · 2 层提示')
   })
 })

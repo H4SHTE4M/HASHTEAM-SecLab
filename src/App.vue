@@ -23,7 +23,7 @@ import {
   TERMINAL_FONT_SIZE_MIN,
 } from './services/ui-preferences-store'
 import { getLevel, LEVELS, TOTAL_LEVELS } from './data/levels'
-import type { ThemeName } from './types/lab'
+import type { LabMode, ThemeName } from './types/lab'
 
 const PANEL_WIDTH_STORAGE_KEY = 'hashteam-mission-panel-width-v1'
 const THEME_STORAGE_KEY = 'hashteam-theme-v1'
@@ -108,6 +108,9 @@ const currentGuideStep = computed(() =>
 const currentCompletedSteps = computed(() =>
   progress.completedStepsFor(progress.state.currentLevel),
 )
+const currentCompletionRecord = computed(
+  () => progress.state.completionRecords[progress.state.currentLevel],
+)
 const panelWidthBounds = computed(() =>
   getMissionPanelWidthBounds(
     viewportWidth.value,
@@ -156,6 +159,18 @@ watch(
       showBootOverlay.value = false
       bootOverlayTimer = null
     }, delay)
+  },
+  { immediate: true },
+)
+
+watch(
+  [
+    () => preferences.state.mode,
+    () => progress.state.currentLevel,
+    () => currentCompleted.value,
+  ],
+  ([mode, level, completed]) => {
+    if (mode === 'guided' && !completed) progress.markGuided(level)
   },
   { immediate: true },
 )
@@ -287,6 +302,13 @@ function handleRunDemo(): void {
   handleRunCommand('echo "hello, HASHTEAM"')
 }
 
+function handleChangeMode(mode: LabMode): void {
+  preferences.setMode(mode)
+  if (mode === 'guided' && !currentCompleted.value) {
+    progress.markGuided(progress.state.currentLevel)
+  }
+}
+
 function handleNextLevel(): void {
   if (isLastLevel.value) {
     showCompletion.value = true
@@ -308,7 +330,10 @@ function handleSelectLevel(level: number): void {
 }
 
 function handleResetLevel(): void {
-  progress.resetGuide(progress.state.currentLevel)
+  progress.resetLevel(progress.state.currentLevel)
+  if (preferences.state.mode === 'guided') {
+    progress.markGuided(progress.state.currentLevel)
+  }
   vm.resetCurrentLevel()
 }
 
@@ -358,7 +383,7 @@ function openHelp(): void {
         @reset-all="handleResetAll"
         @about="openAbout"
         @help="openHelp"
-        @change-mode="preferences.setMode"
+        @change-mode="handleChangeMode"
         @toggle-theme="toggleTheme"
       />
 
@@ -377,6 +402,7 @@ function openHelp(): void {
             :levels="LEVELS"
             :current-level="progress.state.currentLevel"
             :completed-levels="progress.state.completedLevels"
+            :completion-records="progress.state.completionRecords"
             :short-landscape-split="shortLandscapeSplit"
             @select="handleSelectLevel"
           />
@@ -464,15 +490,21 @@ function openHelp(): void {
             :mode="currentMode"
             :guide-step="currentGuideStep"
             :completed-steps="currentCompletedSteps"
+            :completion-record="currentCompletionRecord"
             @next="handleNextLevel"
             @use-hint="progress.useHint"
             @run-command="handleRunCommand"
             @advance-guide="progress.advanceGuide"
             @complete-step="progress.completeStep"
-            @change-mode="preferences.setMode"
+            @change-mode="handleChangeMode"
           />
         </main>
-        <CompletionPage v-else key="completion" @restart="handleResetAll" />
+        <CompletionPage
+          v-else
+          key="completion"
+          :completion-records="progress.state.completionRecords"
+          @restart="handleResetAll"
+        />
       </Transition>
     </div>
 
@@ -492,7 +524,7 @@ function openHelp(): void {
         v-if="showOnboardingDialog"
         :mode="preferences.state.mode"
         :progress-reset-notice="progress.progressResetNotice.value"
-        @select-mode="preferences.setMode"
+        @select-mode="handleChangeMode"
         @run-demo="handleRunDemo"
         @complete="handleCompleteOnboarding"
       />

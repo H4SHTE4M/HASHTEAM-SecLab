@@ -117,7 +117,7 @@ onBeforeUnmount(() => {
       <template v-if="tutorialStep < 0">
         <span class="eyebrow">开始前先选择帮助密度</span>
         <h2 id="onboarding-title">你希望怎样完成新手村？</h2>
-        <p>两种模式使用相同目标、环境和判题；关键操作都需要你填写、判断或手动输入。</p>
+        <p>两种模式使用相同环境和最终判题，可以随时无损切换。</p>
         <p v-if="progressResetNotice" class="migration-notice" role="status">
           教学路径已升级，旧版步骤进度已重置，其他浏览器数据不受影响。
         </p>
@@ -130,11 +130,11 @@ onBeforeUnmount(() => {
           >
             <span class="recommended-badge">推荐零基础新生</span>
             <strong>引导模式</strong>
-            <span>先讲当前所需知识，观察示例后逐步过渡到补全和独立输入。</span>
+            <span>逐步讲解必要知识，完成观察、补全和判断后再进行最终验证。</span>
           </button>
           <button type="button" class="mode-card" @click="selectMode('challenge')">
             <strong>挑战模式</strong>
-            <span>共享同一任务步骤，默认隐藏命令结构，需要时逐层展开提示。</span>
+            <span>只看任务目标，在真实终端自由探索；需要时再逐层展开提示。</span>
           </button>
         </div>
       </template>
@@ -199,7 +199,7 @@ onBeforeUnmount(() => {
             <li><strong>分层提示</strong><span>先给观察方向，再给工具，最后给仍需填写的结构。</span></li>
             <li><strong>help</strong><span>在终端查看命令用途、格式、例子和常见错误。</span></li>
             <li><strong>重置本关</strong><span>恢复当前实验环境；不会改变你选择的模式。</span></li>
-            <li><strong>完成证据</strong><span>关键步骤必须运行、填写、判断或确认，不能只点“下一步”。</span></li>
+            <li><strong>模式规则</strong><span>引导模式完成教学步骤；挑战模式只看最终环境结果。</span></li>
           </ul>
           <p>准备好了：看懂任务 → 学最小知识 → 运行并观察 → 自己补全 → 根据反馈修正。</p>
         </div>

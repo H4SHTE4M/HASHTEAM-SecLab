@@ -8,11 +8,13 @@ import {
   advanceGuideStep,
   completeLearningStep,
   loadProgress,
+  markGuidedAssistance,
   recordHint,
-  resetGuideStep,
+  resetLevelAttempt,
   resetAllProgress,
   setCurrentLevel,
 } from '../services/progress-store'
+import type { LevelCompletionRecord } from '../types/lab'
 
 /**
  * 关卡进度（模块级单例，LocalStorage 持久化）。
@@ -27,8 +29,8 @@ export function useLabProgress() {
   const allCompleted = computed(() => state.completedLevels.length >= TOTAL_LEVELS)
 
   /** 标记关卡完成；重复完成同一关不会重复写入 */
-  function complete(level: number): boolean {
-    return completeLevel(storage, state, level)
+  function complete(level: number, record: LevelCompletionRecord): boolean {
+    return completeLevel(storage, state, level, record)
   }
 
   /** 记录一次提示使用，返回该关累计提示数 */
@@ -49,6 +51,8 @@ export function useLabProgress() {
     state.hintsUsed = fresh.hintsUsed
     state.guideSteps = fresh.guideSteps
     state.completedSteps = fresh.completedSteps
+    state.guidedAssistanceLevels = fresh.guidedAssistanceLevels
+    state.completionRecords = fresh.completionRecords
     state.startedAt = fresh.startedAt
     state.updatedAt = fresh.updatedAt
   }
@@ -66,8 +70,8 @@ export function useLabProgress() {
     return advanceGuideStep(storage, state, level, totalSteps)
   }
 
-  function resetGuide(level: number): void {
-    resetGuideStep(storage, state, level)
+  function resetLevel(level: number): void {
+    resetLevelAttempt(storage, state, level)
   }
 
   function completeStep(level: number, stepId: number): number[] {
@@ -76,6 +80,14 @@ export function useLabProgress() {
 
   function completedStepsFor(level: number): number[] {
     return state.completedSteps[level] ?? []
+  }
+
+  function markGuided(level: number): boolean {
+    return markGuidedAssistance(storage, state, level)
+  }
+
+  function hasGuidedAssistance(level: number): boolean {
+    return state.guidedAssistanceLevels.includes(level)
   }
 
   function dismissProgressResetNotice(): void {
@@ -93,9 +105,11 @@ export function useLabProgress() {
     hintsUsedFor,
     guideStepFor,
     advanceGuide,
-    resetGuide,
+    resetLevel,
     completeStep,
     completedStepsFor,
+    markGuided,
+    hasGuidedAssistance,
     dismissProgressResetNotice,
   }
 }

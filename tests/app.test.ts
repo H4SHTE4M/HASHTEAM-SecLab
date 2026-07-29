@@ -48,7 +48,9 @@ beforeEach(() => {
 describe('application release flows', () => {
   it('已完成用户直接进入总结页，不启动 VM 或显示无关顶部控制', async () => {
     const progress = useLabProgress()
-    for (let level = 1; level <= TOTAL_LEVELS; level += 1) progress.complete(level)
+    for (let level = 1; level <= TOTAL_LEVELS; level += 1) {
+      progress.complete(level, { path: 'guided', hintsUsed: 0 })
+    }
 
     const wrapper = mount(App)
     await nextTick()
@@ -85,5 +87,31 @@ describe('application release flows', () => {
 
     wrapper.unmount()
     vi.useRealTimers()
+  })
+
+  it('模式切换保留本关状态，打开引导会持久化混合完成资格', async () => {
+    const progress = useLabProgress()
+    const preferences = useLabPreferences()
+    preferences.state.mode = 'challenge'
+    progress.useHint(1)
+    progress.completeStep(1, 1)
+
+    const wrapper = mount(App)
+    await nextTick()
+    expect(progress.hasGuidedAssistance(1)).toBe(false)
+
+    await wrapper.get('button[aria-label="引导模式"]').trigger('click')
+    await nextTick()
+    expect(preferences.state.mode).toBe('guided')
+    expect(progress.state.hintsUsed[1]).toBe(1)
+    expect(progress.completedStepsFor(1)).toEqual([1])
+    expect(progress.hasGuidedAssistance(1)).toBe(true)
+    expect(vmMock.resetCurrentLevel).not.toHaveBeenCalled()
+
+    await wrapper.get('button[aria-label="挑战模式"]').trigger('click')
+    expect(preferences.state.mode).toBe('challenge')
+    expect(progress.hasGuidedAssistance(1)).toBe(true)
+
+    wrapper.unmount()
   })
 })

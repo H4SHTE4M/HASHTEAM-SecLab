@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from 'vue'
-import type { LabMode, LearningStep, LevelDef } from '../types/lab'
+import type {
+  LabMode,
+  LearningStep,
+  LevelCompletionRecord,
+  LevelDef,
+} from '../types/lab'
 
 const props = defineProps<{
   level: LevelDef
@@ -10,6 +15,7 @@ const props = defineProps<{
   mode: LabMode
   guideStep: number
   completedSteps: number[]
+  completionRecord?: LevelCompletionRecord
 }>()
 
 const emit = defineEmits<{
@@ -47,6 +53,9 @@ const hasNextStep = computed(() => currentStepIndex.value < props.level.steps.le
 const learningPathComplete = computed(() =>
   props.level.steps.every((step) => allCompletedIds.value.has(step.id)),
 )
+const verificationAvailable = computed(
+  () => props.mode === 'challenge' || learningPathComplete.value,
+)
 const completedConcepts = computed(() =>
   props.level.steps
     .filter(
@@ -56,9 +65,20 @@ const completedConcepts = computed(() =>
     )
     .flatMap((step) => step.introduces ?? []),
 )
-const showStructuredInput = computed(
-  () => props.mode === 'guided' || props.hintsUsed >= 3,
-)
+const completionPathLabel = computed(() => {
+  if (!props.completionRecord) return '历史完成'
+  if (props.completionRecord.path === 'challenge') return '挑战通关'
+  if (props.completionRecord.path === 'mixed') return '混合完成'
+  return '引导通关'
+})
+const completionRecordLabel = computed(() => {
+  if (!props.completionRecord) return completionPathLabel.value
+  const hints =
+    props.completionRecord.hintsUsed === 0
+      ? '未使用提示'
+      : `展开 ${props.completionRecord.hintsUsed} 层提示`
+  return `${completionPathLabel.value} · ${hints}`
+})
 
 watch(
   () => props.completed,
@@ -183,7 +203,7 @@ function advanceStep(): void {
 
 function runVerification(): void {
   const command = verificationCommand.value.trim()
-  if (!learningPathComplete.value) {
+  if (!verificationAvailable.value) {
     verificationError.value = '先完成当前教学步骤，验证区才会开放。'
     return
   }
@@ -253,6 +273,7 @@ function stepTypeLabel(type: LearningStep['type']): string {
           <div>
             <h3>验证通过</h3>
             <p>{{ level.completionSummary.solved }}</p>
+            <p class="completion-path">{{ completionRecordLabel }}</p>
           </div>
         </section>
 
@@ -279,7 +300,7 @@ function stepTypeLabel(type: LearningStep['type']): string {
           <ul>
             <li v-for="goal in level.goals" :key="goal">{{ goal }}</li>
           </ul>
-          <details v-if="level.prerequisites.length > 0">
+          <details v-if="mode === 'guided' && level.prerequisites.length > 0">
             <summary>本关会复用的能力</summary>
             <ul>
               <li v-for="item in level.prerequisites" :key="item">{{ item }}</li>
@@ -287,7 +308,7 @@ function stepTypeLabel(type: LearningStep['type']): string {
           </details>
         </section>
 
-        <section class="current-action" aria-live="polite">
+        <section v-if="mode === 'guided'" class="current-action" aria-live="polite">
           <header class="action-header">
             <div>
               <span class="action-eyebrow">{{ stepTypeLabel(currentStep.type) }}</span>
@@ -326,7 +347,6 @@ function stepTypeLabel(type: LearningStep['type']): string {
 
           <template v-if="currentStep.type === 'observe'">
             <button
-              v-if="mode === 'guided'"
               type="button"
               class="command-run"
               @click="runObservation"
@@ -334,22 +354,10 @@ function stepTypeLabel(type: LearningStep['type']): string {
               <span>运行观察示例</span>
               <code>{{ currentStep.command }}</code>
             </button>
-            <form v-else class="manual-form" @submit.prevent="runManualCommand">
-              <label :for="`manual-${level.id}-${currentStep.id}`">在挑战模式中自行输入观察命令</label>
-              <input
-                :id="`manual-${level.id}-${currentStep.id}`"
-                v-model="manualCommand"
-                autocomplete="off"
-                spellcheck="false"
-                placeholder="完整输入命令"
-              />
-              <button type="submit">在终端运行</button>
-            </form>
           </template>
 
           <template v-else-if="currentStep.type === 'partial-command'">
             <form
-              v-if="showStructuredInput"
               class="structured-form"
               @submit.prevent="runStructuredCommand"
             >
@@ -364,17 +372,6 @@ function stepTypeLabel(type: LearningStep['type']): string {
                 />
               </label>
               <button type="submit">组合后在终端运行</button>
-            </form>
-            <form v-else class="manual-form" @submit.prevent="runManualCommand">
-              <label :for="`manual-${level.id}-${currentStep.id}`">挑战模式：完整输入命令</label>
-              <input
-                :id="`manual-${level.id}-${currentStep.id}`"
-                v-model="manualCommand"
-                autocomplete="off"
-                spellcheck="false"
-                placeholder="需要结构时可逐层展开提示"
-              />
-              <button type="submit">在终端运行</button>
             </form>
           </template>
 
@@ -469,6 +466,18 @@ function stepTypeLabel(type: LearningStep['type']): string {
           </button>
         </section>
 
+        <section v-else class="challenge-brief" aria-live="polite">
+          <span class="challenge-eyebrow">自由探索</span>
+          <h3>终端和最终状态就是你的解题空间</h3>
+          <p>
+            挑战模式不会展示教学步骤、命令结构或观察答案。你可以直接在终端调查，
+            需要时逐层展开提示；最终验证只检查真实环境结果。
+          </p>
+          <button type="button" class="btn-switch-guided" @click="emit('change-mode', 'guided')">
+            需要分步带领？切换到引导模式
+          </button>
+        </section>
+
         <section class="hints-block">
           <h3>按需提示</h3>
           <ol v-if="visibleHints.length > 0" class="hints">
@@ -488,14 +497,14 @@ function stepTypeLabel(type: LearningStep['type']): string {
           <p v-else class="hint-note">最高级提示仍保留需要你填写或判断的关键部分。</p>
         </section>
 
-        <section v-if="completedConcepts.length > 0" class="mastery-strip">
+        <section v-if="mode === 'guided' && completedConcepts.length > 0" class="mastery-strip">
           <h3>已掌握能力</h3>
           <span v-for="concept in completedConcepts" :key="concept.id">{{ concept.term }}</span>
         </section>
 
-        <section class="verification" :class="{ locked: !learningPathComplete }">
+        <section class="verification" :class="{ locked: !verificationAvailable }">
           <h3>最终验证</h3>
-          <template v-if="learningPathComplete">
+          <template v-if="verificationAvailable">
             <p>{{ level.verification.instruction }}</p>
             <code>{{ level.verification.usage }}</code>
             <dl v-if="level.verification.placeholders.length > 0">
@@ -602,6 +611,7 @@ function stepTypeLabel(type: LearningStep['type']): string {
 .story-details,
 .goals-block,
 .current-action,
+.challenge-brief,
 .hints-block,
 .mastery-strip,
 .verification,
@@ -688,6 +698,47 @@ function stepTypeLabel(type: LearningStep['type']): string {
   background: var(--surface-raised);
   border: var(--hairline) solid var(--accent-cyan-border);
   border-radius: 10px;
+}
+
+.challenge-brief {
+  padding: 15px;
+  background: var(--accent-violet-soft);
+  border: var(--hairline) solid var(--accent-violet-border);
+  border-radius: 10px;
+}
+
+.challenge-eyebrow {
+  color: var(--accent-violet);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.challenge-brief h3 {
+  margin: 5px 0 7px;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.challenge-brief p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.btn-switch-guided {
+  width: 100%;
+  margin-top: 12px;
+  padding: 9px 11px;
+  color: var(--accent-violet);
+  font-size: 12px;
+  font-weight: 800;
+  background: var(--surface-1);
+  border: var(--hairline) solid var(--accent-violet-border);
+  border-radius: 7px;
+  cursor: pointer;
 }
 
 .action-header {
@@ -1142,6 +1193,12 @@ input[type='text'],
   line-height: 1.7;
 }
 
+.completion-card .completion-path {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 750;
+}
+
 .next-transfer {
   padding: 11px 12px;
   background: var(--surface-2);
@@ -1161,6 +1218,7 @@ input[type='text'],
 @media (max-width: 600px) {
   .mode-badge,
   .command-run,
+  .btn-switch-guided,
   .structured-form button,
   .manual-form button,
   .question button,
