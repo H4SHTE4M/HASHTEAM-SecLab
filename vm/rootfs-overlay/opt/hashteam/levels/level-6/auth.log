@@ -1,0 +1,84 @@
+Jul 12 07:58:08 hashteam CRON[1103]: (root) CMD (run-parts /etc/cron.hourly)
+Jul 12 07:58:19 hashteam CRON[1106]: (root) CMD (run-parts /etc/cron.hourly)
+Jul 12 07:59:02 hashteam sshd[1108]: Connection closed by 10.0.0.5 port 41627
+Jul 12 07:59:54 hashteam sshd[1111]: Connection closed by 10.0.0.8 port 41650
+Jul 12 08:00:04 hashteam sudo:   guest : TTY=pts/0 ; PWD=/home/guest ; USER=root ; COMMAND=/bin/cat /etc/motd
+Jul 12 08:00:21 hashteam sshd[1115]: Failed password for oracle from 203.0.113.66 port 40046 ssh2
+Jul 12 08:00:52 hashteam sshd[1118]: Failed password for root from 198.51.100.23 port 40314 ssh2
+Jul 12 08:00:56 hashteam sshd[1119]: Failed password for admin from 203.0.113.66 port 40203 ssh2
+Jul 12 08:01:20 hashteam sshd[1121]: Connection closed by 10.0.0.8 port 41517
+Jul 12 08:01:57 hashteam CRON[1122]: (root) CMD (run-parts /etc/cron.hourly)
+Jul 12 08:02:45 hashteam sshd[1124]: Failed password for test from 203.0.113.66 port 40122 ssh2
+Jul 12 08:03:14 hashteam sshd[1125]: Failed password for oracle from 203.0.113.66 port 40031 ssh2
+Jul 12 08:03:55 hashteam sshd[1126]: Accepted password for guest from 10.0.0.5 port 40629 ssh2
+Jul 12 08:04:49 hashteam sshd[1129]: Failed password for root from 192.0.2.10 port 40473 ssh2
+Jul 12 08:04:57 hashteam sshd[1132]: Connection closed by 10.0.0.8 port 41007
+Jul 12 08:05:11 hashteam CRON[1133]: (root) CMD (run-parts /etc/cron.hourly)
+Jul 12 08:05:18 hashteam sudo:   guest : TTY=pts/0 ; PWD=/home/guest ; USER=root ; COMMAND=/bin/cat /etc/motd
+Jul 12 08:05:53 hashteam sshd[1138]: Failed password for test from 203.0.113.66 port 40225 ssh2
+Jul 12 08:06:09 hashteam sshd[1141]: Failed password for guest from 203.0.113.66 port 40275 ssh2
+Jul 12 08:06:45 hashteam sshd[1146]: Connection closed by 10.0.0.5 port 40866
+Jul 12 08:07:08 hashteam sshd[1147]: Accepted password for guest from 10.0.0.5 port 40722 ssh2
+Jul 12 08:07:55 hashteam sudo:   guest : TTY=pts/0 ; PWD=/home/guest ; USER=root ; COMMAND=/bin/cat /etc/motd
+Jul 12 08:08:48 hashteam sshd[1153]: Failed password for root from 203.0.113.66 port 40076 ssh2
+Jul 12 08:08:54 hashteam sshd[1155]: Accepted password for guest from 10.0.0.5 port 40651 ssh2
+Jul 12 08:09:02 hashteam sshd[1159]: Failed password for guest from 192.0.2.10 port 40445 ssh2
+Jul 12 08:09:39 hashteam CRON[1164]: (root) CMD (run-parts /etc/cron.hourly)
+Jul 12 08:10:29 hashteam sshd[1165]: Connection closed by 10.0.0.5 port 41427
+Jul 12 08:10:35 hashteam sshd[1169]: Connection closed by 10.0.0.8 port 41214
+Jul 12 08:10:40 hashteam sudo:   guest : TTY=pts/0 ; PWD=/home/guest ; USER=root ; COMMAND=/bin/cat /etc/motd
+Jul 12 08:10:52 hashteam sshd[1176]: Failed password for admin from 203.0.113.90 port 40474 ssh2
+Jul 12 08:11:18 hashteam sshd[1178]: Failed password for root from 198.51.100.23 port 40427 ssh2
+Jul 12 08:11:51 hashteam sshd[1180]: Failed password for test from 203.0.113.66 port 40007 ssh2
+Jul 12 08:12:08 hashteam sshd[1183]: Accepted password for guest from 10.0.0.5 port 40568 ssh2
+Jul 12 08:12:22 hashteam sshd[1187]: Failed password for admin from 203.0.113.66 port 40207 ssh2
+Jul 12 08:13:07 hashteam sshd[1189]: Failed password for test from 192.0.2.10 port 40470 ssh2
+Jul 12 08:13:28 hashteam CRON[1193]: (root) CMD (run-parts /etc/cron.hourly)
+Jul 12 08:13:54 hashteam sshd[1196]: Failed password for guest from 203.0.113.66 port 40107 ssh2
+Jul 12 08:14:07 hashteam sshd[1198]: Failed password for oracle from 203.0.113.90 port 40538 ssh2
+Jul 12 08:14:50 hashteam CRON[1202]: (root) CMD (run-parts /etc/cron.hourly)
+Jul 12 08:14:55 hashteam sshd[1206]: Failed password for oracle from 203.0.113.66 port 40058 ssh2
+Jul 12 08:15:06 hashteam sshd[1209]: Accepted password for guest from 10.0.0.5 port 40737 ssh2
+Jul 12 08:15:19 hashteam CRON[1212]: (root) CMD (run-parts /etc/cron.hourly)
+Jul 12 08:15:36 hashteam sshd[1214]: Failed password for oracle from 198.51.100.23 port 40355 ssh2
+Jul 12 08:15:55 hashteam sudo:   guest : TTY=pts/0 ; PWD=/home/guest ; USER=root ; COMMAND=/bin/cat /etc/motd
+Jul 12 08:16:43 hashteam sshd[1218]: Connection closed by 10.0.0.8 port 40838
+Jul 12 08:16:54 hashteam sudo:   guest : TTY=pts/0 ; PWD=/home/guest ; USER=root ; COMMAND=/bin/cat /etc/motd
+Jul 12 08:17:40 hashteam sudo:   guest : TTY=pts/0 ; PWD=/home/guest ; USER=root ; COMMAND=/bin/cat /etc/motd
+Jul 12 08:18:13 hashteam sshd[1226]: Failed password for guest from 198.51.100.23 port 40391 ssh2
+Jul 12 08:18:43 hashteam sshd[1227]: Failed password for admin from 203.0.113.66 port 40286 ssh2
+Jul 12 08:19:02 hashteam CRON[1230]: (root) CMD (run-parts /etc/cron.hourly)
+Jul 12 08:19:51 hashteam sudo:   guest : TTY=pts/0 ; PWD=/home/guest ; USER=root ; COMMAND=/bin/cat /etc/motd
+Jul 12 08:20:40 hashteam sshd[1235]: Connection closed by 10.0.0.8 port 41310
+Jul 12 08:21:30 hashteam sudo:   guest : TTY=pts/0 ; PWD=/home/guest ; USER=root ; COMMAND=/bin/cat /etc/motd
+Jul 12 08:22:07 hashteam sshd[1244]: Connection closed by 10.0.0.8 port 41242
+Jul 12 08:22:59 hashteam sshd[1248]: Failed password for root from 192.0.2.10 port 40466 ssh2
+Jul 12 08:23:50 hashteam sshd[1252]: Connection closed by 10.0.0.5 port 41500
+Jul 12 08:23:58 hashteam sshd[1254]: Accepted password for guest from 10.0.0.5 port 40696 ssh2
+Jul 12 08:24:35 hashteam CRON[1258]: (root) CMD (run-parts /etc/cron.hourly)
+Jul 12 08:25:15 hashteam sshd[1260]: Failed password for oracle from 198.51.100.23 port 40316 ssh2
+Jul 12 08:25:49 hashteam sshd[1265]: Connection closed by 10.0.0.5 port 41523
+Jul 12 08:26:40 hashteam sshd[1270]: Failed password for ubuntu from 203.0.113.66 port 40113 ssh2
+Jul 12 08:27:12 hashteam CRON[1275]: (root) CMD (run-parts /etc/cron.hourly)
+Jul 12 08:27:17 hashteam CRON[1279]: Connection closed by 10.0.0.5 port 41274
+Jul 12 08:27:35 hashteam CRON[1282]: (root) CMD (run-parts /etc/cron.hourly)
+Jul 12 08:27:46 hashteam sshd[1285]: Failed password for root from 203.0.113.66 port 40159 ssh2
+Jul 12 08:28:28 hashteam CRON[1288]: (root) CMD (run-parts /etc/cron.hourly)
+Jul 12 08:28:39 hashteam CRON[1293]: (root) CMD (run-parts /etc/cron.hourly)
+Jul 12 08:29:15 hashteam sudo:   guest : TTY=pts/0 ; PWD=/home/guest ; USER=root ; COMMAND=/bin/cat /etc/motd
+Jul 12 08:29:17 hashteam CRON[1302]: (root) CMD (run-parts /etc/cron.hourly)
+Jul 12 08:29:49 hashteam sshd[1304]: Accepted password for guest from 10.0.0.5 port 40729 ssh2
+Jul 12 08:30:28 hashteam CRON[1307]: (root) CMD (run-parts /etc/cron.hourly)
+Jul 12 08:30:57 hashteam sshd[1311]: Failed password for root from 203.0.113.66 port 40193 ssh2
+Jul 12 08:31:29 hashteam sudo:   guest : TTY=pts/0 ; PWD=/home/guest ; USER=root ; COMMAND=/bin/cat /etc/motd
+Jul 12 08:31:54 hashteam sudo:   guest : TTY=pts/0 ; PWD=/home/guest ; USER=root ; COMMAND=/bin/cat /etc/motd
+Jul 12 08:32:23 hashteam sshd[1320]: Connection closed by 10.0.0.8 port 41260
+Jul 12 08:32:46 hashteam sshd[1324]: Connection closed by 10.0.0.5 port 41601
+Jul 12 08:33:06 hashteam sshd[1325]: Accepted password for guest from 10.0.0.5 port 40681 ssh2
+Jul 12 08:33:51 hashteam sshd[1327]: Failed password for guest from 198.51.100.23 port 40423 ssh2
+Jul 12 08:34:05 hashteam sshd[1329]: Accepted password for guest from 10.0.0.5 port 40600 ssh2
+Jul 12 08:34:26 hashteam CRON[1333]: (root) CMD (run-parts /etc/cron.hourly)
+Jul 12 08:34:37 hashteam sudo:   guest : TTY=pts/0 ; PWD=/home/guest ; USER=root ; COMMAND=/bin/cat /etc/motd
+Jul 12 08:35:02 hashteam sshd[1340]: Failed password for ubuntu from 203.0.113.90 port 40508 ssh2
+Jul 12 08:35:20 hashteam sshd[1345]: Failed password for admin from 203.0.113.66 port 40218 ssh2
+Jul 12 08:36:11 hashteam sshd[1348]: Failed password for root from 203.0.113.66 port 40264 ssh2
