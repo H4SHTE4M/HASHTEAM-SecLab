@@ -14,6 +14,11 @@ DEPLOY_URL="${DEPLOY_URL:-https://labtest.lwzheng.tech}"
 EXPECTED_REMOTE_USER="${DEPLOY_EXPECTED_USER:-hashteam-deploy}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+LOCK_HELPER="$SCRIPT_DIR/remote-deploy-lock.sh"
+LOCK_HEARTBEAT_SECONDS="${DEPLOY_LOCK_HEARTBEAT_SECONDS:-30}"
+LOCK_STALE_SECONDS="${DEPLOY_LOCK_STALE_SECONDS:-180}"
+LOCK_WAIT_SECONDS="${DEPLOY_LOCK_WAIT_SECONDS:-300}"
+LOCK_RETRY_SECONDS="${DEPLOY_LOCK_RETRY_SECONDS:-15}"
 
 case "$HOST" in
   *[!A-Za-z0-9._-]*|'') echo "ERROR: DEPLOY_HOST 含非法字符"; exit 2 ;;
@@ -35,6 +40,24 @@ esac
 [[ "$DEPLOY_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?$ ]] || {
   echo "ERROR: DEPLOY_URL 必须是无路径、无尾斜杠的 HTTPS 站点地址"
   exit 2
+}
+for lock_interval in \
+  "$LOCK_HEARTBEAT_SECONDS" \
+  "$LOCK_STALE_SECONDS" \
+  "$LOCK_WAIT_SECONDS" \
+  "$LOCK_RETRY_SECONDS"; do
+  [[ "$lock_interval" =~ ^[0-9]+$ ]] || {
+    echo "ERROR: 发布锁时间参数必须是整数" >&2
+    exit 2
+  }
+done
+(( LOCK_HEARTBEAT_SECONDS >= 10 && LOCK_HEARTBEAT_SECONDS <= 120 ))
+(( LOCK_STALE_SECONDS >= LOCK_HEARTBEAT_SECONDS * 3 && LOCK_STALE_SECONDS <= 3600 ))
+(( LOCK_WAIT_SECONDS >= LOCK_STALE_SECONDS && LOCK_WAIT_SECONDS <= 900 ))
+(( LOCK_RETRY_SECONDS >= 5 && LOCK_RETRY_SECONDS <= LOCK_HEARTBEAT_SECONDS ))
+[[ -r "$LOCK_HELPER" ]] || {
+  echo "ERROR: 缺少远端发布锁助手：$LOCK_HELPER" >&2
+  exit 1
 }
 
 cd "$PROJECT_DIR"
@@ -66,7 +89,7 @@ if [[ -n "${1:-}" ]]; then
   exit 2
 fi
 
-for required_command in git node ssh rsync curl cmp sha256sum; do
+for required_command in git node ssh rsync curl cmp sha256sum sleep; do
   command -v "$required_command" >/dev/null || {
     echo "ERROR: 缺少发布命令：${required_command}" >&2
     exit 1
@@ -121,56 +144,111 @@ RELEASE_ID="$(date -u +%Y%m%dT%H%M%SZ)-${RELEASE_CONTENT_HASH}"
 
 DEPLOY_TOKEN="${SOURCE_ID}-${RELEASE_ID}-$$"
 LOCK_ACQUIRED=0
-release_deploy_lock() {
-  if [[ "$LOCK_ACQUIRED" -ne 1 ]]; then
+LOCK_HEARTBEAT_PID=""
+LOCK_HEARTBEAT_FAILURE_FILE="${RUNNER_TEMP:-/tmp}/hashteam-deploy-heartbeat-failed-${BASHPID}"
+
+run_lock_helper() {
+  local action="$1"
+  shift
+  ssh "$HOST" bash -s -- \
+    "$action" "$REMOTE_PATH" "$DEPLOY_TOKEN" "$@" \
+    < "$LOCK_HELPER"
+}
+
+heartbeat_deploy_lock() {
+  while sleep "$LOCK_HEARTBEAT_SECONDS"; do
+    if ! run_lock_helper refresh; then
+      echo "ERROR: 远端发布锁心跳失败；本次发布不得继续切换 current" >&2
+      : > "$LOCK_HEARTBEAT_FAILURE_FILE"
+      return 1
+    fi
+  done
+}
+
+start_deploy_lock_heartbeat() {
+  heartbeat_deploy_lock &
+  LOCK_HEARTBEAT_PID="$!"
+}
+
+stop_deploy_lock_heartbeat() {
+  if [[ -z "$LOCK_HEARTBEAT_PID" ]]; then
     return
   fi
-  if ! ssh "$HOST" bash -s -- "$REMOTE_PATH" "$DEPLOY_TOKEN" <<'REMOTE'
-set -euo pipefail
-root="$1"
-token="$2"
-lock="$root/.deploy-lock"
-test -d "$lock"
-test "$(cat "$lock/owner")" = "$token"
-unlink "$lock/owner"
-rmdir "$lock"
-REMOTE
-  then
-    echo "WARNING: 未能自动释放远端发布锁；再次发布前必须确认没有发布进程，再按手册清理" >&2
+  if kill -0 "$LOCK_HEARTBEAT_PID" 2>/dev/null; then
+    kill "$LOCK_HEARTBEAT_PID" 2>/dev/null || true
+  fi
+  wait "$LOCK_HEARTBEAT_PID" 2>/dev/null || true
+  LOCK_HEARTBEAT_PID=""
+}
+
+assert_deploy_lock_heartbeat() {
+  if [[ -e "$LOCK_HEARTBEAT_FAILURE_FILE" ]] ||
+    [[ -z "$LOCK_HEARTBEAT_PID" ]] ||
+    ! kill -0 "$LOCK_HEARTBEAT_PID" 2>/dev/null; then
+    echo "ERROR: 远端发布锁心跳已停止；拒绝继续发布" >&2
+    return 1
+  fi
+}
+
+release_deploy_lock() {
+  [[ "$LOCK_ACQUIRED" -eq 1 ]] || return
+  if ! run_lock_helper release; then
+    return 1
   fi
   LOCK_ACQUIRED=0
 }
-trap release_deploy_lock EXIT
 
-echo "==> [2/6] 获取远端发布锁并准备原子发布目录"
+cleanup_deploy() {
+  local status=$?
+  trap - EXIT HUP INT TERM
+  stop_deploy_lock_heartbeat
+  if [[ "$LOCK_ACQUIRED" -eq 1 ]] && ! release_deploy_lock; then
+    echo "WARNING: 未能自动释放远端发布锁；租约过期后下次发布将安全回收" >&2
+    if [[ "$status" -eq 0 ]]; then
+      status=1
+    fi
+  fi
+  if [[ -e "$LOCK_HEARTBEAT_FAILURE_FILE" ]]; then
+    unlink "$LOCK_HEARTBEAT_FAILURE_FILE"
+  fi
+  exit "$status"
+}
+trap cleanup_deploy EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+echo "==> [2/6] 获取远端发布租约并准备原子发布目录"
+lock_deadline=$((SECONDS + LOCK_WAIT_SECONDS))
+while true; do
+  if run_lock_helper acquire "$LOCK_STALE_SECONDS"; then
+    break
+  else
+    lock_status=$?
+  fi
+  if [[ "$lock_status" -ne 75 ]] || (( SECONDS >= lock_deadline )); then
+    echo "ERROR: 无法在 ${LOCK_WAIT_SECONDS}s 内取得远端发布锁" >&2
+    exit "$lock_status"
+  fi
+  lock_remaining=$((lock_deadline - SECONDS))
+  echo "==> 发布锁仍有有效租约；等待自动恢复（最多剩余 ${lock_remaining}s）"
+  sleep "$LOCK_RETRY_SECONDS"
+done
+LOCK_ACQUIRED=1
+start_deploy_lock_heartbeat
+
 PREVIOUS_TARGET="$(
   ssh "$HOST" bash -s -- "$REMOTE_PATH" "$DEPLOY_TOKEN" <<'REMOTE'
 set -euo pipefail
 root="$1"
 token="$2"
 mkdir -p "$root/releases" "$root/vm-assets" "$root/sources"
-lock="$root/.deploy-lock"
-if ! mkdir "$lock" 2>/dev/null; then
-  echo "ERROR: 已有发布占用远端锁：$(cat "$lock/owner" 2>/dev/null || echo owner-unknown)" >&2
-  exit 75
-fi
-cleanup_lock_on_error() {
-  status=$?
-  if [ "$status" -ne 0 ]; then
-    unlink "$lock/owner" 2>/dev/null || true
-    rmdir "$lock" 2>/dev/null || true
-  fi
-  exit "$status"
-}
-trap cleanup_lock_on_error EXIT
-printf '%s\n' "$token" > "$lock/owner"
+test "$(cat "$root/.deploy-lock/owner")" = "$token"
 if [ -L "$root/current" ]; then
   readlink "$root/current"
 fi
-trap - EXIT
 REMOTE
 )"
-LOCK_ACQUIRED=1
 case "$PREVIOUS_TARGET" in
   ''|releases/*) ;;
   *) echo "ERROR: 远端 current 指向异常位置：$PREVIOUS_TARGET"; exit 1 ;;
@@ -186,6 +264,7 @@ rsync -rlz --checksum \
 rsync -rlz --checksum \
   ./dist/sources/ \
   "${HOST}:${REMOTE_PATH}/sources/"
+assert_deploy_lock_heartbeat
 
 echo "==> [4/6] 上传 release ${RELEASE_ID}"
 ssh "$HOST" mkdir -p "${REMOTE_PATH}/releases/${RELEASE_ID}.upload"
@@ -196,6 +275,7 @@ rsync -az --delete \
   --exclude='*.log' \
   ./dist/ \
   "${HOST}:${REMOTE_PATH}/releases/${RELEASE_ID}.upload/"
+assert_deploy_lock_heartbeat
 
 echo "==> [5/6] 校验远端文件并原子切换 current"
 ssh "$HOST" bash -s -- \
@@ -387,6 +467,7 @@ while read -r _source_sha256 source_archive; do
     exit 1
   fi
 done < "dist/sources/SHA256SUMS-${SOURCE_ID}"
+assert_deploy_lock_heartbeat
 
 echo "==> 发布完成：${DEPLOY_URL}/"
 echo "    release: ${RELEASE_ID}"
