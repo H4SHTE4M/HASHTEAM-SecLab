@@ -237,10 +237,16 @@ bash scripts/verify-build.sh
 项目源码包与 `SHA256SUMS-<Git 提交>` 按 release 永久保留。许可证和源码获取说明见
 [第三方声明](THIRD_PARTY_NOTICES.md) 与 [对应源码说明](SOURCE_CODE.md)。
 
-项目自带的生产发布脚本和 Nginx 配置位于本机 `.deploy/`：它采用独立
-release 目录、共享内容寻址 VM 资源、原子软链接切换和失败自动回滚。
-发布前必须保持 Git 工作区干净，并完整通过发布门禁；详细步骤见
-`.deploy/DEPLOY_PLAN.md`。
+推送到受保护的 `main` 后，GitHub Actions 会在无生产凭据的 `verify` job
+完成全部门禁、对应源码准备和发布包 SHA-256 固化；只有验证成功的 artifact
+才会进入 `production` Environment 的 `deploy` job。部署使用无 sudo 的专用
+SSH 账号，采用独立 release、共享内容寻址 VM 资源、原子软链接切换和失败自动
+回滚。PR（包括 fork PR）不会运行部署 job，也不会获得生产 Secret。
+
+受版本控制的日常原子发布逻辑位于 `scripts/deploy-release.sh`；服务器账号初始化、
+GitHub Environment、密钥轮换和故障恢复见
+[生产 CI/CD 手册](docs/deployment.md)。本机 `.deploy/` 继续保存 Nginx、证书和
+手工发布资料，不会进入仓库或 GitHub artifact。
 
 ## 11. 已知限制
 
@@ -324,6 +330,8 @@ hashteam-web-lab/
     ├── test-vm-checks.sh    # Linux 检查脚本与绕过回归测试
     ├── integration-test.mjs # 端到端：Node 无头启动真实 VM 通关 10 关
     ├── prepare-corresponding-source.sh # 准备 GPL/LGPL 对应源码
+    ├── deploy-release.sh   # CI/CD 原子发布、校验和失败回滚
+    ├── provision-deploy-user.sh # 一次性初始化无 sudo 部署账号
     ├── verify-dist.mjs      # 校验生产 VM 资产清单和 SHA-256
     ├── prepare-vm-assets.sh # vm/build.sh 的便捷入口
     └── verify-build.sh      # 一键验证：资源 + 测试 + 构建
