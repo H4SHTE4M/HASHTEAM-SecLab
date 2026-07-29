@@ -580,7 +580,10 @@ onBeforeUnmount(() => {
   }
 
   .topbar-identity {
-    display: none;
+    grid-column: 1 / 3;
+    grid-row: 1;
+    padding-right: 156px;
+    overflow: hidden;
   }
 
   .topbar-controls {
@@ -589,6 +592,7 @@ onBeforeUnmount(() => {
 
   .progress {
     grid-column: 1 / 3;
+    grid-row: 1;
     justify-self: end;
   }
 
@@ -596,6 +600,7 @@ onBeforeUnmount(() => {
     min-width: 0;
     display: block;
     grid-column: 4;
+    grid-row: 1;
     container-type: inline-size;
   }
 

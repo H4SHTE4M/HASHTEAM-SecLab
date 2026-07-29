@@ -74,8 +74,6 @@ onBeforeUnmount(() => {
           type="button"
           class="btn-close"
           aria-label="关闭"
-          data-tooltip="关闭"
-          data-tooltip-placement="left"
           @click="close"
         >
           <AppIcon name="x" :size="18" />
@@ -129,77 +127,96 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: calc(20px + var(--safe-top)) calc(20px + var(--safe-right)) calc(20px + var(--safe-bottom)) calc(20px + var(--safe-left));
-  background: var(--overlay-backdrop);
-  backdrop-filter: blur(10px) saturate(115%);
+  background: rgba(4, 8, 9, 0.82);
+  backdrop-filter: blur(7px) saturate(100%);
   box-sizing: border-box;
 }
 
 .modal-card {
-  width: min(620px, 100%);
-  max-height: min(720px, 100%);
+  width: min(680px, 100%);
+  max-height: min(760px, 100%);
   display: flex;
   flex-direction: column;
-  background: var(--surface-1);
-  border: var(--hairline) solid var(--border-strong);
+  color: #dce3e1;
+  background: #090d0f;
+  border: var(--hairline) solid #2a3638;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: var(--shadow-dialog);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.56), inset 0 1px rgba(255, 255, 255, 0.025);
   animation: dialog-rise var(--duration-slow) var(--ease-out) both;
 }
 
 .modal-header {
+  min-height: 60px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 17px 20px 17px 24px;
-  border-bottom: var(--hairline) solid var(--border-subtle);
+  gap: 16px;
+  padding: 10px 12px 10px 24px;
+  background: #0c1113;
+  border-bottom: var(--hairline) solid #273034;
 }
 
 .modal-header h2 {
+  min-width: 0;
   margin: 0;
-  font-family: var(--font-display);
-  font-size: 19px;
-  font-weight: 720;
-  color: var(--text-primary);
+  color: #83e1de;
+  font-family: var(--font-terminal);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .btn-close {
-  width: 44px;
-  height: 44px;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
-  color: var(--text-muted);
-  background: transparent;
-  border: var(--hairline) solid transparent;
-  border-radius: 7px;
-  cursor: pointer;
   padding: 0;
+  color: #71807d;
+  background: #090d0f;
+  border: var(--hairline) solid #273034;
+  border-radius: 6px;
+  cursor: pointer;
 }
 
-.btn-close:hover {
-  color: var(--text-primary);
-  background: var(--surface-hover);
-  border-color: var(--border-strong);
-  transform: rotate(2deg);
+.btn-close:hover,
+.btn-close:focus-visible {
+  color: #83e1de;
+  background: #11191b;
+  border-color: #4c8f90;
+  box-shadow: 0 0 0 2px rgba(107, 213, 210, 0.12);
 }
 
 .modal-body {
-  padding: 22px 24px 26px;
+  padding: 20px 24px 26px;
   overflow-y: auto;
+  font-family: var(--font-terminal);
+  scrollbar-color: #3a474b transparent;
 }
 
 .modal-body h3 {
-  margin: 18px 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 20px 0 8px;
+  color: #83e1de;
+  font-family: var(--font-terminal);
   font-size: 14px;
-  font-weight: 720;
-  color: var(--accent-cyan);
+  font-weight: 600;
+}
+
+.modal-body h3::before {
+  color: #6bd5d2;
+  content: '›';
 }
 
 .modal-body p,
 .modal-body li {
-  font-size: 15px;
-  line-height: 1.8;
-  color: var(--text-secondary);
+  color: #c9d2d0;
+  font-size: 14px;
+  line-height: 1.85;
 }
 
 .modal-body ul {
@@ -212,7 +229,7 @@ onBeforeUnmount(() => {
 }
 
 .modal-body a {
-  color: var(--accent-cyan);
+  color: #83e1de;
 }
 
 .build-info {
@@ -220,14 +237,14 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   margin-bottom: 0;
-  color: var(--text-muted);
+  color: #71807d;
 }
 
 .build-info code {
   padding: 2px 6px;
-  color: var(--text-secondary);
-  background: var(--surface-2);
-  border: var(--hairline) solid var(--border-subtle);
+  color: #c9d2d0;
+  background: #0c1113;
+  border: var(--hairline) solid #273034;
   border-radius: 4px;
   font-size: 12px;
 }
@@ -250,8 +267,9 @@ onBeforeUnmount(() => {
   }
 
   .modal-header {
-    gap: 12px;
-    padding: 12px 14px 12px 16px;
+    min-height: 52px;
+    gap: 10px;
+    padding: 8px 8px 8px 16px;
   }
 
   .modal-header h2 {
@@ -260,7 +278,9 @@ onBeforeUnmount(() => {
   }
 
   .btn-close {
-    flex: 0 0 44px;
+    flex-basis: 44px;
+    width: 44px;
+    height: 44px;
   }
 
   .modal-body {

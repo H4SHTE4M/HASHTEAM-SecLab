@@ -150,7 +150,9 @@ describe('responsive layout contract', () => {
   })
 
   it('keeps compact interactive targets usable by touch', () => {
+    const about = source('src/components/AboutModal.vue')
     const app = source('src/App.vue')
+    const panel = source('src/components/MissionPanel.vue')
     const rail = source('src/components/LevelRail.vue')
     const topbar = source('src/components/TopBar.vue')
 
@@ -158,6 +160,15 @@ describe('responsive layout contract', () => {
       'grid-template-columns: var(--workspace-rail-width) minmax(0, 1fr) var(--workspace-resizer-width)',
     )
     expect(app).toMatch(/\.font-size-control\s*\{[\s\S]*?height:\s*46px;/)
+    expect(app).toMatch(
+      /@media \(max-width:\s*900px\)[\s\S]*?\.font-size-control \[data-tooltip\]::before\s*\{[\s\S]*?display:\s*none;/,
+    )
+    expect(panel).toMatch(
+      /@media \(max-width:\s*600px\)[\s\S]*?\.story-details summary\s*\{[\s\S]*?padding-block:\s*9px;/,
+    )
+    expect(about).toMatch(
+      /@media \(max-width:\s*480px\)[\s\S]*?\.btn-close\s*\{[\s\S]*?width:\s*44px;[\s\S]*?height:\s*44px;/,
+    )
     expect(rail).not.toContain('flex-basis: 38px')
     expect(topbar).not.toContain('width: 34px')
   })
@@ -210,6 +221,21 @@ describe('responsive layout contract', () => {
     expect(app).not.toContain('LevelCompleteDialog')
   })
 
+  it('uses the earlier mission-panel typography without changing the v2 learning content', () => {
+    const panel = source('src/components/MissionPanel.vue')
+
+    expect(panel).toMatch(/\.mission-panel\s*\{[\s\S]*?font-family:\s*var\(--font-ui\);/)
+    expect(panel).toMatch(/\.level-name\s*\{[\s\S]*?font-size:\s*20px;[\s\S]*?font-weight:\s*620;/)
+    expect(panel).toMatch(/\.story-details p\s*\{[\s\S]*?font-size:\s*15px;[\s\S]*?line-height:\s*1\.75;/)
+    expect(panel).toMatch(/\.story-details summary span\s*\{[\s\S]*?display:\s*inline;/)
+    expect(panel).toMatch(/\.story-details \.story-summary\s*\{[\s\S]*?font-weight:\s*550;/)
+    expect(panel).toMatch(/\.action-header h3\s*\{[\s\S]*?font-size:\s*17px;/)
+    expect(panel).toMatch(/\.step-instruction\s*\{[\s\S]*?font-size:\s*15px;[\s\S]*?line-height:\s*1\.7;/)
+    expect(panel).toMatch(/code,\s*input\s*\{\s*font-family:\s*var\(--font-mono\);/)
+    expect(panel).toContain('level.steps.length')
+    expect(panel).toContain('learningPathComplete')
+  })
+
   it('supports accessible tooltips and a resizable mission panel', () => {
     const app = source('src/App.vue')
     const globalCss = source('src/styles/global.css')
@@ -220,6 +246,8 @@ describe('responsive layout contract', () => {
     expect(app).toContain('handlePanelResizeKeydown')
     expect(app).toContain('--mission-panel-width')
     expect(globalCss).toContain('[data-tooltip]:hover::before')
+    expect(globalCss).toContain('[data-tooltip]:focus-visible::before')
+    expect(globalCss).not.toContain('[data-tooltip]:focus::before')
     expect(topbar).toContain('data-tooltip="操作帮助"')
   })
 
@@ -234,8 +262,17 @@ describe('responsive layout contract', () => {
     expect(topbar).toMatch(
       /\.topbar\s*\{[\s\S]*?grid-template-columns:\s*var\(--workspace-rail-width\) minmax\(0, 1fr\) var\(--workspace-resizer-width\) var\(--mission-panel-width\);/,
     )
-    expect(topbar).toMatch(/\.progress\s*\{[\s\S]*?grid-column:\s*1 \/ 3;[\s\S]*?justify-self:\s*end;/)
-    expect(topbar).toMatch(/\.mission-controls\s*\{[\s\S]*?grid-column:\s*4;/)
+    expect(topbar).toContain('class="brand"')
+    expect(topbar).not.toMatch(/\.topbar-identity\s*\{\s*display:\s*none;/)
+    expect(topbar).toMatch(
+      /\.topbar-identity\s*\{[\s\S]*?grid-column:\s*1 \/ 3;[\s\S]*?grid-row:\s*1;[\s\S]*?padding-right:\s*156px;/,
+    )
+    expect(topbar).toMatch(
+      /\.progress\s*\{[\s\S]*?grid-column:\s*1 \/ 3;[\s\S]*?grid-row:\s*1;[\s\S]*?justify-self:\s*end;/,
+    )
+    expect(topbar).toMatch(
+      /\.mission-controls\s*\{[\s\S]*?grid-column:\s*4;[\s\S]*?grid-row:\s*1;/,
+    )
     expect(topbar).toMatch(
       /\.mission-controls-layout\s*\{[\s\S]*?grid-template-columns:\s*auto minmax\(0, 1fr\) auto auto;/,
     )
