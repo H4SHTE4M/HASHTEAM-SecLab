@@ -108,6 +108,10 @@ ssh cn-tencent sudo bash /tmp/hashteam-provision-deploy-user.sh \
 8. 逐字节比对线上首页、VM 清单、法律声明和 VM 资产；
 9. 任一健康检查失败时自动把 `current` 切回上一 release。
 
+共享 VM 资产和对应源码可能由不同部署账号创建。同步时按 SHA-256/内容更新文件，
+不保留本地 mtime，避免为了设置历史时间戳而扩大部署账号权限；独立 release
+目录仍由本次部署账号创建并保持不可变。
+
 ## 手工触发与故障恢复
 
 具有仓库写权限的用户可以从 Actions 页面运行 `workflow_dispatch`，但仅允许选择

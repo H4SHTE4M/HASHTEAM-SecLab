@@ -177,11 +177,13 @@ case "$PREVIOUS_TARGET" in
 esac
 
 echo "==> [3/6] 同步共享 VM 资产组 ${VM_HASH}"
-rsync -az --checksum \
+# Shared content-addressed files may have been created by an earlier manual
+# deployment account. Copy content and structure without attempting to set
+# arbitrary historical mtimes, which Linux reserves for the file owner.
+rsync -rlz --checksum \
   ./dist/vm-assets/ \
   "${HOST}:${REMOTE_PATH}/vm-assets/"
-rsync -az --checksum \
-  --chmod=D755,F644 \
+rsync -rlz --checksum \
   ./dist/sources/ \
   "${HOST}:${REMOTE_PATH}/sources/"
 
