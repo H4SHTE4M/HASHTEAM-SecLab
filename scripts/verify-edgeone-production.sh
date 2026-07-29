@@ -30,7 +30,7 @@ cleanup_and_report() {
   status=$?
   trap - EXIT
   if [[ -d "$temporary_dir" ]]; then
-    find "$temporary_dir" -type f -exec unlink {} + || true
+    find "$temporary_dir" -type f -exec unlink {} \; || true
     rmdir "$temporary_dir" || true
   fi
   if [[ "$status" -ne 0 ]]; then
@@ -215,7 +215,8 @@ grep -Eq '^HTTP/[0-9.]+ 206([[:space:]]|$)' "$range_headers" || {
   echo "ERROR: WASM Range 请求没有返回 HTTP 206" >&2
   exit 1
 }
-require_header "$range_headers" Accept-Ranges bytes
+# 206、精确 Content-Range 和单字节响应体是 Range 能力的直接证明。
+# Accept-Ranges 只是能力提示，EdgeOne 新版本收敛期间可能暂时不返回它。
 grep -Eqi '^content-range:[[:space:]]*bytes 0-0/[1-9][0-9]*[[:space:]]*$' \
   "$range_headers" || {
   echo "ERROR: WASM Content-Range 响应无效" >&2
