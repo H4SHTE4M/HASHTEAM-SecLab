@@ -119,6 +119,7 @@ describe('accessible components', () => {
     const dialog = wrapper.get('[role="dialog"]')
     expect(dialog.attributes('aria-modal')).toBe('true')
     expect(document.activeElement).toBe(wrapper.get('.btn-close').element)
+    expect(wrapper.get('.build-info code').attributes('title')).toBe(__SOURCE_ID__)
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     expect(wrapper.emitted('close')).toHaveLength(1)

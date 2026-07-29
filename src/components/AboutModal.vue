@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { CTF_POSITIONING, LAB_DIRECTIONS } from '../data/levels'
+import { BUILD_INFO } from '../services/build-info'
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -95,6 +96,10 @@ onBeforeUnmount(() => {
           ·
           <a href="./legal/SOURCE_CODE.md">源码获取说明</a>
         </p>
+        <p class="build-info">
+          <span>当前构建</span>
+          <code :title="BUILD_INFO.sourceId">{{ BUILD_INFO.displayId }}</code>
+        </p>
       </div>
     </div>
   </div>
@@ -170,6 +175,23 @@ onBeforeUnmount(() => {
 
 .modal-body a {
   color: #7dd3fc;
+}
+
+.build-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+  color: #7d8aa5;
+}
+
+.build-info code {
+  padding: 2px 6px;
+  color: #c7d3e8;
+  background: #111c33;
+  border: 1px solid #22314f;
+  border-radius: 4px;
+  font-size: 12px;
 }
 
 .modal-body ul {

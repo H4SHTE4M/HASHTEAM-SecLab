@@ -96,6 +96,9 @@ await requireFile(stylePaths[0])
 if (!appScript.includes(manifest.base)) {
   fail('生产 JavaScript 没有引用清单中的内容寻址 VM 资产目录')
 }
+if (!appScript.includes(manifest.sourceId)) {
+  fail('生产 JavaScript 中的 Build ID 与 VM 资产清单不一致')
+}
 await requireFile('favicon.svg')
 const sourceNotice = (await requireFile('legal/SOURCE_CODE.md')).toString('utf8')
 const thirdPartyNotice = (await requireFile('legal/THIRD_PARTY_NOTICES.md')).toString('utf8')
