@@ -1,5 +1,10 @@
 export PATH=/usr/local/bin:/bin:/usr/bin:/sbin
-export PS1='\u@hashteam:\w\$ '
+. /etc/hashteam/colors.sh
+if [ "$HT_COLOR_ENABLED" -eq 1 ]; then
+    export PS1='\[\033[1;92m\]\u@hashteam\[\033[0m\]:\[\033[1;96m\]\w\[\033[0m\] \[\033[1;97m\]\$\[\033[0m\] '
+else
+    export PS1='\u@hashteam:\w\$ '
+fi
 umask 022
 # 主 BusyBox 的 ash 会优先执行内建 applet，显式路由到最小 SUID helper。
 alias su='/bin/su'

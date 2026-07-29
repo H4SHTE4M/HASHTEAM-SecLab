@@ -4,6 +4,8 @@
 /mnt 挂载点不支持 exec 位，因此本脚本显式记录每个条目的权限，
 不依赖文件系统上的 mode。
 """
+from __future__ import annotations
+
 import argparse
 import gzip
 import os

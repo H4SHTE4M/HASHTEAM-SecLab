@@ -1,6 +1,7 @@
 #!/bin/sh
 # 第 4 关：过宽的权限
 set -eu
+. "${HASHTEAM_LIB_DIR:-/etc/hashteam}/colors.sh"
 cd "$HOME"
 
 cat > baseline-report.txt <<'R_EOF'
@@ -38,7 +39,5 @@ S_EOF
 chmod 777 deploy.sh
 chmod 644 secret.txt
 
-echo "──────────────────────────────────────────────"
-echo " 第 4 关 · 过宽的权限"
-echo "──────────────────────────────────────────────"
+ht_banner "第 4 关 · 过宽的权限"
 echo "基线扫描发现文件权限与业务用途不符。先观察权限字符串。"

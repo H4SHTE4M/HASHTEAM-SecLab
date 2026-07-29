@@ -12,6 +12,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OVERLAY="$ROOT/vm/rootfs-overlay"
 export HASHTEAM_LEVELS_DIR="$OVERLAY/opt/hashteam/levels"
+export HASHTEAM_LIB_DIR="$OVERLAY/etc/hashteam"
 
 BUSYBOX="${BUSYBOX:-}"
 if [ -z "$BUSYBOX" ]; then
@@ -76,11 +77,32 @@ run_level() { # sandbox script [args...]
 }
 run_check() { # sandbox [args...] → 运行 check 包装器
     local sb="$1"; shift
-    HOME="$sb/home/guest" HASHTEAM_USER=guest PATH="$STUB:$PATH" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/check" "$@"
+    HOME="$sb/home/guest" HASHTEAM_USER=guest PATH="$STUB:$PATH" \
+        HASHTEAM_FORCE_COLOR="${HASHTEAM_FORCE_COLOR:-}" \
+        "$BUSYBOX" sh "$OVERLAY/usr/local/bin/check" "$@"
 }
 
 echo "使用 busybox: $BUSYBOX"
 echo
+
+echo "—— 终端语义色 ——"
+MOTD_OUT=$(PATH="$STUB:$PATH" HASHTEAM_FORCE_COLOR=0 "$BUSYBOX" sh -c \
+    '. "$1"; ht_render_motd "$2"' sh "$HASHTEAM_LIB_DIR/colors.sh" "$HASHTEAM_LIB_DIR/motd")
+MOTD_EXPECTED=$("$STUB/cat" "$HASHTEAM_LIB_DIR/motd")
+expect_eq "非交互 MOTD 保持纯文本" "$MOTD_OUT" "$MOTD_EXPECTED"
+
+COLOR_SAMPLE=$(PATH="$STUB:$PATH" HASHTEAM_FORCE_COLOR=1 "$BUSYBOX" sh -c \
+    '. "$1"; ht_render_result 1 "  ✓ 成功项
+  ✗ 失败项"' sh "$HASHTEAM_LIB_DIR/colors.sh")
+ESC=$(printf '\033')
+case "$COLOR_SAMPLE" in
+    *"${ESC}[1;92m  ✓ 成功项${ESC}[0m"*) ok "成功行使用语义色" ;;
+    *) bad "成功行缺少绿色 ANSI" ;;
+esac
+case "$COLOR_SAMPLE" in
+    *"${ESC}[1;91m  ✗ 失败项${ESC}[0m"*) ok "失败行使用语义色" ;;
+    *) bad "失败行缺少红色 ANSI" ;;
+esac
 
 echo "—— 第 1 关 ——"
 sandbox 1
@@ -92,6 +114,24 @@ expect_contains "$OUT" "输出 passed 协议" '"status":"passed"'
 OUT=$(run_check "$SB" wrong-answer) && RC=0 || RC=$?
 expect_eq "错误答案失败（退出码 1）" "$RC" "1"
 expect_contains "$OUT" "输出 error 协议" '"type":"error"'
+
+if OUT=$(HASHTEAM_FORCE_COLOR=1 run_check "$SB" first-light); then RC=0; else RC=$?; fi
+expect_eq "强制颜色不改变成功退出码" "$RC" "0"
+case "$OUT" in
+    *"${ESC}[1;92m✓ 验证通过！"*) ok "交互成功结果包含 ANSI" ;;
+    *) bad "交互成功结果缺少 ANSI" ;;
+esac
+PROTOCOL=$(printf '%s\n' "$OUT" | "$STUB/sed" -n '/^@@HASHTEAM:/p')
+expect_eq "成功协议行保持纯文本" "$PROTOCOL" '@@HASHTEAM:{"type":"level-result","level":1,"status":"passed"}'
+
+OUT=$(HASHTEAM_FORCE_COLOR=1 run_check "$SB" wrong-answer) && RC=0 || RC=$?
+expect_eq "强制颜色不改变失败退出码" "$RC" "1"
+case "$OUT" in
+    *"${ESC}[1;91m✗ 通行证不对。"*) ok "交互失败结果包含 ANSI" ;;
+    *) bad "交互失败结果缺少 ANSI" ;;
+esac
+PROTOCOL=$(printf '%s\n' "$OUT" | "$STUB/sed" -n '/^@@HASHTEAM:/p')
+expect_eq "错误协议行保持纯文本" "$PROTOCOL" '@@HASHTEAM:{"type":"error","message":"level 1 check failed"}'
 sandbox 1
 SB2="$SB_DIR"  # 未运行 init：未完成状态
 OUT=$(run_check "$SB2" first-light) && RC=0 || RC=$?

@@ -4,6 +4,7 @@ set -eu
 
 STATE_DIR="$HOME/.hashteam"
 LEVELS_DIR="${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}"
+. "${HASHTEAM_LIB_DIR:-/etc/hashteam}/colors.sh"
 
 current_level() {
     cat "$STATE_DIR/level" 2>/dev/null || echo 1
@@ -23,17 +24,17 @@ case "$cmd" in
     goto)
         level=${2:-}
         case "$level" in
-            ''|*[!0-9]*) echo "无效的关卡编号: $level" >&2; exit 2 ;;
+            ''|*[!0-9]*) ht_error "无效的关卡编号: $level"; exit 2 ;;
         esac
         if [ ! -d "$LEVELS_DIR/level-$level" ]; then
-            echo "关卡 $level 不存在" >&2
+            ht_error "关卡 $level 不存在"
             exit 2
         fi
         # 不允许跳关：除第 1 关外，必须先完成上一关
         if [ "$level" -ne 1 ]; then
             mc=$(max_completed)
             if [ "$((level - 1))" -gt "$mc" ]; then
-                echo "还没解锁第 $level 关：请先用 check 完成第 $((level - 1)) 关。" >&2
+                ht_warning "还没解锁第 $level 关：请先用 check 完成第 $((level - 1)) 关。"
                 exit 3
             fi
         fi
@@ -46,7 +47,7 @@ case "$cmd" in
         # 记录某关已完成（供 check 通过后调用，以及前端开机时回放进度）
         level=${2:-}
         case "$level" in
-            ''|*[!0-9]*) echo "无效的关卡编号: $level" >&2; exit 2 ;;
+            ''|*[!0-9]*) ht_error "无效的关卡编号: $level"; exit 2 ;;
         esac
         mkdir -p "$STATE_DIR"
         mc=$(max_completed)
@@ -56,7 +57,7 @@ case "$cmd" in
         ;;
     reset-level)
         level=$(current_level)
-        echo "正在重置第 $level 关的实验环境..."
+        ht_notice "正在重置第 $level 关的实验环境..."
         run_init "$level"
         printf '@@HASHTEAM:{"type":"level-ready","level":%s}\n' "$level"
         ;;
@@ -71,7 +72,7 @@ case "$cmd" in
         current_level
         ;;
     *)
-        echo "用法：hashteamctl <goto N | reset-level | factory-reset | mark-completed N | current>" >&2
+        ht_error "用法：hashteamctl <goto N | reset-level | factory-reset | mark-completed N | current>"
         exit 2
         ;;
 esac

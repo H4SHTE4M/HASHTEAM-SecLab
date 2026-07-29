@@ -1,6 +1,7 @@
 #!/bin/sh
 # 第 9 关：被遗忘的调试接口（本地 Web 服务，只监听 127.0.0.1）
 set -eu
+. "${HASHTEAM_LIB_DIR:-/etc/hashteam}/colors.sh"
 cd "$HOME"
 mkdir -p www
 cat > www/index.html <<'H_EOF'
@@ -45,8 +46,6 @@ until httpd -p 127.0.0.1:"$PORT" -h "$HOME/www" 2>/dev/null; do
     fi
     sleep 1
 done
-echo "──────────────────────────────────────────────"
-echo " 第 9 关 · 被遗忘的调试接口"
-echo "──────────────────────────────────────────────"
+ht_banner "第 9 关 · 被遗忘的调试接口"
 echo "一个 Web 服务已在虚拟机本机启动。请先从监听状态发现入口。"
 echo "所有请求必须限制在当前训练虚拟机内。"
