@@ -530,9 +530,11 @@ function stepTypeLabel(type: LearningStep['type']): string {
 .mission-panel {
   height: 100%;
   overflow: hidden;
-  color: #c7d3e8;
-  background: #0f1830;
-  border-left: 1px solid #1c2a44;
+  color: var(--text-secondary);
+  background: var(--panel-bg);
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: 8px;
+  box-shadow: var(--shadow-panel);
 }
 
 .panel-scroll {
@@ -557,34 +559,34 @@ function stepTypeLabel(type: LearningStep['type']): string {
 }
 
 .level-badge {
-  color: #38bdf8;
-  background: rgba(56, 189, 248, 0.12);
-  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: var(--accent-cyan);
+  background: var(--accent-cyan-soft);
+  border: var(--hairline) solid var(--accent-cyan-border);
 }
 
 .mode-badge {
-  color: #a8c7fa;
-  background: #111c33;
-  border: 1px solid #22314f;
+  color: var(--accent-cyan);
+  background: var(--surface-2);
+  border: var(--hairline) solid var(--border-subtle);
   cursor: pointer;
 }
 
 .done-badge {
   margin-left: auto;
-  color: #7fdba7;
-  background: rgba(127, 219, 167, 0.1);
-  border: 1px solid rgba(127, 219, 167, 0.35);
+  color: var(--accent-green);
+  background: var(--accent-green-soft);
+  border: var(--hairline) solid var(--accent-green-border);
 }
 
 .level-name {
   margin: 10px 0 3px;
-  color: #eef3fc;
+  color: var(--text-primary);
   font-size: 21px;
 }
 
 .level-tagline {
   margin: 0;
-  color: #7d8aa5;
+  color: var(--text-faint);
   font-size: 12px;
 }
 
@@ -601,7 +603,7 @@ function stepTypeLabel(type: LearningStep['type']): string {
 
 .story-details {
   padding: 11px 12px;
-  background: #111c33;
+  background: var(--surface-2);
   border-radius: 8px;
 }
 
@@ -612,14 +614,14 @@ function stepTypeLabel(type: LearningStep['type']): string {
 }
 
 .story-details summary {
-  color: #c7d3e8;
+  color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.55;
 }
 
 .story-details summary span {
   display: block;
-  color: #7dd3fc;
+  color: var(--accent-cyan);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -628,7 +630,7 @@ function stepTypeLabel(type: LearningStep['type']): string {
 
 .story-details p {
   margin: 10px 0 0;
-  color: #93a5c6;
+  color: var(--text-muted);
   font-size: 12px;
   line-height: 1.65;
 }
@@ -640,7 +642,7 @@ function stepTypeLabel(type: LearningStep['type']): string {
 .summary-block h3,
 .next-transfer h3 {
   margin: 0 0 7px;
-  color: #93a5c6;
+  color: var(--text-muted);
   font-size: 12px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -656,14 +658,14 @@ function stepTypeLabel(type: LearningStep['type']): string {
 
 .goals-block details {
   margin-top: 9px;
-  color: #7d8aa5;
+  color: var(--text-faint);
   font-size: 12px;
 }
 
 .current-action {
   padding: 15px;
-  background: linear-gradient(145deg, rgba(56, 189, 248, 0.1), rgba(17, 28, 51, 0.95));
-  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: var(--surface-raised);
+  border: var(--hairline) solid var(--accent-cyan-border);
   border-radius: 10px;
 }
 
@@ -674,7 +676,7 @@ function stepTypeLabel(type: LearningStep['type']): string {
 }
 
 .action-eyebrow {
-  color: #7dd3fc;
+  color: var(--accent-cyan);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -682,7 +684,7 @@ function stepTypeLabel(type: LearningStep['type']): string {
 
 .action-header h3 {
   margin: 4px 0 0;
-  color: #eef3fc;
+  color: var(--text-primary);
   font-size: 14px;
   line-height: 1.4;
 }
@@ -699,16 +701,16 @@ function stepTypeLabel(type: LearningStep['type']): string {
 .step-progress i {
   width: 10px;
   height: 4px;
-  background: #2a3a5c;
+  background: var(--border-strong);
   border-radius: 2px;
 }
 
 .step-progress i.active {
-  background: #38bdf8;
+  background: var(--accent-cyan);
 }
 
 .step-progress i.done {
-  background: #7fdba7;
+  background: var(--accent-green);
 }
 
 .step-objective,
@@ -719,27 +721,27 @@ function stepTypeLabel(type: LearningStep['type']): string {
 }
 
 .step-objective {
-  color: #b8c5dd;
+  color: var(--text-secondary);
 }
 
 .step-objective strong {
-  color: #ffd580;
+  color: var(--accent-amber);
 }
 
 .step-instruction {
-  color: #c7d3e8;
+  color: var(--text-secondary);
 }
 
 .concept-card {
   margin-top: 12px;
   padding: 11px;
-  background: rgba(167, 139, 250, 0.08);
-  border: 1px solid rgba(167, 139, 250, 0.3);
+  background: var(--accent-violet-soft);
+  border: var(--hairline) solid var(--accent-violet-border);
   border-radius: 8px;
 }
 
 .concept-card > span {
-  color: #c4b5fd;
+  color: var(--accent-violet);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -748,7 +750,7 @@ function stepTypeLabel(type: LearningStep['type']): string {
 
 .concept-card h4 {
   margin: 3px 0 4px;
-  color: #ddd6fe;
+  color: var(--text-primary);
   font-size: 13px;
 }
 
@@ -763,13 +765,13 @@ function stepTypeLabel(type: LearningStep['type']): string {
 .observation-box {
   margin-top: 12px;
   padding: 9px 10px;
-  background: rgba(255, 213, 128, 0.06);
-  border-left: 3px solid #ffd580;
+  background: var(--accent-amber-soft);
+  border-left: 3px solid var(--accent-amber);
   border-radius: 4px;
 }
 
 .observation-box > span {
-  color: #ffd580;
+  color: var(--accent-amber);
   font-size: 10px;
   font-weight: 800;
 }
@@ -789,10 +791,10 @@ function stepTypeLabel(type: LearningStep['type']): string {
   align-items: flex-start;
   gap: 5px;
   padding: 10px 12px;
-  color: #a8e6c0;
+  color: var(--accent-green);
   text-align: left;
-  background: #0b1220;
-  border: 1px solid #2b7553;
+  background: var(--surface-0);
+  border: var(--hairline) solid var(--accent-green-border);
   border-radius: 7px;
   cursor: pointer;
 }
@@ -817,7 +819,7 @@ input {
 
 .command-note {
   margin: 8px 0 0;
-  color: #7d8aa5;
+  color: var(--text-faint);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -825,11 +827,11 @@ input {
 .command-template {
   overflow-x: auto;
   padding: 9px 10px;
-  color: #ffd580;
+  color: var(--accent-amber);
   font-size: 12px;
   white-space: nowrap;
-  background: #0b1220;
-  border: 1px solid rgba(255, 213, 128, 0.3);
+  background: var(--surface-0);
+  border: var(--hairline) solid var(--accent-amber-border);
   border-radius: 6px;
 }
 
@@ -839,7 +841,7 @@ input {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  color: #93a5c6;
+  color: var(--text-muted);
   font-size: 11px;
 }
 
@@ -849,9 +851,9 @@ input[type='text'],
 .verification-form input {
   min-width: 0;
   padding: 9px 10px;
-  color: #eef3fc;
-  background: #0b1220;
-  border: 1px solid #314263;
+  color: var(--text-primary);
+  background: var(--surface-0);
+  border: var(--hairline) solid var(--border-strong);
   border-radius: 6px;
 }
 
@@ -864,10 +866,10 @@ input[type='text'],
 .btn-advance,
 .btn-next {
   padding: 9px 11px;
-  color: #06121f;
+  color: var(--accent-cyan-contrast);
   font-size: 12px;
   font-weight: 800;
-  background: #38bdf8;
+  background: var(--accent-cyan);
   border: none;
   border-radius: 7px;
   cursor: pointer;
@@ -883,7 +885,7 @@ input[type='text'],
 
 .question legend {
   margin-bottom: 8px;
-  color: #eef3fc;
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 700;
 }
@@ -893,7 +895,7 @@ input[type='text'],
   display: flex;
   align-items: flex-start;
   gap: 7px;
-  color: #c7d3e8;
+  color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -916,20 +918,20 @@ input[type='text'],
 }
 
 .btn-evidence {
-  color: #d9fbe6;
-  background: rgba(43, 117, 83, 0.35);
-  border: 1px solid #2b7553;
+  color: var(--accent-green);
+  background: var(--accent-green-soft);
+  border: var(--hairline) solid var(--accent-green-border);
 }
 
 .inline-error {
   margin: 9px 0 0;
-  color: #fca5a5;
+  color: var(--accent-red);
   font-size: 12px;
 }
 
 .errors-details {
   margin-top: 10px;
-  color: #d8b4a0;
+  color: var(--accent-coral);
   font-size: 11px;
 }
 
@@ -941,8 +943,8 @@ input[type='text'],
 .step-complete {
   margin-top: 12px;
   padding: 9px 10px;
-  color: #a8e6c0;
-  background: rgba(127, 219, 167, 0.08);
+  color: var(--accent-green);
+  background: var(--accent-green-soft);
   border-radius: 6px;
 }
 
@@ -953,12 +955,12 @@ input[type='text'],
 
 .step-complete p {
   margin-top: 4px;
-  color: #b8c5dd;
+  color: var(--text-secondary);
 }
 
 .hints-block {
   padding-top: 13px;
-  border-top: 1px solid #1c2a44;
+  border-top: var(--hairline) solid var(--border-subtle);
 }
 
 .hints {
@@ -974,30 +976,30 @@ input[type='text'],
 
 .hints li {
   padding: 8px 9px;
-  background: rgba(255, 213, 128, 0.05);
+  background: var(--accent-amber-soft);
   border-radius: 6px;
 }
 
 .hints span {
   display: block;
-  color: #ffd580;
+  color: var(--accent-amber);
   font-size: 9px;
   font-weight: 800;
 }
 
 .btn-hint {
   padding: 7px 11px;
-  color: #ffd580;
+  color: var(--accent-amber);
   font-size: 12px;
-  background: rgba(255, 213, 128, 0.08);
-  border: 1px solid rgba(255, 213, 128, 0.3);
+  background: var(--accent-amber-soft);
+  border: var(--hairline) solid var(--accent-amber-border);
   border-radius: 7px;
   cursor: pointer;
 }
 
 .hint-note {
   margin: 0;
-  color: #7d8aa5;
+  color: var(--text-faint);
   font-size: 11px;
 }
 
@@ -1013,24 +1015,24 @@ input[type='text'],
 
 .mastery-strip span {
   padding: 3px 8px;
-  color: #c4b5fd;
+  color: var(--accent-violet);
   font-size: 10px;
-  background: rgba(167, 139, 250, 0.08);
-  border: 1px solid rgba(167, 139, 250, 0.25);
+  background: var(--accent-violet-soft);
+  border: var(--hairline) solid var(--accent-violet-border);
   border-radius: 999px;
 }
 
 .verification {
   padding: 12px;
-  background: rgba(127, 219, 167, 0.06);
-  border: 1px solid rgba(127, 219, 167, 0.25);
+  background: var(--accent-green-soft);
+  border: var(--hairline) solid var(--accent-green-border);
   border-radius: 8px;
 }
 
 .verification.locked {
-  color: #66779a;
-  background: rgba(102, 119, 154, 0.05);
-  border-color: #22314f;
+  color: var(--text-disabled);
+  background: var(--surface-2);
+  border-color: var(--border-subtle);
 }
 
 .verification > p {
@@ -1042,7 +1044,7 @@ input[type='text'],
 .verification > code {
   display: block;
   overflow-x: auto;
-  color: #7fdba7;
+  color: var(--accent-green);
   font-size: 12px;
   white-space: nowrap;
 }
@@ -1056,14 +1058,14 @@ input[type='text'],
 }
 
 .verification dt {
-  color: #ffd580;
+  color: var(--accent-amber);
   font-family: 'JetBrains Mono', Consolas, monospace;
   font-size: 11px;
 }
 
 .verification dd {
   margin: 2px 0 0;
-  color: #93a5c6;
+  color: var(--text-muted);
   font-size: 11px;
 }
 
@@ -1076,8 +1078,8 @@ input[type='text'],
   gap: 12px;
   margin-top: 16px;
   padding: 14px;
-  background: rgba(127, 219, 167, 0.08);
-  border: 1px solid rgba(127, 219, 167, 0.3);
+  background: var(--accent-green-soft);
+  border: var(--hairline) solid var(--accent-green-border);
   border-radius: 9px;
 }
 
@@ -1087,9 +1089,9 @@ input[type='text'],
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  color: #06121f;
+  color: var(--accent-green-contrast);
   font-weight: 900;
-  background: #7fdba7;
+  background: var(--accent-green);
   border-radius: 50%;
 }
 
@@ -1099,21 +1101,21 @@ input[type='text'],
 }
 
 .completion-card h3 {
-  color: #a8e6c0;
+  color: var(--accent-green);
   font-size: 14px;
 }
 
 .completion-card p,
 .next-transfer p {
   margin-top: 4px;
-  color: #b8c5dd;
+  color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.6;
 }
 
 .next-transfer {
   padding: 11px 12px;
-  background: #111c33;
+  background: var(--surface-2);
   border-radius: 8px;
 }
 

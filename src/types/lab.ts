@@ -117,6 +117,9 @@ export interface CompletionSummary {
 /** 学习界面的提示密度；不影响关卡环境与判题。 */
 export type LabMode = 'guided' | 'challenge'
 
+/** 界面配色主题。 */
+export type ThemeName = 'light' | 'dark'
+
 /** 关卡展示定义，由每关目录中的 challenge.json 提供。 */
 export interface LevelDef {
   id: number
@@ -168,6 +171,8 @@ export interface LabProgress {
 export interface LabUiPreferences {
   mode: LabMode | null
   onboardingComplete: boolean
+  /** xterm 正文使用的像素字号。 */
+  terminalFontSize: number
 }
 
 /** 虚拟机启动阶段（用于加载界面展示真实阶段，不伪造百分比） */

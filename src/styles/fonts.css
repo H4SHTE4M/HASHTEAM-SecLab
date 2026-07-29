@@ -1,0 +1,33 @@
+@font-face {
+  font-family: 'Geist Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../assets/fonts/geist/files/geist-latin-wght-normal.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url('../assets/fonts/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'CaskaydiaCove Nerd Font Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('../assets/fonts/caskaydia-cove-nerd/CaskaydiaCoveNerdFontMono-Regular.woff2')
+    format('woff2');
+}
+
+@font-face {
+  font-family: 'CaskaydiaCove Nerd Font Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url('../assets/fonts/caskaydia-cove-nerd/CaskaydiaCoveNerdFontMono-SemiBold.woff2')
+    format('woff2');
+}
