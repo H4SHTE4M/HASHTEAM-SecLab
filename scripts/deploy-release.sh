@@ -74,7 +74,7 @@ if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
 fi
 
 if [[ -n "$(git status --porcelain --untracked-files=normal)" ]]; then
-  echo "ERROR: 发布要求工作区已提交且干净，以保证产物、源码和提交可追溯" >&2
+  echo "ERROR: 发布要求工作区已提交且干净，以保证产物和提交可追溯" >&2
   exit 1
 fi
 SOURCE_ID="$(git rev-parse HEAD)"
@@ -106,11 +106,6 @@ DIST_SOURCE_ID="$(node -e "const m=require('./dist/vm-assets.json'); process.std
   echo "ERROR: dist 的 source ID 与当前 Git 提交不一致" >&2
   exit 1
 }
-SOURCE_CHECKSUMS="dist/sources/SHA256SUMS-${SOURCE_ID}"
-[[ -s "$SOURCE_CHECKSUMS" ]] || {
-  echo "ERROR: 发布包缺少当前提交的对应源码校验清单" >&2
-  exit 1
-}
 
 ssh "$HOST" bash -s -- "$REMOTE_PATH" "$EXPECTED_REMOTE_USER" <<'REMOTE'
 set -euo pipefail
@@ -126,7 +121,7 @@ if command -v sudo >/dev/null && sudo -n true >/dev/null 2>&1; then
   echo "ERROR: 部署账号不应拥有免交互 sudo 权限" >&2
   exit 1
 fi
-for path in "$root" "$root/releases" "$root/vm-assets" "$root/sources"; do
+for path in "$root" "$root/releases" "$root/vm-assets"; do
   [ -d "$path" ] && [ -r "$path" ] && [ -w "$path" ] && [ -x "$path" ] || {
     echo "ERROR: 部署账号缺少目录权限：$path" >&2
     exit 1
@@ -242,7 +237,7 @@ PREVIOUS_TARGET="$(
 set -euo pipefail
 root="$1"
 token="$2"
-mkdir -p "$root/releases" "$root/vm-assets" "$root/sources"
+mkdir -p "$root/releases" "$root/vm-assets"
 test "$(cat "$root/.deploy-lock/owner")" = "$token"
 if [ -L "$root/current" ]; then
   readlink "$root/current"
@@ -261,16 +256,12 @@ echo "==> [3/6] 同步共享 VM 资产组 ${VM_HASH}"
 rsync -rlz --checksum \
   ./dist/vm-assets/ \
   "${HOST}:${REMOTE_PATH}/vm-assets/"
-rsync -rlz --checksum \
-  ./dist/sources/ \
-  "${HOST}:${REMOTE_PATH}/sources/"
 assert_deploy_lock_heartbeat
 
 echo "==> [4/6] 上传 release ${RELEASE_ID}"
 ssh "$HOST" mkdir -p "${REMOTE_PATH}/releases/${RELEASE_ID}.upload"
 rsync -az --delete \
   --exclude='vm-assets/' \
-  --exclude='sources/' \
   --exclude='.DS_Store' \
   --exclude='*.log' \
   ./dist/ \
@@ -441,32 +432,6 @@ for relative in \
     exit 1
   fi
 done
-if ! curl -fsS --max-time 20 \
-  "${DEPLOY_URL}/sources/SHA256SUMS-${SOURCE_ID}" |
-  cmp - "dist/sources/SHA256SUMS-${SOURCE_ID}"; then
-  rollback
-  exit 1
-fi
-while read -r _source_sha256 source_archive; do
-  if [[ ! "$_source_sha256" =~ ^[a-f0-9]{64}$ ]] ||
-    [[ ! "$source_archive" =~ ^[A-Za-z0-9._-]+$ ]]; then
-    echo "ERROR: 本地源码校验清单包含非法条目" >&2
-    rollback
-    exit 1
-  fi
-  source_status="$(
-    curl -sS --head -o /dev/null -w '%{http_code}' --max-time 20 \
-      "${DEPLOY_URL}/sources/${source_archive}"
-  )" || {
-    rollback
-    exit 1
-  }
-  if [[ "$source_status" != "200" ]]; then
-    echo "ERROR: 线上对应源码不可访问：${source_archive}（HTTP ${source_status}）" >&2
-    rollback
-    exit 1
-  fi
-done < "dist/sources/SHA256SUMS-${SOURCE_ID}"
 assert_deploy_lock_heartbeat
 
 echo "==> 发布完成：${DEPLOY_URL}/"

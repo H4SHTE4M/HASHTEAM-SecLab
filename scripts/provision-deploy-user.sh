@@ -112,8 +112,7 @@ usermod -aG "$DEPLOY_USER" "$MANUAL_DEPLOY_USER"
 for path in \
   "$DEPLOY_ROOT" \
   "$DEPLOY_ROOT/releases" \
-  "$DEPLOY_ROOT/vm-assets" \
-  "$DEPLOY_ROOT/sources"; do
+  "$DEPLOY_ROOT/vm-assets"; do
   [[ -d "$path" && ! -L "$path" ]] || {
     echo "ERROR: 部署目录不存在或不是普通目录：$path" >&2
     exit 1
@@ -122,12 +121,11 @@ for path in \
   chmod 2775 "$path"
 done
 
-# Existing shared assets were created by the manual account. Grant the deploy
-# group write access so rsync can verify or repair them without sudo.
-chgrp -R "$DEPLOY_USER" "$DEPLOY_ROOT/vm-assets" "$DEPLOY_ROOT/sources"
-chmod -R g+rwX "$DEPLOY_ROOT/vm-assets" "$DEPLOY_ROOT/sources"
-find "$DEPLOY_ROOT/vm-assets" "$DEPLOY_ROOT/sources" \
-  -type d -exec chmod g+s {} +
+# Existing shared VM assets may have been created by the manual account. Grant
+# the deploy group access without touching the historical sources/ directory.
+chgrp -R "$DEPLOY_USER" "$DEPLOY_ROOT/vm-assets"
+chmod -R g+rwX "$DEPLOY_ROOT/vm-assets"
+find "$DEPLOY_ROOT/vm-assets" -type d -exec chmod g+s {} +
 
 unlink "$STAGED_PUBLIC_KEY"
 
@@ -136,7 +134,6 @@ id "$DEPLOY_USER"
 for path in \
   "$DEPLOY_ROOT" \
   "$DEPLOY_ROOT/releases" \
-  "$DEPLOY_ROOT/vm-assets" \
-  "$DEPLOY_ROOT/sources"; do
+  "$DEPLOY_ROOT/vm-assets"; do
   stat -c '%A %U:%G %n' "$path"
 done

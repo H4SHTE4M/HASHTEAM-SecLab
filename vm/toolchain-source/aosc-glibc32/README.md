@@ -7,8 +7,10 @@ This directory is the complete `runtime-optenv32/glibc+32` recipe from
 
 That commit is the last recipe change before the installed `glibc+32` 2.42
 package build timestamp (2026-01-17) and adds the two security patches present
-in the package used to link `bin/busybox-suid`. The matching pristine GNU
-glibc source is published as `/sources/glibc-2.42.tar.xz`; its SHA-256 is
+in the package used to link `bin/busybox-suid`. The fixed release source points
+to the matching pristine GNU archive
+`glibc-2.42.tar.xz`; `scripts/prepare-corresponding-source.sh` downloads it and
+verifies that its SHA-256 is
 `d1775e32e4628e64ef930f435b67bb63af7599acb6be2b335b9f19f16509f17f`.
 
 The exact installed package metadata and compiler/library file hashes are
