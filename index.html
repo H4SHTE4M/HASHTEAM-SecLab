@@ -2,8 +2,21 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <meta name="description" content="HASHTEAM Security Lab - 浏览器中的交互式 Linux 安全新手村" />
+    <script>
+      (() => {
+        try {
+          const storedTheme = localStorage.getItem('hashteam-theme-v1')
+          document.documentElement.dataset.theme = storedTheme === 'dark' ? 'dark' : 'light'
+        } catch {
+          document.documentElement.dataset.theme = 'light'
+        }
+      })()
+    </script>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <title>HASHTEAM Security Lab</title>
   </head>

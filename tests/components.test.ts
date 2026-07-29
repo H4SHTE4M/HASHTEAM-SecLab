@@ -4,6 +4,7 @@ import { nextTick } from 'vue'
 import { describe, expect, it } from 'vitest'
 import AboutModal from '../src/components/AboutModal.vue'
 import LoadingScreen from '../src/components/LoadingScreen.vue'
+import LevelRail from '../src/components/LevelRail.vue'
 import MissionPanel from '../src/components/MissionPanel.vue'
 import OnboardingDialog from '../src/components/OnboardingDialog.vue'
 import TopBar from '../src/components/TopBar.vue'
@@ -145,7 +146,7 @@ describe('accessible components', () => {
 
   it('重新开始按钮需要二次点击才发送事件', async () => {
     const wrapper = mount(TopBar, {
-      props: { completedCount: 2, total: 10, mode: 'guided' },
+      props: { completedCount: 2, total: 10, mode: 'guided', theme: 'light' },
     })
     const restart = wrapper.findAll('button').find((button) => button.text() === '重新开始')
     expect(restart).toBeDefined()
@@ -155,6 +156,32 @@ describe('accessible components', () => {
     expect(restart!.text()).toContain('确认')
     await restart!.trigger('click')
     expect(wrapper.emitted('reset-all')).toHaveLength(1)
+  })
+
+  it('关卡轨道只允许选择已解锁关卡，并标记当前与完成状态', async () => {
+    const levels = Array.from({ length: 4 }, (_, index) => ({
+      ...level,
+      id: index + 1,
+      name: `测试关卡 ${index + 1}`,
+    }))
+    const wrapper = mount(LevelRail, {
+      props: {
+        levels,
+        currentLevel: 1,
+        completedLevels: [1],
+      },
+    })
+
+    const buttons = wrapper.findAll('.level-button')
+    expect(buttons[0].attributes('aria-current')).toBe('step')
+    expect(buttons[0].classes()).toContain('completed')
+    expect(buttons[1].attributes('disabled')).toBeUndefined()
+    expect(buttons[2].attributes('disabled')).toBeDefined()
+
+    await buttons[1].trigger('click')
+    expect(wrapper.emitted('select')?.[0]).toEqual([2])
+    await buttons[2].trigger('click')
+    expect(wrapper.emitted('select')).toHaveLength(1)
   })
 
   it('Onboarding 覆盖提示符、按键、命令结构、占位符、复制、提示与重置', async () => {

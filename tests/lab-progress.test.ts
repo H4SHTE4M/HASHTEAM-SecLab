@@ -19,6 +19,9 @@ import {
   type StorageLike,
 } from '../src/services/progress-store'
 import {
+  TERMINAL_FONT_SIZE_DEFAULT,
+  TERMINAL_FONT_SIZE_MAX,
+  TERMINAL_FONT_SIZE_MIN,
   UI_PREFERENCES_STORAGE_KEY,
   createDefaultUiPreferences,
   loadUiPreferences,
@@ -225,9 +228,14 @@ describe('lab UI preferences', () => {
     expect(createDefaultUiPreferences()).toEqual({
       mode: null,
       onboardingComplete: false,
+      terminalFontSize: TERMINAL_FONT_SIZE_DEFAULT,
     })
 
-    const preferences = { mode: 'guided' as const, onboardingComplete: true }
+    const preferences = {
+      mode: 'guided' as const,
+      onboardingComplete: true,
+      terminalFontSize: 17,
+    }
     saveUiPreferences(window.localStorage, preferences)
     expect(loadUiPreferences(window.localStorage)).toEqual(preferences)
   })
@@ -241,15 +249,43 @@ describe('lab UI preferences', () => {
     expect(loadUiPreferences(window.localStorage)).toEqual(createDefaultUiPreferences())
   })
 
+  it('旧偏好自动补默认字号，并只接受 12–20 的整数', () => {
+    window.localStorage.setItem(
+      UI_PREFERENCES_STORAGE_KEY,
+      JSON.stringify({ mode: 'guided', onboardingComplete: true }),
+    )
+    expect(loadUiPreferences(window.localStorage).terminalFontSize).toBe(
+      TERMINAL_FONT_SIZE_DEFAULT,
+    )
+
+    for (const terminalFontSize of [TERMINAL_FONT_SIZE_MIN, TERMINAL_FONT_SIZE_MAX]) {
+      window.localStorage.setItem(
+        UI_PREFERENCES_STORAGE_KEY,
+        JSON.stringify({ mode: 'challenge', onboardingComplete: true, terminalFontSize }),
+      )
+      expect(loadUiPreferences(window.localStorage).terminalFontSize).toBe(terminalFontSize)
+    }
+
+    for (const terminalFontSize of [11, 21, 15.5]) {
+      window.localStorage.setItem(
+        UI_PREFERENCES_STORAGE_KEY,
+        JSON.stringify({ mode: 'guided', onboardingComplete: true, terminalFontSize }),
+      )
+      expect(loadUiPreferences(window.localStorage)).toEqual(createDefaultUiPreferences())
+    }
+  })
+
   it('重置关卡进度不会删除界面偏好', () => {
     saveUiPreferences(window.localStorage, {
       mode: 'challenge',
       onboardingComplete: true,
+      terminalFontSize: 18,
     })
     resetAllProgress(window.localStorage)
     expect(loadUiPreferences(window.localStorage)).toEqual({
       mode: 'challenge',
       onboardingComplete: true,
+      terminalFontSize: 18,
     })
   })
 })

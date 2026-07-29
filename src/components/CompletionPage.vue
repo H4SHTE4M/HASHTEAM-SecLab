@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { CTF_POSITIONING, LAB_DIRECTIONS } from '../data/levels'
+import AppIcon from './AppIcon.vue'
 
 const emit = defineEmits<{
   (e: 'restart'): void
@@ -9,7 +10,7 @@ const emit = defineEmits<{
 <template>
   <main class="completion-page">
     <div class="completion-inner">
-      <p class="congrats-badge">🎉 全部关卡完成</p>
+      <p class="congrats-badge"><AppIcon name="trophy" :size="16" /> 全部关卡完成</p>
       <h1 class="title">欢迎加入 HASHTEAM 的世界</h1>
       <p class="intro">
         你已经在真实的 Linux 终端里完成了身份确认、文件整理、隐藏信息探索、
@@ -33,6 +34,7 @@ const emit = defineEmits<{
       </section>
 
       <button type="button" class="btn-restart" @click="emit('restart')">
+        <AppIcon name="rotate-ccw" :size="17" />
         重新开始体验
       </button>
     </div>
@@ -42,131 +44,178 @@ const emit = defineEmits<{
 <style scoped>
 .completion-page {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 48px 24px;
+  padding: calc(48px + var(--safe-top)) calc(24px + var(--safe-right)) calc(48px + var(--safe-bottom)) calc(24px + var(--safe-left));
+  background: var(--bg-canvas);
 }
 
 .completion-inner {
   max-width: 860px;
   margin: 0 auto;
   text-align: center;
+  animation: completion-page-in 420ms var(--ease-out) both;
 }
 
 .congrats-badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-size: 14px;
-  color: #7fdba7;
-  background: rgba(127, 219, 167, 0.1);
-  border: 1px solid rgba(127, 219, 167, 0.35);
+  color: var(--accent-green);
+  background: var(--accent-green-soft);
+  border: var(--hairline) solid var(--accent-green-border);
   padding: 6px 18px;
-  border-radius: 999px;
+  border-radius: 6px;
   margin: 0 0 20px;
 }
 
 .title {
   margin: 0 0 16px;
-  font-size: 34px;
-  color: #eef3fc;
+  font-family: var(--font-display);
+  font-size: 38px;
+  font-weight: 760;
+  line-height: 1.22;
+  color: var(--text-primary);
 }
 
 .intro {
   margin: 0 auto 40px;
   max-width: 640px;
-  font-size: 15px;
-  line-height: 1.9;
-  color: #b8c5dd;
+  font-size: 16px;
+  line-height: 1.85;
+  color: var(--text-secondary);
 }
 
 .directions h2,
 .ctf-note h2 {
-  font-size: 15px;
-  color: #93a5c6;
-  letter-spacing: 0.08em;
+  font-size: 14px;
+  font-weight: 720;
+  color: var(--text-muted);
   margin: 0 0 18px;
 }
 
 .direction-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 14px;
   margin-bottom: 40px;
   text-align: left;
 }
 
 .direction-card {
-  background: #0f1830;
-  border: 1px solid #22314f;
-  border-radius: 10px;
-  padding: 18px 20px;
-  transition: border-color 0.2s ease, transform 0.2s ease;
+  background: var(--surface-1);
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 20px 22px;
+  transition: transform var(--duration-normal) var(--ease-out), border-color var(--duration-normal) ease, background-color var(--duration-normal) ease, box-shadow var(--duration-normal) ease;
 }
 
 .direction-card:hover {
-  border-color: #38bdf8;
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-control);
   transform: translateY(-2px);
 }
 
 .direction-card h3 {
   margin: 0 0 8px;
-  font-size: 16px;
-  color: #38bdf8;
+  font-family: var(--font-display);
+  font-size: 17px;
+  color: var(--accent-cyan);
 }
 
 .direction-card p {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.8;
-  color: #b8c5dd;
+  font-size: 14px;
+  line-height: 1.78;
+  color: var(--text-secondary);
 }
 
 .ctf-note {
   max-width: 680px;
   margin: 0 auto 40px;
   padding: 20px 24px;
-  background: rgba(56, 189, 248, 0.06);
-  border: 1px solid rgba(56, 189, 248, 0.25);
-  border-radius: 10px;
+  background: var(--surface-1);
+  border-left: 3px solid var(--accent-coral);
+  border-radius: 0 8px 8px 0;
 }
 
 .ctf-note p {
   margin: 0;
   font-size: 14px;
   line-height: 1.9;
-  color: #c7d3e8;
+  color: var(--text-secondary);
   text-align: left;
 }
 
 .btn-restart {
   min-height: 44px;
-  padding: 12px 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 28px;
   font-size: 15px;
-  font-weight: 600;
-  color: #06121f;
-  background: #38bdf8;
+  font-weight: 720;
+  color: var(--accent-cyan-contrast);
+  background: var(--accent-cyan);
   border: none;
-  border-radius: 8px;
+  border-radius: 7px;
   cursor: pointer;
+  box-shadow: 0 8px 22px rgba(101, 212, 206, 0.14), inset 0 1px rgba(255, 255, 255, 0.24);
 }
 
 .btn-restart:hover {
-  background: #5ccbf9;
+  background: var(--accent-cyan-hover);
+  box-shadow: 0 10px 28px rgba(101, 212, 206, 0.2), inset 0 1px rgba(255, 255, 255, 0.28);
+  transform: translateY(-1px);
 }
 
-@media (max-width: 520px) {
+@keyframes completion-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
   .completion-page {
-    padding: 32px 16px;
+    padding: calc(28px + var(--safe-top)) calc(16px + var(--safe-right)) calc(28px + var(--safe-bottom)) calc(16px + var(--safe-left));
   }
 
   .title {
-    font-size: clamp(26px, 9vw, 34px);
+    font-size: 28px;
   }
 
   .intro {
-    margin-bottom: 28px;
+    margin-bottom: 30px;
+    font-size: 14px;
+  }
+
+  .direction-grid {
+    grid-template-columns: minmax(0, 1fr);
+    margin-bottom: 30px;
   }
 
   .ctf-note {
-    padding: 18px;
+    margin-bottom: 30px;
+    padding: 16px 18px;
+  }
+}
+
+@media (max-width: 360px) {
+  .completion-page {
+    padding-inline: calc(12px + var(--safe-left)) calc(12px + var(--safe-right));
+  }
+
+  .congrats-badge {
+    padding-inline: 12px;
   }
 }
 </style>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
@@ -8,10 +8,32 @@ const emit = defineEmits<{
   (e: 'input', data: string): void
 }>()
 
+const props = withDefaults(defineProps<{
+  fontSize?: number
+  autoFocus?: boolean
+}>(), {
+  fontSize: 15,
+  autoFocus: true,
+})
+
 const containerRef = ref<HTMLElement | null>(null)
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
 let resizeObserver: ResizeObserver | null = null
+let resizeFrame: number | null = null
+
+function scheduleFit(): void {
+  if (resizeFrame !== null) return
+  resizeFrame = window.requestAnimationFrame(() => {
+    resizeFrame = null
+    try {
+      fitAddon?.fit()
+      if (terminal !== null && terminal.rows > 0) terminal.refresh(0, terminal.rows - 1)
+    } catch {
+      // 容器隐藏或可视视口切换中时，下一次观察会重新测量。
+    }
+  })
+}
 
 function write(data: string): void {
   terminal?.write(data)
@@ -21,75 +43,92 @@ function focus(): void {
   terminal?.focus()
 }
 
+watch(
+  () => props.fontSize,
+  (fontSize) => {
+    if (terminal === null) return
+    terminal.options.fontSize = fontSize
+    scheduleFit()
+  },
+)
+
+watch(
+  () => props.autoFocus,
+  (autoFocus) => {
+    if (autoFocus) focus()
+  },
+  { flush: 'post' },
+)
+
 onMounted(() => {
   const container = containerRef.value
   if (container === null) return
 
+  const terminalFontFamily =
+    getComputedStyle(document.documentElement).getPropertyValue('--font-terminal').trim() ||
+    '"CaskaydiaCove Nerd Font Mono", "JetBrains Mono", "Noto Sans Mono CJK SC", monospace'
+
   terminal = new Terminal({
-    fontFamily: '"JetBrains Mono", "Fira Code", Consolas, "Noto Sans Mono CJK SC", monospace',
-    fontSize: 14,
-    lineHeight: 1.25,
+    fontFamily: terminalFontFamily,
+    fontSize: props.fontSize,
+    fontWeight: 400,
+    fontWeightBold: 600,
+    lineHeight: 1.34,
+    letterSpacing: 0,
     cursorBlink: true,
     cursorStyle: 'block',
     scrollback: 5000,
     convertEol: false,
+    minimumContrastRatio: 4.5,
+    rescaleOverlappingGlyphs: true,
     theme: {
-      background: '#0b1220',
-      foreground: '#d6deeb',
-      cursor: '#7dd3fc',
-      cursorAccent: '#0b1220',
-      selectionBackground: '#1e3a5f',
-      black: '#0b1220',
-      blue: '#82aaff',
-      cyan: '#7dd3fc',
-      green: '#7fdba7',
-      magenta: '#c792ea',
-      red: '#ff7a93',
-      white: '#d6deeb',
-      yellow: '#ffd580',
-      brightBlack: '#5b7185',
-      brightBlue: '#82aaff',
-      brightCyan: '#89ddff',
-      brightGreen: '#a8e6c0',
-      brightMagenta: '#d0a9f5',
-      brightRed: '#ff9eb0',
-      brightWhite: '#ffffff',
-      brightYellow: '#ffe0a3',
+      background: '#090d10',
+      foreground: '#dce3e1',
+      cursor: '#83e1de',
+      cursorAccent: '#090d10',
+      selectionBackground: '#244946',
+      black: '#090d10',
+      blue: '#78a9e3',
+      cyan: '#6bd5d2',
+      green: '#7fce96',
+      magenta: '#bc97d8',
+      red: '#e17982',
+      white: '#dce3e1',
+      yellow: '#dfb968',
+      brightBlack: '#71807d',
+      brightBlue: '#94bdf0',
+      brightCyan: '#83e1de',
+      brightGreen: '#9adeac',
+      brightMagenta: '#d1abe9',
+      brightRed: '#ee979e',
+      brightWhite: '#f4f7f6',
+      brightYellow: '#efca80',
     },
   })
   fitAddon = new FitAddon()
   terminal.loadAddon(fitAddon)
   terminal.open(container)
-  fitAddon.fit()
+  scheduleFit()
 
-  // xterm.js 自带 ClipboardEvent 处理：有选区时 Ctrl+C 复制、否则作为
-  // \x03 发送给真实 tty，粘贴则读取事件中的 clipboardData。不要在这里
-  // 无条件拦截快捷键调用 navigator.clipboard，否则权限拒绝或非安全上下文
-  // 会同时破坏 xterm 的原生降级路径。
+  // 保留 xterm 的 ClipboardEvent 处理：有选区时复制，否则 Ctrl+C 透传给 tty。
+  // 不直接调用 navigator.clipboard，避免权限拒绝时破坏原生降级路径。
 
   terminal.onData((data) => emit('input', data))
-  terminal.focus()
+  if (props.autoFocus) terminal.focus()
   container.addEventListener('click', focus)
 
-  resizeObserver = new ResizeObserver(() => {
-    try {
-      fitAddon?.fit()
-    } catch {
-      // 容器隐藏时 fit 可能失败，忽略
-    }
-    // 跨断点缩放时容器最终尺寸在下一帧才稳定，再校正一次行列数
-    requestAnimationFrame(() => {
-      try {
-        fitAddon?.fit()
-      } catch {
-        // 同上
-      }
-    })
-  })
+  resizeObserver = new ResizeObserver(scheduleFit)
   resizeObserver.observe(container)
+  window.addEventListener('resize', scheduleFit, { passive: true })
+  window.visualViewport?.addEventListener('resize', scheduleFit, { passive: true })
+  document.fonts?.ready.then(scheduleFit).catch(() => undefined)
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', scheduleFit)
+  window.visualViewport?.removeEventListener('resize', scheduleFit)
+  if (resizeFrame !== null) window.cancelAnimationFrame(resizeFrame)
+  resizeFrame = null
   resizeObserver?.disconnect()
   resizeObserver = null
   terminal?.dispose()
@@ -101,19 +140,40 @@ defineExpose({ write, focus })
 </script>
 
 <template>
-  <div ref="containerRef" class="lab-terminal" aria-label="Linux 终端" />
+  <div class="lab-terminal">
+    <div ref="containerRef" class="terminal-viewport" aria-label="Linux 终端" />
+  </div>
 </template>
 
 <style scoped>
 .lab-terminal {
   width: 100%;
   height: 100%;
-  padding: 8px;
-  box-sizing: border-box;
-  background: #0b1220;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px 14px;
+  background: #090d0f;
+  overflow: hidden;
+  border: var(--hairline) solid #273034;
+  border-radius: 8px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.025), 0 14px 34px rgba(0, 0, 0, 0.2);
+  contain: layout paint;
+  touch-action: pan-y;
 }
 
-.lab-terminal :deep(.xterm) {
+.terminal-viewport {
+  width: 100%;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.terminal-viewport :deep(.xterm) {
+  height: 100%;
+}
+
+.terminal-viewport :deep(.xterm-viewport) {
+  scrollbar-color: #3a474b transparent;
 }
 </style>

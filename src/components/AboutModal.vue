@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { CTF_POSITIONING, LAB_DIRECTIONS } from '../data/levels'
 import { BUILD_INFO } from '../services/build-info'
+import AppIcon from './AppIcon.vue'
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -68,7 +69,17 @@ onBeforeUnmount(() => {
     >
       <header class="modal-header">
         <h2 id="about-dialog-title">关于 HASHTEAM 安全实验室</h2>
-        <button ref="closeButtonRef" type="button" class="btn-close" aria-label="关闭" @click="close">×</button>
+        <button
+          ref="closeButtonRef"
+          type="button"
+          class="btn-close"
+          aria-label="关闭"
+          data-tooltip="关闭"
+          data-tooltip-placement="left"
+          @click="close"
+        >
+          <AppIcon name="x" :size="18" />
+        </button>
       </header>
       <div class="modal-body">
         <p>
@@ -110,88 +121,85 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   z-index: 60;
+  width: 100%;
+  height: 100vh;
+  height: 100svh;
+  height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(7, 11, 20, 0.7);
+  padding: calc(20px + var(--safe-top)) calc(20px + var(--safe-right)) calc(20px + var(--safe-bottom)) calc(20px + var(--safe-left));
+  background: var(--overlay-backdrop);
+  backdrop-filter: blur(10px) saturate(115%);
+  box-sizing: border-box;
 }
 
 .modal-card {
-  width: min(620px, 92vw);
-  max-height: 80vh;
+  width: min(620px, 100%);
+  max-height: min(720px, 100%);
   display: flex;
   flex-direction: column;
-  background: #0f1830;
-  border: 1px solid #22314f;
-  border-radius: 12px;
+  background: var(--surface-1);
+  border: var(--hairline) solid var(--border-strong);
+  border-radius: 8px;
   overflow: hidden;
+  box-shadow: var(--shadow-dialog);
+  animation: dialog-rise var(--duration-slow) var(--ease-out) both;
 }
 
 .modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
-  border-bottom: 1px solid #1c2a44;
+  padding: 17px 20px 17px 24px;
+  border-bottom: var(--hairline) solid var(--border-subtle);
 }
 
 .modal-header h2 {
   margin: 0;
-  font-size: 17px;
-  color: #eef3fc;
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 720;
+  color: var(--text-primary);
 }
 
 .btn-close {
-  font-size: 22px;
-  line-height: 1;
-  color: #7d8aa5;
-  background: none;
-  border: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  background: transparent;
+  border: var(--hairline) solid transparent;
+  border-radius: 7px;
   cursor: pointer;
-  padding: 0 4px;
+  padding: 0;
 }
 
 .btn-close:hover {
-  color: #e8eef9;
+  color: var(--text-primary);
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  transform: rotate(2deg);
 }
 
 .modal-body {
-  padding: 20px 24px;
+  padding: 22px 24px 26px;
   overflow-y: auto;
 }
 
 .modal-body h3 {
   margin: 18px 0 8px;
   font-size: 14px;
-  color: #38bdf8;
+  font-weight: 720;
+  color: var(--accent-cyan);
 }
 
 .modal-body p,
 .modal-body li {
-  font-size: 14px;
-  line-height: 1.85;
-  color: #c7d3e8;
-}
-
-.modal-body a {
-  color: #7dd3fc;
-}
-
-.build-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 0;
-  color: #7d8aa5;
-}
-
-.build-info code {
-  padding: 2px 6px;
-  color: #c7d3e8;
-  background: #111c33;
-  border: 1px solid #22314f;
-  border-radius: 4px;
-  font-size: 12px;
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--text-secondary);
 }
 
 .modal-body ul {
@@ -199,18 +207,90 @@ onBeforeUnmount(() => {
   padding-left: 20px;
 }
 
-@media (max-width: 520px) {
-  .modal-header {
-    padding: 12px 16px;
+.modal-body li + li {
+  margin-top: 7px;
+}
+
+.modal-body a {
+  color: var(--accent-cyan);
+}
+
+.build-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+  color: var(--text-muted);
+}
+
+.build-info code {
+  padding: 2px 6px;
+  color: var(--text-secondary);
+  background: var(--surface-2);
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+@keyframes dialog-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
   }
 
-  .modal-body {
-    padding: 16px;
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 480px) {
+  .modal-mask {
+    padding: calc(12px + var(--safe-top)) calc(12px + var(--safe-right)) calc(12px + var(--safe-bottom)) calc(12px + var(--safe-left));
+  }
+
+  .modal-header {
+    gap: 12px;
+    padding: 12px 14px 12px 16px;
+  }
+
+  .modal-header h2 {
+    font-size: 16px;
+    line-height: 1.4;
   }
 
   .btn-close {
-    min-width: 44px;
-    min-height: 44px;
+    flex: 0 0 44px;
+  }
+
+  .modal-body {
+    padding: 14px 16px 18px;
+  }
+}
+
+@media (max-height: 600px) {
+  .modal-mask {
+    align-items: stretch;
+    padding-top: calc(8px + var(--safe-top));
+    padding-bottom: calc(8px + var(--safe-bottom));
+  }
+
+  .modal-card {
+    max-height: 100%;
+    margin: auto;
+  }
+
+  .modal-header {
+    padding-block: 8px;
+  }
+
+  .modal-body {
+    padding-top: 10px;
+    padding-bottom: 12px;
+  }
+
+  .modal-body h3 {
+    margin-top: 12px;
   }
 }
 </style>

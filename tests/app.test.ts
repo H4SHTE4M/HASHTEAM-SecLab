@@ -63,11 +63,14 @@ describe('application release flows', () => {
   })
 
   it('帮助和关于入口互斥，程序化切换也不会产生两个 aria-modal', async () => {
+    vi.useFakeTimers()
     vmMock.stage.value = 'ready'
     const wrapper = mount(App, { attachTo: document.body })
     await nextTick()
+    await vi.advanceTimersByTimeAsync(1_000)
+    await nextTick()
 
-    await wrapper.get('.actions button:last-child').trigger('click')
+    await wrapper.get('button[aria-label="关于实验室"]').trigger('click')
     expect(wrapper.findAll('[aria-modal="true"]')).toHaveLength(1)
     expect(wrapper.text()).toContain('关于 HASHTEAM 安全实验室')
 
@@ -81,5 +84,6 @@ describe('application release flows', () => {
     expect(wrapper.text()).not.toContain('关于 HASHTEAM 安全实验室')
 
     wrapper.unmount()
+    vi.useRealTimers()
   })
 })
