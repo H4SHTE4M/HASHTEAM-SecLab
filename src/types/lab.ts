@@ -114,8 +114,17 @@ export interface CompletionSummary {
   next: string
 }
 
-/** 学习界面的提示密度；不影响关卡环境与判题。 */
+/** 学习路径；不影响关卡环境与 VM 最终状态判题。 */
 export type LabMode = 'guided' | 'challenge'
+
+/** 首次通关时实际采用的学习路径。 */
+export type CompletionPath = 'guided' | 'challenge' | 'mixed'
+
+export interface LevelCompletionRecord {
+  path: CompletionPath
+  /** 通关前累计展开的提示层数；每关固定为 0–3。 */
+  hintsUsed: number
+}
 
 /** 界面配色主题。 */
 export type ThemeName = 'light' | 'dark'
@@ -163,6 +172,10 @@ export interface LabProgress {
   guideSteps: Record<number, number>
   /** 每关已经留下完成证据的步骤 id。 */
   completedSteps: Record<number, number[]>
+  /** 最近一次重置本关后曾经打开过引导内容的关卡。 */
+  guidedAssistanceLevels: number[]
+  /** 新版首次通关记录；从旧存档迁移的已完成关卡允许没有记录。 */
+  completionRecords: Record<number, LevelCompletionRecord>
   startedAt: number
   updatedAt: number
 }

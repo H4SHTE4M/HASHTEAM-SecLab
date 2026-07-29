@@ -1,8 +1,9 @@
 import { ref } from 'vue'
-import type { BootStage, ProtocolMessage, VirtualMachineController } from '../types/lab'
+import type { BootStage, LabMode, ProtocolMessage, VirtualMachineController } from '../types/lab'
 import { V86Controller } from '../services/vm-controller'
 import { useSerialProtocol } from './useSerialProtocol'
 import { useLabProgress } from './useLabProgress'
+import { useLabPreferences } from './useLabPreferences'
 import { getLevel, TOTAL_LEVELS } from '../data/levels'
 import { log, clear as clearBootLog } from '../services/boot-logger'
 
@@ -13,6 +14,8 @@ export interface VirtualMachineOptions {
   createController?: (onStageChange: (stage: BootStage) => void) => VirtualMachineController
   /** 从加载首个静态资源到 Linux 发出 ready 协议的全流程最长等待时间。 */
   readyTimeoutMs?: number
+  /** 当前学习模式读取器；测试可注入以覆盖判题分流。 */
+  getMode?: () => LabMode
 }
 
 function isKnownLevel(level: number): boolean {
@@ -30,6 +33,9 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
   const errorMessage = ref<string | null>(null)
   const displayCallbacks = new Set<(data: string) => void>()
   const progress = useLabProgress()
+  const getMode =
+    options.getMode ??
+    (() => useLabPreferences().state.mode ?? 'guided')
 
   const createController =
     options.createController ??
@@ -102,10 +108,22 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
       case 'level-result':
         // 只接受当前关卡的通过消息，避免迟到或异常协议改写其他关卡进度。
         if (message.status === 'passed' && message.level === progress.state.currentLevel) {
+          const mode = getMode()
           const requiredSteps = getLevel(message.level)?.steps.map((step) => step.id) ?? []
           const completedSteps = new Set(progress.completedStepsFor(message.level))
-          if (requiredSteps.every((stepId) => completedSteps.has(stepId))) {
-            progress.complete(message.level)
+          if (
+            mode === 'challenge' ||
+            requiredSteps.every((stepId) => completedSteps.has(stepId))
+          ) {
+            progress.complete(message.level, {
+              path:
+                mode === 'guided'
+                  ? 'guided'
+                  : progress.hasGuidedAssistance(message.level)
+                    ? 'mixed'
+                    : 'challenge',
+              hintsUsed: progress.hintsUsedFor(message.level),
+            })
           } else {
             const notice =
               '\r\n\x1b[33m环境结果已经正确，但还需要完成右侧当前教学步骤，' +

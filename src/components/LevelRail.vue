@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import type { LevelDef } from '../types/lab'
+import type { LevelCompletionRecord, LevelDef } from '../types/lab'
 import AppIcon from './AppIcon.vue'
 
 const props = defineProps<{
   levels: LevelDef[]
   currentLevel: number
   completedLevels: number[]
+  completionRecords: Record<number, LevelCompletionRecord>
   shortLandscapeSplit?: boolean
 }>()
 
@@ -22,6 +23,19 @@ let feedbackTimer: number | null = null
 
 function isUnlocked(level: number): boolean {
   return level === 1 || completed.value.has(level - 1)
+}
+
+function completionDescription(level: number): string {
+  const record = props.completionRecords[level]
+  if (!record) return '，历史完成'
+  const path =
+    record.path === 'challenge'
+      ? '挑战模式完成'
+      : record.path === 'mixed'
+        ? '混合模式完成'
+        : '引导模式完成'
+  const hints = record.hintsUsed === 0 ? '未使用提示' : `展开 ${record.hintsUsed} 层提示`
+  return `，${path}，${hints}`
 }
 
 function clearFeedbackTimer(): void {
@@ -91,6 +105,8 @@ onBeforeUnmount(clearFeedbackTimer)
         :class="{
           active: level.id === currentLevel,
           completed: completed.has(level.id),
+          'challenge-completed': completionRecords[level.id]?.path === 'challenge',
+          'mixed-completed': completionRecords[level.id]?.path === 'mixed',
           locked: !isUnlocked(level.id),
           'just-completed': recentlyCompleted === level.id,
           'just-unlocked': recentlyUnlocked === level.id,
@@ -98,15 +114,15 @@ onBeforeUnmount(clearFeedbackTimer)
         :data-level="level.id"
         :disabled="!isUnlocked(level.id)"
         :aria-current="level.id === currentLevel ? 'step' : undefined"
-        :aria-label="`第 ${level.id} 关：${level.name}${completed.has(level.id) ? '，已完成' : ''}`"
-        :title="`第 ${level.id} 关 · ${level.name}`"
+        :aria-label="`第 ${level.id} 关：${level.name}${completed.has(level.id) ? completionDescription(level.id) : ''}`"
+        :title="`第 ${level.id} 关 · ${level.name}${completed.has(level.id) ? completionDescription(level.id) : ''}`"
         @click="emit('select', level.id)"
       >
         <Transition name="level-state" mode="out-in">
           <AppIcon
             v-if="completed.has(level.id)"
             :key="`completed-${level.id}`"
-            name="check"
+            :name="completionRecords[level.id]?.path === 'challenge' ? 'crosshair' : 'check'"
             :size="16"
           />
           <AppIcon
@@ -201,6 +217,14 @@ onBeforeUnmount(clearFeedbackTimer)
 
 .level-button.completed:not(.active) {
   color: var(--accent-green);
+}
+
+.level-button.challenge-completed:not(.active) {
+  color: var(--accent-violet);
+}
+
+.level-button.mixed-completed:not(.active) {
+  color: var(--accent-amber);
 }
 
 .level-button.locked {

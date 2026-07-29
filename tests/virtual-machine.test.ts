@@ -176,6 +176,7 @@ describe('virtual machine lifecycle', () => {
   it('环境 check 通过但教学步骤未完成时不解锁关卡', async () => {
     let controller: FakeController | undefined
     const vm = createVirtualMachine({
+      getMode: () => 'guided',
       createController: (onStageChange) => {
         controller = new FakeController(onStageChange)
         return controller
@@ -195,6 +196,54 @@ describe('virtual machine lifecycle', () => {
     for (const step of getLevel(1)!.steps) progress.completeStep(1, step.id)
     controller?.emit('@@HASHTEAM:{"type":"level-result","level":1,"status":"passed"}\n')
     expect(progress.state.completedLevels).toContain(1)
+    expect(progress.state.completionRecords[1]).toEqual({ path: 'guided', hintsUsed: 0 })
+    await vm.dispose()
+  })
+
+  it('挑战模式无需教学步骤即可通关，并记录提示使用量', async () => {
+    let controller: FakeController | undefined
+    const vm = createVirtualMachine({
+      getMode: () => 'challenge',
+      createController: (onStageChange) => {
+        controller = new FakeController(onStageChange)
+        return controller
+      },
+    })
+    const progress = useLabProgress()
+    progress.useHint(1)
+    progress.useHint(1)
+
+    await vm.boot()
+    controller?.emit('@@HASHTEAM:{"type":"ready","version":1}\n')
+    controller?.emit('@@HASHTEAM:{"type":"level-result","level":1,"status":"failed"}\n')
+    expect(progress.state.completedLevels).not.toContain(1)
+
+    controller?.emit('@@HASHTEAM:{"type":"level-result","level":1,"status":"passed"}\n')
+    expect(progress.state.completedLevels).toContain(1)
+    expect(progress.state.completionRecords[1]).toEqual({
+      path: 'challenge',
+      hintsUsed: 2,
+    })
+    await vm.dispose()
+  })
+
+  it('看过引导后切回挑战通关会记录为混合完成', async () => {
+    let controller: FakeController | undefined
+    const vm = createVirtualMachine({
+      getMode: () => 'challenge',
+      createController: (onStageChange) => {
+        controller = new FakeController(onStageChange)
+        return controller
+      },
+    })
+    const progress = useLabProgress()
+    progress.markGuided(1)
+
+    await vm.boot()
+    controller?.emit('@@HASHTEAM:{"type":"ready","version":1}\n')
+    controller?.emit('@@HASHTEAM:{"type":"level-result","level":1,"status":"passed"}\n')
+
+    expect(progress.state.completionRecords[1]).toEqual({ path: 'mixed', hintsUsed: 0 })
     await vm.dispose()
   })
 })

@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   LEGACY_PROGRESS_STORAGE_KEY,
+  MIGRATABLE_PROGRESS_STORAGE_KEY,
   PREVIOUS_PROGRESS_STORAGE_KEY,
   PROGRESS_STORAGE_KEY,
   advanceGuideStep,
@@ -11,8 +12,9 @@ import {
   createSafeStorage,
   createDefaultProgress,
   loadProgress,
+  markGuidedAssistance,
   recordHint,
-  resetGuideStep,
+  resetLevelAttempt,
   resetAllProgress,
   saveProgress,
   setCurrentLevel,
@@ -30,6 +32,7 @@ import {
 import type { LabProgress } from '../src/types/lab'
 
 const TOTAL = 10
+const GUIDED_COMPLETION = { path: 'guided' as const, hintsUsed: 0 }
 
 describe('lab-progress（基于 localStorage）', () => {
   beforeEach(() => {
@@ -43,28 +46,36 @@ describe('lab-progress（基于 localStorage）', () => {
     expect(p.hintsUsed).toEqual({})
     expect(p.guideSteps).toEqual({})
     expect(p.completedSteps).toEqual({})
+    expect(p.guidedAssistanceLevels).toEqual([])
+    expect(p.completionRecords).toEqual({})
   })
 
   it('完成关卡后持久化，重新加载仍在', () => {
     const p = loadProgress(window.localStorage, TOTAL)
-    expect(completeLevel(window.localStorage, p, 1)).toBe(true)
+    expect(completeLevel(window.localStorage, p, 1, GUIDED_COMPLETION)).toBe(true)
     const reloaded = loadProgress(window.localStorage, TOTAL)
     expect(reloaded.completedLevels).toEqual([1])
+    expect(reloaded.completionRecords[1]).toEqual(GUIDED_COMPLETION)
   })
 
-  it('重复完成同一关不重复写入', () => {
+  it('重复完成同一关不重复写入或覆盖首次完成记录', () => {
     const p = loadProgress(window.localStorage, TOTAL)
-    expect(completeLevel(window.localStorage, p, 1)).toBe(true)
-    expect(completeLevel(window.localStorage, p, 1)).toBe(false)
+    expect(
+      completeLevel(window.localStorage, p, 1, { path: 'challenge', hintsUsed: 1 }),
+    ).toBe(true)
+    expect(
+      completeLevel(window.localStorage, p, 1, { path: 'mixed', hintsUsed: 3 }),
+    ).toBe(false)
     expect(p.completedLevels).toEqual([1])
     const reloaded = loadProgress(window.localStorage, TOTAL)
     expect(reloaded.completedLevels).toEqual([1])
+    expect(reloaded.completionRecords[1]).toEqual({ path: 'challenge', hintsUsed: 1 })
   })
 
   it('多关完成按编号排序保存', () => {
     const p = loadProgress(window.localStorage, TOTAL)
-    completeLevel(window.localStorage, p, 3)
-    completeLevel(window.localStorage, p, 1)
+    completeLevel(window.localStorage, p, 3, GUIDED_COMPLETION)
+    completeLevel(window.localStorage, p, 1, GUIDED_COMPLETION)
     expect(p.completedLevels).toEqual([1, 3])
   })
 
@@ -72,14 +83,16 @@ describe('lab-progress（基于 localStorage）', () => {
     const p = loadProgress(window.localStorage, TOTAL)
     expect(recordHint(window.localStorage, p, 4)).toBe(1)
     expect(recordHint(window.localStorage, p, 4)).toBe(2)
+    expect(recordHint(window.localStorage, p, 4)).toBe(3)
+    expect(recordHint(window.localStorage, p, 4)).toBe(3)
     const reloaded = loadProgress(window.localStorage, TOTAL)
-    expect(reloaded.hintsUsed[4]).toBe(2)
+    expect(reloaded.hintsUsed[4]).toBe(3)
   })
 
   it('切换当前关卡并持久化', () => {
     const p = loadProgress(window.localStorage, TOTAL)
     for (let level = 1; level <= 4; level += 1) {
-      completeLevel(window.localStorage, p, level)
+      completeLevel(window.localStorage, p, level, GUIDED_COMPLETION)
     }
     setCurrentLevel(window.localStorage, p, 5)
     const reloaded = loadProgress(window.localStorage, TOTAL)
@@ -93,20 +106,26 @@ describe('lab-progress（基于 localStorage）', () => {
     expect(advanceGuideStep(window.localStorage, p, 2, 3)).toBe(2)
     expect(loadProgress(window.localStorage, TOTAL).guideSteps[2]).toBe(2)
 
-    resetGuideStep(window.localStorage, p, 2)
+    resetLevelAttempt(window.localStorage, p, 2)
     expect(loadProgress(window.localStorage, TOTAL).guideSteps[2]).toBe(0)
     expect(loadProgress(window.localStorage, TOTAL).completedSteps[2]).toEqual([])
   })
 
-  it('步骤完成证据按关卡持久化、去重，并在重置本关时清空', () => {
+  it('重置本关清空步骤、提示和引导使用标记', () => {
     const p = loadProgress(window.localStorage, TOTAL)
     expect(completeLearningStep(window.localStorage, p, 2, 1)).toEqual([1])
     expect(completeLearningStep(window.localStorage, p, 2, 1)).toEqual([1])
     expect(completeLearningStep(window.localStorage, p, 2, 3)).toEqual([1, 3])
+    recordHint(window.localStorage, p, 2)
+    expect(markGuidedAssistance(window.localStorage, p, 2)).toBe(true)
+    expect(markGuidedAssistance(window.localStorage, p, 2)).toBe(false)
     expect(loadProgress(window.localStorage, TOTAL).completedSteps[2]).toEqual([1, 3])
 
-    resetGuideStep(window.localStorage, p, 2)
-    expect(loadProgress(window.localStorage, TOTAL).completedSteps[2]).toEqual([])
+    resetLevelAttempt(window.localStorage, p, 2)
+    const reloaded = loadProgress(window.localStorage, TOTAL)
+    expect(reloaded.completedSteps[2]).toEqual([])
+    expect(reloaded.hintsUsed[2]).toBeUndefined()
+    expect(reloaded.guidedAssistanceLevels).not.toContain(2)
   })
 
   it('发现旧版存档时一次性重置并产生一次迁移提示', () => {
@@ -130,6 +149,29 @@ describe('lab-progress（基于 localStorage）', () => {
     expect(consumeProgressResetNotice(window.localStorage)).toBe(true)
   })
 
+  it('v3 存档无损迁移到 v4，旧完成关卡不伪造完成模式', () => {
+    const v3 = {
+      currentLevel: 3,
+      completedLevels: [1, 2],
+      hintsUsed: { 3: 2 },
+      guideSteps: { 3: 1 },
+      completedSteps: { 3: [1] },
+      startedAt: 100,
+      updatedAt: 200,
+    }
+    window.localStorage.setItem(MIGRATABLE_PROGRESS_STORAGE_KEY, JSON.stringify(v3))
+
+    const migrated = loadProgress(window.localStorage, TOTAL)
+    expect(migrated).toEqual({
+      ...v3,
+      guidedAssistanceLevels: [],
+      completionRecords: {},
+    })
+    expect(window.localStorage.getItem(MIGRATABLE_PROGRESS_STORAGE_KEY)).toBeNull()
+    expect(window.localStorage.getItem(PROGRESS_STORAGE_KEY)).not.toBeNull()
+    expect(consumeProgressResetNotice(window.localStorage)).toBe(false)
+  })
+
   it('损坏的存档不会导致异常，直接从头开始', () => {
     window.localStorage.setItem(PROGRESS_STORAGE_KEY, '{{{broken json')
     const p = loadProgress(window.localStorage, TOTAL)
@@ -146,6 +188,8 @@ describe('lab-progress（基于 localStorage）', () => {
         hintsUsed: {},
         guideSteps: {},
         completedSteps: {},
+        guidedAssistanceLevels: [],
+        completionRecords: {},
         startedAt: 0,
         updatedAt: 0,
       }),
@@ -155,15 +199,37 @@ describe('lab-progress（基于 localStorage）', () => {
   })
 
   it('拒绝重复关卡、非法提示次数和非有限时间戳', () => {
+    const valid = {
+      currentLevel: 1,
+      completedLevels: [],
+      hintsUsed: {},
+      guideSteps: {},
+      completedSteps: {},
+      guidedAssistanceLevels: [],
+      completionRecords: {},
+      startedAt: 1,
+      updatedAt: 1,
+    }
     const invalidRecords = [
-      { currentLevel: 1, completedLevels: [1, 1], hintsUsed: {}, guideSteps: {}, completedSteps: {}, startedAt: 1, updatedAt: 1 },
-      { currentLevel: 3, completedLevels: [1, 3], hintsUsed: {}, guideSteps: {}, completedSteps: {}, startedAt: 1, updatedAt: 1 },
-      { currentLevel: 5, completedLevels: [1, 2], hintsUsed: {}, guideSteps: {}, completedSteps: {}, startedAt: 1, updatedAt: 1 },
-      { currentLevel: 1, completedLevels: [], hintsUsed: { 2: -1 }, guideSteps: {}, completedSteps: {}, startedAt: 1, updatedAt: 1 },
-      { currentLevel: 1, completedLevels: [], hintsUsed: { 99: 1 }, guideSteps: {}, completedSteps: {}, startedAt: 1, updatedAt: 1 },
-      { currentLevel: 1, completedLevels: [], hintsUsed: {}, guideSteps: { 1: -1 }, completedSteps: {}, startedAt: 1, updatedAt: 1 },
-      { currentLevel: 1, completedLevels: [], hintsUsed: {}, guideSteps: {}, completedSteps: { 1: [1, 1] }, startedAt: 1, updatedAt: 1 },
-      { currentLevel: 1, completedLevels: [], hintsUsed: {}, guideSteps: {}, completedSteps: {}, startedAt: 'now', updatedAt: 1 },
+      { ...valid, completedLevels: [1, 1] },
+      { ...valid, currentLevel: 3, completedLevels: [1, 3] },
+      { ...valid, currentLevel: 5, completedLevels: [1, 2] },
+      { ...valid, hintsUsed: { 2: -1 } },
+      { ...valid, hintsUsed: { 99: 1 } },
+      { ...valid, guideSteps: { 1: -1 } },
+      { ...valid, completedSteps: { 1: [1, 1] } },
+      { ...valid, guidedAssistanceLevels: [1, 1] },
+      {
+        ...valid,
+        currentLevel: 2,
+        completedLevels: [1],
+        completionRecords: { 1: { path: 'challenge', hintsUsed: 4 } },
+      },
+      {
+        ...valid,
+        completionRecords: { 1: { path: 'challenge', hintsUsed: 0 } },
+      },
+      { ...valid, startedAt: 'now' },
     ]
 
     for (const record of invalidRecords) {
@@ -175,13 +241,16 @@ describe('lab-progress（基于 localStorage）', () => {
 
   it('resetAllProgress 清空全部进度', () => {
     const p = loadProgress(window.localStorage, TOTAL)
-    completeLevel(window.localStorage, p, 1)
-    completeLevel(window.localStorage, p, 2)
+    completeLevel(window.localStorage, p, 1, GUIDED_COMPLETION)
+    completeLevel(window.localStorage, p, 2, GUIDED_COMPLETION)
     advanceGuideStep(window.localStorage, p, 2, 3)
+    markGuidedAssistance(window.localStorage, p, 2)
     const fresh = resetAllProgress(window.localStorage)
     expect(fresh.completedLevels).toEqual([])
     expect(fresh.guideSteps).toEqual({})
     expect(fresh.completedSteps).toEqual({})
+    expect(fresh.guidedAssistanceLevels).toEqual([])
+    expect(fresh.completionRecords).toEqual({})
     const reloaded = loadProgress(window.localStorage, TOTAL)
     expect(reloaded.completedLevels).toEqual([])
   })
@@ -202,7 +271,7 @@ describe('lab-progress（基于 localStorage）', () => {
       removeItem: (k) => void map.delete(k),
     }
     const p = loadProgress(mem, TOTAL)
-    completeLevel(mem, p, 1)
+    completeLevel(mem, p, 1, GUIDED_COMPLETION)
     expect(loadProgress(mem, TOTAL).completedLevels).toEqual([1])
   })
 
