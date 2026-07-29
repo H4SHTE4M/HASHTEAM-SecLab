@@ -21,6 +21,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 // Node 端 libv86 使用 fs 直接读取所有资源路径
 
 const decoder = new TextDecoder('utf-8')
+const ANSI_SGR = String.raw`(?:\x1b\[[0-9;]*m)*`
+const GUEST_PROMPT = new RegExp(`guest@hashteam${ANSI_SGR}:${ANSI_SGR}`)
 let buffer = ''
 let cursor = 0
 
@@ -117,7 +119,7 @@ async function main() {
     await waitFor(/Password:/)
     emulator.serial0_send('definitely-wrong\n')
     await waitFor(/su: incorrect password/)
-    await waitFor(/guest@hashteam:/)
+    await waitFor(GUEST_PROMPT, 30000, 'guest 提示符')
     send('id')
     await waitFor(/uid=1000\(guest\) gid=1000\(guest\)/)
   })

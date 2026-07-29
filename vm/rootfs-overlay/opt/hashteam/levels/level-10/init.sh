@@ -1,6 +1,7 @@
 #!/bin/sh
 # 第 10 关：综合配置、权限与运行状态加固
 set -eu
+. "${HASHTEAM_LIB_DIR:-/etc/hashteam}/colors.sh"
 cd "$HOME"
 
 PORT="${HASHTEAM_SECURE_PORT:-9090}"
@@ -65,8 +66,6 @@ until netstat -tln 2>/dev/null | grep -q "0.0.0.0:$PORT "; do
     sleep 1
 done
 
-echo "──────────────────────────────────────────────"
-echo " 第 10 关 · 发现漏洞之后"
-echo "──────────────────────────────────────────────"
+ht_banner "第 10 关 · 发现漏洞之后"
 echo "内部服务进入上线前复核。请从文件、权限、进程和监听状态开始盘点。"
 echo "系统不会提前说明问题数量或最终修改值。"

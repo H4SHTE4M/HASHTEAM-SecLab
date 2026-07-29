@@ -6,19 +6,26 @@ STATE_DIR="$HOME/.hashteam"
 level=$(cat "$STATE_DIR/level" 2>/dev/null || echo 1)
 LEVELS_DIR="${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}"
 script="$LEVELS_DIR/level-$level/check.sh"
+. "${HASHTEAM_LIB_DIR:-/etc/hashteam}/colors.sh"
 
 if [ ! -f "$script" ]; then
-    echo "当前关卡没有检查脚本。" >&2
+    ht_error "当前关卡没有检查脚本。"
     exit 2
 fi
 
-if sh "$script" "$@"; then
+if output=$(sh "$script" "$@" 2>&1); then
+    rc=0
+else
+    rc=$?
+fi
+ht_render_result "$rc" "$output"
+
+if [ "$rc" -eq 0 ]; then
     # 记录完成状态，供 hashteamctl goto 的解锁校验使用
     hashteamctl mark-completed "$level" 2>/dev/null || true
     printf '@@HASHTEAM:{"type":"level-result","level":%s,"status":"passed"}\n' "$level"
     exit 0
 else
-    rc=$?
     printf '@@HASHTEAM:{"type":"error","message":"level %s check failed"}\n' "$level"
     exit "$rc"
 fi
