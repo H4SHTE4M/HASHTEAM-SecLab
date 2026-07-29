@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Verify the BusyBox SUID boundary embedded in the generated initramfs."""
+"""Verify initramfs overlay contents, permissions, and BusyBox trust boundaries."""
 
 from __future__ import annotations
 
 import gzip
 import hashlib
+import runpy
 import stat
 import sys
 from dataclasses import dataclass
@@ -61,17 +62,51 @@ def describe(entry: Entry) -> str:
     return f"{stat.filemode(entry.mode)} uid={entry.uid} gid={entry.gid}"
 
 
+def read_locked_checksum(path: Path, member: str) -> str:
+    fields = path.read_text(encoding="utf-8").split()
+    require(
+        len(fields) == 2 and fields[1] == member,
+        f"{path.name} 格式无效，应锁定 {member}",
+    )
+    return fields[0]
+
+
+def verify_overlay_manifest(entries: dict[str, Entry], repository: Path) -> None:
+    packer = runpy.run_path(str(repository / "scripts" / "pack-initramfs.py"))
+    expected_entries = packer["collect_entries"](
+        str(repository / "vm" / "rootfs-overlay"), None, None
+    )
+    expected = {entry.name: entry for entry in expected_entries}
+    expected_names = set(expected) | {"bin/busybox", "bin/busybox-suid"}
+    actual_names = set(entries)
+    missing = sorted(expected_names - actual_names)
+    unexpected = sorted(actual_names - expected_names)
+    require(not missing, f"initramfs 缺少 overlay 条目：{missing[:8]}")
+    require(not unexpected, f"initramfs 出现未跟踪条目：{unexpected[:8]}")
+
+    for name, expected_entry in expected.items():
+        actual = entries[name]
+        require(
+            (actual.mode, actual.uid, actual.gid)
+            == (expected_entry.mode, expected_entry.uid, expected_entry.gid),
+            f"{name} 权限或属主与 overlay 打包规则不一致：{describe(actual)}",
+        )
+        require(actual.data == expected_entry.data, f"{name} 内容与当前 overlay 不一致")
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print(f"用法：{sys.argv[0]} public/vm/rootfs.cpio.gz", file=sys.stderr)
         return 2
 
+    repository = Path(__file__).resolve().parents[1]
     initramfs = Path(sys.argv[1])
     entries, trailing = parse_newc(gzip.decompress(initramfs.read_bytes()))
     require(
         trailing.strip(b"\0") == b"",
         "initramfs 在首个 CPIO 归档后仍有非零内容；拒绝未检查的串联归档",
     )
+    verify_overlay_manifest(entries, repository)
 
     main_busybox = entries.get("bin/busybox")
     suid_busybox = entries.get("bin/busybox-suid")
@@ -132,20 +167,23 @@ def main() -> int:
     require(elf[:7] == b"\x7fELF\x01\x01\x01", "SUID helper 不是 32 位小端 ELF")
     require(int.from_bytes(elf[18:20], "little") == 3, "SUID helper 不是 i386 ELF")
 
-    checksum_file = Path(__file__).resolve().parents[1] / "vm" / "busybox-suid.sha256"
-    checksum_fields = checksum_file.read_text(encoding="utf-8").split()
+    main_busybox_sha256 = hashlib.sha256(main_busybox.data).hexdigest()
     require(
-        len(checksum_fields) == 2 and checksum_fields[1] == "bin/busybox-suid",
-        "SUID helper 校验文件格式无效",
+        main_busybox_sha256
+        == read_locked_checksum(repository / "vm" / "busybox.sha256", "bin/busybox"),
+        f"普通 BusyBox 未通过审核锁定哈希：{main_busybox_sha256}",
     )
     actual_sha256 = hashlib.sha256(elf).hexdigest()
     require(
-        actual_sha256 == checksum_fields[0],
+        actual_sha256
+        == read_locked_checksum(
+            repository / "vm" / "busybox-suid.sha256", "bin/busybox-suid"
+        ),
         f"SUID helper 未通过审核锁定哈希：{actual_sha256}",
     )
     print(
-        "✓ SUID initramfs：普通 busybox 0755，helper 4755 root:root，"
-        "唯一特权文件与 su-only 审核哈希一致，且无未检查的串联归档"
+        "✓ initramfs：overlay 清单/内容/权限一致，普通 busybox 0755，"
+        "helper 4755 root:root，唯一特权文件与 su-only 审核哈希一致"
     )
     return 0
 
@@ -154,5 +192,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except (AssertionError, OSError, ValueError) as error:
-        print(f"✗ SUID initramfs 校验失败：{error}", file=sys.stderr)
+        print(f"✗ initramfs 校验失败：{error}", file=sys.stderr)
         sys.exit(1)

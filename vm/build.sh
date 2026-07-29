@@ -45,6 +45,7 @@ SEABIOS_DEB_SHA256="${SEABIOS_DEB_SHA256:-2b590534250b940f43222eeab9a8f57f337a9d
 BUSYBOX_VERSION="1.38.0"
 BUSYBOX_SOURCE_SHA256="34f9ea6ff8636f2c9241153b9114eefa9e65674a45318ae1ef95bb5f31c53bb2"
 BUSYBOX_CROSS_COMPILE="${BUSYBOX_CROSS_COMPILE:-/opt/32/bin/i686-aosc-linux-gnu-}"
+BUSYBOX_CHECKSUM="$ROOT/vm/busybox.sha256"
 BUSYBOX_SUID_CONFIG="$ROOT/vm/busybox-suid.config"
 BUSYBOX_SUID_CHECKSUM="$ROOT/vm/busybox-suid.sha256"
 BUSYBOX_TOOLCHAIN_LOCK="$ROOT/vm/suid-toolchain.lock"
@@ -86,6 +87,10 @@ download_verified() {
 }
 
 # ---------- 1. busybox 静态用户态 ----------
+[ -f "$BUSYBOX_CHECKSUM" ] || {
+    echo "错误：缺少 $BUSYBOX_CHECKSUM" >&2
+    exit 1
+}
 if ! verify_sha256 "$BUSYBOX_DEB_SHA256" "$WORK/busybox.deb" >/dev/null 2>&1; then
     log "下载 busybox-static（i386，静态链接，GPLv2）"
     download_verified \
@@ -103,6 +108,15 @@ _busybox_built_using="$(dpkg-deb -f busybox.deb Built-Using)"
     exit 1
 }
 cp busybox-pkg/usr/bin/busybox "$WORK/busybox"
+_expected_busybox_sha256="$(awk 'NF >= 2 && $2 == "bin/busybox" { print $1 }' "$BUSYBOX_CHECKSUM")"
+[ -n "$_expected_busybox_sha256" ] || {
+    echo "错误：普通 BusyBox 校验文件格式无效" >&2
+    exit 1
+}
+verify_sha256 "$_expected_busybox_sha256" "$WORK/busybox" >/dev/null || {
+    echo "错误：普通 BusyBox 与审核锁定值不一致" >&2
+    exit 1
+}
 
 # ---------- 1b. 最小 SUID busybox（严格仅含 su）----------
 BUSYBOX_SUID="$WORK/busybox-suid"
