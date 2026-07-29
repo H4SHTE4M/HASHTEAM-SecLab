@@ -151,12 +151,9 @@ defineExpose({ write, focus })
   height: 100%;
   min-width: 0;
   min-height: 0;
-  padding: 12px 14px;
+  padding: clamp(18px, 2vw, 28px);
   background: #090d0f;
   overflow: hidden;
-  border: var(--hairline) solid #273034;
-  border-radius: 8px;
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.025), 0 14px 34px rgba(0, 0, 0, 0.2);
   contain: layout paint;
   touch-action: pan-y;
 }

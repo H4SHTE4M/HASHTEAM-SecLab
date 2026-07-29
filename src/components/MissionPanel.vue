@@ -242,10 +242,8 @@ function stepTypeLabel(type: LearningStep['type']): string {
       <p class="level-tagline">{{ level.tagline }}</p>
 
       <details class="story-details">
-        <summary>
-          <span>任务背景</span>
-          {{ level.storySummary }}
-        </summary>
+        <summary><span>任务背景</span></summary>
+        <p class="story-summary">{{ level.storySummary }}</p>
         <p>{{ level.story }}</p>
       </details>
 
@@ -531,6 +529,10 @@ function stepTypeLabel(type: LearningStep['type']): string {
   height: 100%;
   overflow: hidden;
   color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 440;
+  line-height: 1.5;
   background: var(--panel-bg);
   border: var(--hairline) solid var(--border-subtle);
   border-radius: 8px;
@@ -540,7 +542,7 @@ function stepTypeLabel(type: LearningStep['type']): string {
 .panel-scroll {
   height: 100%;
   overflow-y: auto;
-  padding: 18px 20px 28px;
+  padding: 16px 16px 28px;
   box-sizing: border-box;
 }
 
@@ -553,9 +555,12 @@ function stepTypeLabel(type: LearningStep['type']): string {
 .level-badge,
 .mode-badge,
 .done-badge {
-  padding: 3px 9px;
+  min-height: 23px;
+  padding: 2px 7px;
   font-size: 11px;
-  border-radius: 999px;
+  font-weight: 650;
+  line-height: 1;
+  border-radius: 5px;
 }
 
 .level-badge {
@@ -579,15 +584,19 @@ function stepTypeLabel(type: LearningStep['type']): string {
 }
 
 .level-name {
-  margin: 10px 0 3px;
+  margin: 8px 0 3px;
   color: var(--text-primary);
-  font-size: 21px;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 620;
+  line-height: 1.4;
 }
 
 .level-tagline {
   margin: 0;
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .story-details,
@@ -598,7 +607,7 @@ function stepTypeLabel(type: LearningStep['type']): string {
 .verification,
 .summary-block,
 .next-transfer {
-  margin-top: 14px;
+  margin-top: var(--space-4);
 }
 
 .story-details {
@@ -614,25 +623,36 @@ function stepTypeLabel(type: LearningStep['type']): string {
 }
 
 .story-details summary {
+  display: list-item;
   color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: 15px;
+  font-weight: 450;
+  line-height: 1.7;
 }
 
 .story-details summary span {
-  display: block;
+  display: inline;
   color: var(--accent-cyan);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 14px;
+  font-weight: 650;
+  text-transform: none;
 }
 
 .story-details p {
   margin: 10px 0 0;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 450;
+  line-height: 1.75;
+}
+
+.story-details p + p {
+  margin-top: 8px;
+}
+
+.story-details .story-summary {
   color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.65;
+  font-weight: 550;
 }
 
 .goals-block h3,
@@ -643,23 +663,24 @@ function stepTypeLabel(type: LearningStep['type']): string {
 .next-transfer h3 {
   margin: 0 0 7px;
   color: var(--text-muted);
-  font-size: 12px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font-size: 14px;
+  font-weight: 650;
+  text-transform: none;
 }
 
 .goals-block ul,
 .summary-block ul {
   margin: 0;
   padding-left: 18px;
-  font-size: 13px;
-  line-height: 1.65;
+  font-size: 15px;
+  line-height: 1.75;
 }
 
 .goals-block details {
   margin-top: 9px;
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .current-action {
@@ -677,16 +698,15 @@ function stepTypeLabel(type: LearningStep['type']): string {
 
 .action-eyebrow {
   color: var(--accent-cyan);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  font-size: 11px;
+  font-weight: 750;
 }
 
 .action-header h3 {
-  margin: 4px 0 0;
+  margin: 3px 0 0;
   color: var(--text-primary);
-  font-size: 14px;
-  line-height: 1.4;
+  font-size: 17px;
+  line-height: 1.5;
 }
 
 .step-progress {
@@ -716,8 +736,8 @@ function stepTypeLabel(type: LearningStep['type']): string {
 .step-objective,
 .step-instruction {
   margin: 12px 0 0;
-  font-size: 13px;
-  line-height: 1.65;
+  font-size: 15px;
+  line-height: 1.7;
 }
 
 .step-objective {
@@ -742,24 +762,24 @@ function stepTypeLabel(type: LearningStep['type']): string {
 
 .concept-card > span {
   color: var(--accent-violet);
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: none;
 }
 
 .concept-card h4 {
   margin: 3px 0 4px;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 .concept-card p,
 .observation-box p,
 .step-complete p {
   margin: 0;
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: 14px;
+  line-height: 1.7;
 }
 
 .observation-box {
@@ -772,8 +792,8 @@ function stepTypeLabel(type: LearningStep['type']): string {
 
 .observation-box > span {
   color: var(--accent-amber);
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 750;
 }
 
 .command-run,
@@ -800,13 +820,18 @@ function stepTypeLabel(type: LearningStep['type']): string {
 }
 
 .command-run span {
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 code,
 input {
-  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-family: var(--font-mono);
+}
+
+.command-run code {
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .structured-form,
@@ -820,15 +845,15 @@ input {
 .command-note {
   margin: 8px 0 0;
   color: var(--text-faint);
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .command-template {
   overflow-x: auto;
   padding: 9px 10px;
   color: var(--accent-amber);
-  font-size: 12px;
+  font-size: 14px;
   white-space: nowrap;
   background: var(--surface-0);
   border: var(--hairline) solid var(--accent-amber-border);
@@ -842,7 +867,7 @@ input {
   flex-direction: column;
   gap: 4px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 input[type='text'],
@@ -852,6 +877,7 @@ input[type='text'],
   min-width: 0;
   padding: 9px 10px;
   color: var(--text-primary);
+  font-size: 14px;
   background: var(--surface-0);
   border: var(--hairline) solid var(--border-strong);
   border-radius: 6px;
@@ -867,8 +893,9 @@ input[type='text'],
 .btn-next {
   padding: 9px 11px;
   color: var(--accent-cyan-contrast);
-  font-size: 12px;
-  font-weight: 800;
+  min-height: 44px;
+  font-size: 15px;
+  font-weight: 750;
   background: var(--accent-cyan);
   border: none;
   border-radius: 7px;
@@ -886,8 +913,8 @@ input[type='text'],
 .question legend {
   margin-bottom: 8px;
   color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 650;
 }
 
 .question label,
@@ -896,8 +923,8 @@ input[type='text'],
   align-items: flex-start;
   gap: 7px;
   color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .checkpoint {
@@ -926,13 +953,13 @@ input[type='text'],
 .inline-error {
   margin: 9px 0 0;
   color: var(--accent-red);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .errors-details {
   margin-top: 10px;
   color: var(--accent-coral);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .errors-details ul {
@@ -949,8 +976,8 @@ input[type='text'],
 }
 
 .step-complete span {
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .step-complete p {
@@ -970,8 +997,8 @@ input[type='text'],
   margin: 0 0 9px;
   padding: 0;
   list-style: none;
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: 14px;
+  line-height: 1.72;
 }
 
 .hints li {
@@ -983,14 +1010,16 @@ input[type='text'],
 .hints span {
   display: block;
   color: var(--accent-amber);
-  font-size: 9px;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .btn-hint {
   padding: 7px 11px;
   color: var(--accent-amber);
-  font-size: 12px;
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 650;
   background: var(--accent-amber-soft);
   border: var(--hairline) solid var(--accent-amber-border);
   border-radius: 7px;
@@ -1000,7 +1029,7 @@ input[type='text'],
 .hint-note {
   margin: 0;
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .mastery-strip {
@@ -1016,7 +1045,7 @@ input[type='text'],
 .mastery-strip span {
   padding: 3px 8px;
   color: var(--accent-violet);
-  font-size: 10px;
+  font-size: 13px;
   background: var(--accent-violet-soft);
   border: var(--hairline) solid var(--accent-violet-border);
   border-radius: 999px;
@@ -1037,15 +1066,15 @@ input[type='text'],
 
 .verification > p {
   margin: 0 0 8px;
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .verification > code {
   display: block;
   overflow-x: auto;
   color: var(--accent-green);
-  font-size: 12px;
+  font-size: 14px;
   white-space: nowrap;
 }
 
@@ -1059,14 +1088,14 @@ input[type='text'],
 
 .verification dt {
   color: var(--accent-amber);
-  font-family: 'JetBrains Mono', Consolas, monospace;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: 13px;
 }
 
 .verification dd {
   margin: 2px 0 0;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .verification-form {
@@ -1102,15 +1131,15 @@ input[type='text'],
 
 .completion-card h3 {
   color: var(--accent-green);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .completion-card p,
 .next-transfer p {
   margin-top: 4px;
   color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: 14px;
+  line-height: 1.7;
 }
 
 .next-transfer {
@@ -1153,11 +1182,15 @@ input[type='text'],
 
   .question label,
   .checkpoint label,
-  .story-details summary,
   .goals-block details summary,
   .errors-details summary {
     min-height: 44px;
     align-items: center;
+  }
+
+  .story-details summary {
+    min-height: 44px;
+    padding-block: 9px;
   }
 }
 </style>

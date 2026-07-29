@@ -89,6 +89,17 @@ describe('VM terminal semantic colors', () => {
     expect(rendered.replace(ansiPattern, '')).toBe(`${mixedResult}\n`)
   })
 
+  it('keeps the classic MOTD frame and colors its border without changing the text', () => {
+    const rendered = renderMotd(true)
+    const plainMotd = readFileSync(motd, 'utf8')
+
+    expect(plainMotd).toContain('╭─────────────────────────────────────────╮')
+    expect(plainMotd).toContain('  HASHTEAM Security Lab  /  安全新手村')
+    expect(plainMotd).not.toContain('===========================================')
+    expect(rendered).toContain('\u001b[36m╭─────────────────────────────────────────╮\u001b[0m')
+    expect(rendered.replace(ansiPattern, '')).toBe(plainMotd)
+  })
+
   it('never adds ANSI to success or error protocol lines and preserves exit codes', () => {
     const passed = runCheck(0, true)
     expect(passed.status).toBe(0)

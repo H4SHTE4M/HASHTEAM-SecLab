@@ -51,7 +51,7 @@ ht_render_motd() {
         -v cyan_bold="$HT_CYAN_BOLD" \
         -v yellow="$HT_YELLOW" \
         '
-            /^=+$/ { color = cyan; print color $0 reset; next }
+            NR == 1 || NR == 3 || /^=+$/ { color = cyan; print color $0 reset; next }
             /HASHTEAM Security Lab/ { color = cyan_bold; print color $0 reset; next }
             /^输入 help/ || /^完成第一关/ { color = yellow; print color $0 reset; next }
             { print $0 }

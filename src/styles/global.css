@@ -245,7 +245,7 @@ button:not(:disabled):active svg {
 }
 
 [data-tooltip]:hover::before,
-[data-tooltip]:focus::before {
+[data-tooltip]:focus-visible::before {
   visibility: visible;
   opacity: 1;
   transform: translate(-50%, 0);
@@ -260,9 +260,9 @@ button:not(:disabled):active svg {
 }
 
 [data-tooltip][data-tooltip-placement='bottom']:hover::before,
-[data-tooltip][data-tooltip-placement='bottom']:focus::before,
+[data-tooltip][data-tooltip-placement='bottom']:focus-visible::before,
 [data-tooltip][data-tooltip-placement='bottom-end']:hover::before,
-[data-tooltip][data-tooltip-placement='bottom-end']:focus::before {
+[data-tooltip][data-tooltip-placement='bottom-end']:focus-visible::before {
   transform: translate(-50%, 0);
 }
 
@@ -273,7 +273,7 @@ button:not(:disabled):active svg {
 }
 
 [data-tooltip][data-tooltip-placement='bottom-end']:hover::before,
-[data-tooltip][data-tooltip-placement='bottom-end']:focus::before {
+[data-tooltip][data-tooltip-placement='bottom-end']:focus-visible::before {
   transform: translateY(0);
 }
 
@@ -290,7 +290,7 @@ button:not(:disabled):active svg {
 }
 
 [data-tooltip][data-tooltip-placement='right']:hover::before,
-[data-tooltip][data-tooltip-placement='right']:focus::before {
+[data-tooltip][data-tooltip-placement='right']:focus-visible::before {
   transform: translate(0, -50%);
 }
 
@@ -301,7 +301,7 @@ button:not(:disabled):active svg {
 }
 
 [data-tooltip][data-tooltip-placement='left']:hover::before,
-[data-tooltip][data-tooltip-placement='left']:focus::before {
+[data-tooltip][data-tooltip-placement='left']:focus-visible::before {
   transform: translate(0, -50%);
 }
 

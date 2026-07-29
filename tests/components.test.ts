@@ -120,6 +120,7 @@ describe('accessible components', () => {
     const dialog = wrapper.get('[role="dialog"]')
     expect(dialog.attributes('aria-modal')).toBe('true')
     expect(document.activeElement).toBe(wrapper.get('.btn-close').element)
+    expect(wrapper.get('.btn-close').attributes('data-tooltip')).toBeUndefined()
     expect(wrapper.get('.build-info code').attributes('title')).toBe(__SOURCE_ID__)
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
@@ -320,6 +321,8 @@ describe('accessible components', () => {
 
     const details = wrapper.get('.story-details')
     expect(details.attributes('open')).toBeUndefined()
+    expect(details.get('summary').text()).toBe('任务背景')
+    expect(details.find('.story-summary').exists()).toBe(true)
     expect(details.text()).toContain('可以完整展开')
     await details.get('summary').trigger('click')
     expect(details.attributes('open')).toBeDefined()
