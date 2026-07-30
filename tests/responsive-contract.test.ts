@@ -256,10 +256,16 @@ describe('responsive layout contract', () => {
   })
 
   it('uses the earlier mission-panel typography without changing the v2 learning content', () => {
+    const globalCss = source('src/styles/global.css')
     const panel = source('src/components/MissionPanel.vue')
 
     expect(panel).toMatch(/\.mission-panel\s*\{[\s\S]*?font-family:\s*var\(--font-ui\);/)
-    expect(panel).toMatch(/\.level-name\s*\{[\s\S]*?font-size:\s*20px;[\s\S]*?font-weight:\s*620;/)
+    expect(globalCss).toContain(
+      "--font-cjk: 'Noto Sans SC Variable', 'PingFang SC', 'Microsoft YaHei', sans-serif;",
+    )
+    expect(panel).toMatch(
+      /\.level-name\s*\{[\s\S]*?font-family:\s*var\(--font-cjk\);[\s\S]*?font-size:\s*20px;[\s\S]*?font-weight:\s*600;/,
+    )
     expect(panel).toMatch(/\.story-details p\s*\{[\s\S]*?font-size:\s*15px;[\s\S]*?line-height:\s*1\.75;/)
     expect(panel).toMatch(/\.story-details summary span\s*\{[\s\S]*?display:\s*inline;/)
     expect(panel).toMatch(/\.story-details \.story-summary\s*\{[\s\S]*?font-weight:\s*550;/)
