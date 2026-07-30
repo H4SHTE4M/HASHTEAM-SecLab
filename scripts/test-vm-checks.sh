@@ -17,14 +17,18 @@ export HASHTEAM_LIB_DIR="$OVERLAY/etc/hashteam"
 BUSYBOX="${BUSYBOX:-}"
 if [ -z "$BUSYBOX" ]; then
     for cand in "$ROOT/vm/.cache/busybox" /tmp/busybox "$(command -v busybox || true)"; do
-        if [ -n "$cand" ] && [ -x "$cand" ]; then
+        if [ -n "$cand" ] && [ -x "$cand" ] && "$cand" true >/dev/null 2>&1; then
             BUSYBOX="$cand"
             break
         fi
     done
 fi
 if [ -z "$BUSYBOX" ]; then
-    echo "错误：找不到 busybox 静态二进制。请先运行 vm/build.sh，或设置 BUSYBOX=/path/to/busybox" >&2
+    echo "错误：找不到与当前宿主机兼容的 busybox。请安装原生 busybox，或设置 BUSYBOX=/path/to/busybox" >&2
+    exit 1
+fi
+if [ ! -x "$BUSYBOX" ] || ! "$BUSYBOX" true >/dev/null 2>&1; then
+    echo "错误：BUSYBOX 无法在当前宿主机执行：$BUSYBOX" >&2
     exit 1
 fi
 

@@ -17,6 +17,9 @@ const VM_ASSETS = {
 
 const LEGAL_FILES = ['SOURCE_CODE.md', 'THIRD_PARTY_NOTICES.md'] as const
 const EDGEONE_CONFIG_FILE = 'edgeone.json'
+const NODE_MAJOR_VERSION = Number.parseInt(process.versions.node, 10)
+const TEST_WORKER_EXEC_ARGV =
+  NODE_MAJOR_VERSION >= 25 ? ['--no-experimental-webstorage'] : []
 
 interface VmAssetBundle {
   hash: string
@@ -183,6 +186,10 @@ export default defineConfig(({ command }) => {
     test: {
       include: ['tests/**/*.test.ts'],
       environment: 'node',
+      poolOptions: {
+        forks: { execArgv: TEST_WORKER_EXEC_ARGV },
+        threads: { execArgv: TEST_WORKER_EXEC_ARGV },
+      },
     },
   }
 })

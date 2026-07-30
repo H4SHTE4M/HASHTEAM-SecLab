@@ -59,6 +59,8 @@ describe('responsive layout contract', () => {
     expect(globalCss).toContain(":root[data-theme='dark']")
     expect(topbar).toContain('class="icon-btn theme-toggle"')
     expect(topbar).toContain("'深色模式' : '浅色模式'")
+    expect(topbar).not.toContain('<Transition name="theme-icon"')
+    expect(topbar).not.toContain('.theme-icon-leave-to')
   })
 
   it('keeps increased-contrast colors legible in both themes', () => {
@@ -146,6 +148,8 @@ describe('responsive layout contract', () => {
     expect(terminal).toContain('terminal.options.fontSize = fontSize')
     expect(preferences).toContain('TERMINAL_FONT_SIZE_MIN = 12')
     expect(preferences).toContain('TERMINAL_FONT_SIZE_MAX = 20')
+    expect(preferences).toContain('TERMINAL_FONT_SIZE_DEFAULT = 14')
+    expect(terminal).toContain('fontSize: 14')
     expect(app).toContain('grid-template-columns: 44px 32px 44px')
   })
 

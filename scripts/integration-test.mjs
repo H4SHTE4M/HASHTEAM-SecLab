@@ -220,8 +220,14 @@ async function main() {
   await step('第 8 关：多出来的进程（端口 31337）', async () => {
     goToLevel(8)
     await waitFor(/"level-ready","level":8\}/)
+    const netstatOutputStart = buffer.length
     send('netstat -tln')
     await waitFor(/:31337 /)
+    await waitFor(GUEST_PROMPT, 30000, 'netstat 完成后的 guest 提示符')
+    const netstatOutput = buffer.slice(netstatOutputStart)
+    if (netstatOutput.includes('/proc/net/tcp6')) {
+      throw new Error(`netstat 泄漏了缺失 IPv6 proc 文件的警告：\n${netstatOutput}`)
+    }
     send('check 31337')
     await waitFor(/还在运行/)
     send('kill $(cat .backdoor/backdoor.pid)')

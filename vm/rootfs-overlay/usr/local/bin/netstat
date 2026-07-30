@@ -1,0 +1,9 @@
+#!/bin/busybox sh
+# BusyBox probes tcp6 even though this training kernel intentionally has IPv6 disabled.
+error_file="/tmp/hashteam-netstat.$$"
+trap '/bin/busybox rm -f "$error_file"' EXIT HUP INT TERM
+
+/bin/busybox netstat "$@" 2>"$error_file"
+status=$?
+/bin/busybox sed '/^netstat: \/proc\/net\/tcp6: No such file or directory$/d' "$error_file" >&2
+exit "$status"

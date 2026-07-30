@@ -8,5 +8,7 @@ fi
 umask 022
 # 主 BusyBox 的 ash 会优先执行内建 applet，显式路由到最小 SUID helper。
 alias su='/bin/su'
+# 内建 netstat 会输出已禁用 IPv6 对应的 tcp6 缺失警告，路由到过滤包装器。
+alias netstat='/usr/local/bin/netstat'
 # busybox ash 自带 help 内建命令会遮蔽 PATH，用别名指向实验帮助。
 alias help='cat /etc/hashteam/help.txt'

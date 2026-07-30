@@ -4,7 +4,13 @@ import type { StorageLike } from './progress-store'
 export const UI_PREFERENCES_STORAGE_KEY = 'hashteam-lab-ui-v1'
 export const TERMINAL_FONT_SIZE_MIN = 12
 export const TERMINAL_FONT_SIZE_MAX = 20
-export const TERMINAL_FONT_SIZE_DEFAULT = 15
+export const TERMINAL_FONT_SIZE_DEFAULT = 14
+const UI_PREFERENCES_SCHEMA_VERSION = 2
+const LEGACY_TERMINAL_FONT_SIZE_DEFAULT = 15
+
+interface StoredLabUiPreferences extends Partial<LabUiPreferences> {
+  schemaVersion?: unknown
+}
 
 export function createDefaultUiPreferences(): LabUiPreferences {
   return {
@@ -33,11 +39,16 @@ export function loadUiPreferences(storage: StorageLike): LabUiPreferences {
   try {
     const parsed: unknown = JSON.parse(raw)
     if (typeof parsed !== 'object' || parsed === null) return createDefaultUiPreferences()
-    const value = parsed as Partial<LabUiPreferences>
+    const value = parsed as StoredLabUiPreferences
     if (value.mode !== null && !isLabMode(value.mode)) return createDefaultUiPreferences()
     if (typeof value.onboardingComplete !== 'boolean') return createDefaultUiPreferences()
-    const terminalFontSize = value.terminalFontSize ?? TERMINAL_FONT_SIZE_DEFAULT
-    if (!isTerminalFontSize(terminalFontSize)) return createDefaultUiPreferences()
+    const storedFontSize = value.terminalFontSize ?? TERMINAL_FONT_SIZE_DEFAULT
+    if (!isTerminalFontSize(storedFontSize)) return createDefaultUiPreferences()
+    const terminalFontSize =
+      value.schemaVersion === UI_PREFERENCES_SCHEMA_VERSION ||
+      storedFontSize !== LEGACY_TERMINAL_FONT_SIZE_DEFAULT
+        ? storedFontSize
+        : TERMINAL_FONT_SIZE_DEFAULT
     return {
       mode: value.mode,
       onboardingComplete: value.onboardingComplete,
@@ -52,5 +63,8 @@ export function saveUiPreferences(
   storage: StorageLike,
   preferences: LabUiPreferences,
 ): void {
-  storage.setItem(UI_PREFERENCES_STORAGE_KEY, JSON.stringify(preferences))
+  storage.setItem(
+    UI_PREFERENCES_STORAGE_KEY,
+    JSON.stringify({ ...preferences, schemaVersion: UI_PREFERENCES_SCHEMA_VERSION }),
+  )
 }
