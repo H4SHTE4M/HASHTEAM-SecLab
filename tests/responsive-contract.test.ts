@@ -339,6 +339,21 @@ describe('responsive layout contract', () => {
     expect(completion).toContain('var(--safe-bottom)')
   })
 
+  it('adapts the about-lab introduction to narrow, desktop, and large viewports', () => {
+    const about = source('src/components/AboutModal.vue')
+
+    expect(about).toContain('width: min(100%, clamp(42.5rem, 48vw, 54rem))')
+    expect(about).toContain('max-height: min(100%, clamp(47.5rem, 82dvh, 56rem))')
+    expect(about).toContain('--about-gutter-inline: clamp(12px, 3vw, 40px)')
+    expect(about).toMatch(/\.modal-body p,[\s\S]*?overflow-wrap:\s*anywhere;/)
+    expect(about).toMatch(
+      /@media \(min-width:\s*1440px\) and \(min-height:\s*800px\)[\s\S]*?\.modal-body p,[\s\S]*?font-size:\s*15px;/,
+    )
+    expect(about).toMatch(
+      /@media \(min-width:\s*2200px\) and \(min-height:\s*1200px\)[\s\S]*?\.modal-body p,[\s\S]*?font-size:\s*16px;/,
+    )
+  })
+
   it('keeps the completed boot state visible before opening onboarding', () => {
     const app = source('src/App.vue')
 
