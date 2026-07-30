@@ -186,9 +186,7 @@ onBeforeUnmount(() => {
             data-tooltip-placement="bottom-end"
             @click="emit('toggle-theme')"
           >
-            <Transition name="theme-icon" mode="out-in">
-              <AppIcon :key="theme" :name="theme === 'light' ? 'moon' : 'sun'" />
-            </Transition>
+            <AppIcon :name="theme === 'light' ? 'moon' : 'sun'" />
           </button>
         </div>
       </div>
@@ -299,6 +297,7 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
   font-size: 15px;
   font-weight: 560;
+  line-height: 1.3;
   text-overflow: ellipsis;
 }
 
@@ -504,21 +503,6 @@ onBeforeUnmount(() => {
 .theme-toggle:hover {
   background: var(--surface-3);
   box-shadow: none;
-}
-
-.theme-icon-enter-active,
-.theme-icon-leave-active {
-  transition: opacity var(--duration-fast) ease, transform var(--duration-normal) var(--ease-out);
-}
-
-.theme-icon-enter-from {
-  opacity: 0;
-  transform: rotate(-35deg) scale(0.72);
-}
-
-.theme-icon-leave-to {
-  opacity: 0;
-  transform: rotate(35deg) scale(0.72);
 }
 
 .restart-btn.confirming {

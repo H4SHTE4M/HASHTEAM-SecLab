@@ -344,6 +344,25 @@ describe('lab UI preferences', () => {
     }
   })
 
+  it('旧版默认 15px 迁移为 14px，迁移后仍可主动选择 15px', () => {
+    window.localStorage.setItem(
+      UI_PREFERENCES_STORAGE_KEY,
+      JSON.stringify({
+        mode: 'guided',
+        onboardingComplete: true,
+        terminalFontSize: 15,
+      }),
+    )
+    expect(loadUiPreferences(window.localStorage).terminalFontSize).toBe(14)
+
+    saveUiPreferences(window.localStorage, {
+      mode: 'guided',
+      onboardingComplete: true,
+      terminalFontSize: 15,
+    })
+    expect(loadUiPreferences(window.localStorage).terminalFontSize).toBe(15)
+  })
+
   it('重置关卡进度不会删除界面偏好', () => {
     saveUiPreferences(window.localStorage, {
       mode: 'challenge',

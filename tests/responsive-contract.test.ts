@@ -59,6 +59,8 @@ describe('responsive layout contract', () => {
     expect(globalCss).toContain(":root[data-theme='dark']")
     expect(topbar).toContain('class="icon-btn theme-toggle"')
     expect(topbar).toContain("'深色模式' : '浅色模式'")
+    expect(topbar).not.toContain('<Transition name="theme-icon"')
+    expect(topbar).not.toContain('.theme-icon-leave-to')
   })
 
   it('keeps increased-contrast colors legible in both themes', () => {
@@ -146,6 +148,8 @@ describe('responsive layout contract', () => {
     expect(terminal).toContain('terminal.options.fontSize = fontSize')
     expect(preferences).toContain('TERMINAL_FONT_SIZE_MIN = 12')
     expect(preferences).toContain('TERMINAL_FONT_SIZE_MAX = 20')
+    expect(preferences).toContain('TERMINAL_FONT_SIZE_DEFAULT = 14')
+    expect(terminal).toContain('fontSize: 14')
     expect(app).toContain('grid-template-columns: 44px 32px 44px')
   })
 
@@ -277,6 +281,14 @@ describe('responsive layout contract', () => {
       /\.mission-controls-layout\s*\{[\s\S]*?grid-template-columns:\s*auto minmax\(0, 1fr\) auto auto;/,
     )
     expect(topbar).toMatch(/\.tool-group\s*\{[\s\S]*?grid-column:\s*3;[\s\S]*?justify-self:\s*end;/)
+  })
+
+  it('keeps the desktop workspace name line box tall enough to avoid clipping', () => {
+    const topbar = source('src/components/TopBar.vue')
+
+    expect(topbar).toMatch(
+      /\.context-name\s*\{[\s\S]*?font-size:\s*15px;[\s\S]*?line-height:\s*1\.3;/,
+    )
   })
 
   it('bounds overlays to the dynamic viewport and safe areas', () => {
