@@ -1,22 +1,22 @@
 :root {
   color-scheme: light;
-  --bg-canvas: #e9eeea;
-  --bg-canvas-top: #f0f3ef;
-  --topbar-bg: rgba(238, 242, 238, 0.88);
-  --floating-surface: rgba(255, 255, 255, 0.86);
-  --panel-bg: rgba(255, 255, 255, 0.94);
-  --rail-bg: rgba(255, 255, 255, 0.92);
-  --context-border: rgba(189, 201, 190, 0.76);
-  --resizer-color: #aebbb0;
-  --scrollbar-thumb: #b7c2b9;
-  --surface-0: #f8faf7;
-  --surface-1: #ffffff;
-  --surface-2: #f1f4f0;
-  --surface-3: #e7ece7;
-  --surface-raised: #fbfcfa;
-  --surface-hover: #e4ebe4;
-  --border-subtle: #d7ded7;
-  --border-strong: #bdc9be;
+  --bg-canvas: color-mix(in srgb, var(--accent-cyan) 10%, #f1f4f2);
+  --bg-canvas-top: color-mix(in srgb, var(--accent-cyan) 6%, #fafbfa);
+  --topbar-bg: color-mix(in srgb, var(--accent-cyan) 6%, rgba(255, 255, 255, 0.9));
+  --floating-surface: color-mix(in srgb, var(--accent-cyan) 4%, rgba(255, 255, 255, 0.92));
+  --panel-bg: color-mix(in srgb, var(--accent-cyan) 3%, rgba(255, 255, 255, 0.96));
+  --rail-bg: color-mix(in srgb, var(--accent-cyan) 6%, rgba(255, 255, 255, 0.94));
+  --context-border: color-mix(in srgb, var(--accent-cyan) 20%, #d8ded9);
+  --resizer-color: color-mix(in srgb, var(--accent-cyan) 24%, #aeb7b1);
+  --scrollbar-thumb: color-mix(in srgb, var(--accent-cyan) 18%, #b7beba);
+  --surface-0: color-mix(in srgb, var(--accent-cyan) 4%, #fafbfa);
+  --surface-1: color-mix(in srgb, var(--accent-cyan) 2%, #ffffff);
+  --surface-2: color-mix(in srgb, var(--accent-cyan) 7%, #f4f6f4);
+  --surface-3: color-mix(in srgb, var(--accent-cyan) 11%, #edf0ee);
+  --surface-raised: color-mix(in srgb, var(--accent-cyan) 3%, #ffffff);
+  --surface-hover: color-mix(in srgb, var(--accent-cyan) 13%, #e9edea);
+  --border-subtle: color-mix(in srgb, var(--accent-cyan) 14%, #dbe0dc);
+  --border-strong: color-mix(in srgb, var(--accent-cyan) 23%, #c4cbc6);
   --text-primary: #2f3730;
   --text-secondary: #4a554c;
   --text-muted: #68746b;
@@ -41,9 +41,9 @@
   --accent-violet-border: rgba(117, 92, 168, 0.28);
   --overlay-backdrop: rgba(18, 25, 20, 0.56);
   --overlay-backdrop-soft: rgba(18, 25, 20, 0.14);
-  --accent-nav: #eadbb7;
-  --accent-nav-border: #ddca9d;
-  --accent-nav-text: #3a3426;
+  --accent-nav: color-mix(in srgb, var(--accent-cyan) 14%, #ffffff);
+  --accent-nav-border: color-mix(in srgb, var(--accent-cyan) 34%, #dfe4e0);
+  --accent-nav-text: var(--accent-cyan);
   --tooltip-text: #f2f5f2;
   --hairline: 1px;
   --space-1: 4px;
@@ -76,23 +76,23 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg-canvas: #1d2822;
-  --bg-canvas-top: #253129;
-  --topbar-bg: rgba(29, 40, 34, 0.9);
-  --floating-surface: rgba(43, 55, 48, 0.9);
-  --panel-bg: rgba(37, 48, 42, 0.96);
-  --rail-bg: rgba(43, 55, 48, 0.94);
-  --context-border: rgba(97, 112, 100, 0.72);
-  --resizer-color: #617064;
-  --scrollbar-thumb: #58675d;
-  --surface-0: #25302a;
-  --surface-1: #2b3730;
-  --surface-2: #324038;
-  --surface-3: #3a4840;
-  --surface-raised: #3e4c43;
-  --surface-hover: #43534a;
-  --border-subtle: #48574d;
-  --border-strong: #617064;
+  --bg-canvas: color-mix(in srgb, var(--accent-cyan) 10%, #171c19);
+  --bg-canvas-top: color-mix(in srgb, var(--accent-cyan) 12%, #1d2420);
+  --topbar-bg: color-mix(in srgb, var(--accent-cyan) 8%, rgba(20, 25, 22, 0.92));
+  --floating-surface: color-mix(in srgb, var(--accent-cyan) 12%, rgba(32, 39, 35, 0.94));
+  --panel-bg: color-mix(in srgb, var(--accent-cyan) 10%, rgba(29, 36, 32, 0.97));
+  --rail-bg: color-mix(in srgb, var(--accent-cyan) 13%, rgba(31, 39, 34, 0.96));
+  --context-border: color-mix(in srgb, var(--accent-cyan) 24%, #465049);
+  --resizer-color: color-mix(in srgb, var(--accent-cyan) 27%, #4d5851);
+  --scrollbar-thumb: color-mix(in srgb, var(--accent-cyan) 22%, #4b554f);
+  --surface-0: color-mix(in srgb, var(--accent-cyan) 10%, #202723);
+  --surface-1: color-mix(in srgb, var(--accent-cyan) 12%, #242c27);
+  --surface-2: color-mix(in srgb, var(--accent-cyan) 14%, #29322d);
+  --surface-3: color-mix(in srgb, var(--accent-cyan) 17%, #2e3832);
+  --surface-raised: color-mix(in srgb, var(--accent-cyan) 16%, #303934);
+  --surface-hover: color-mix(in srgb, var(--accent-cyan) 20%, #323d36);
+  --border-subtle: color-mix(in srgb, var(--accent-cyan) 20%, #3d4741);
+  --border-strong: color-mix(in srgb, var(--accent-cyan) 29%, #4d5951);
   --text-primary: #f1f2ec;
   --text-secondary: #d5d9d2;
   --text-muted: #aeb7af;
@@ -117,12 +117,76 @@
   --accent-violet-border: rgba(196, 181, 253, 0.28);
   --overlay-backdrop: rgba(5, 10, 7, 0.64);
   --overlay-backdrop-soft: rgba(5, 10, 7, 0.18);
-  --accent-nav: #d8c592;
-  --accent-nav-border: #b9a778;
-  --accent-nav-text: #2d2b24;
+  --accent-nav: color-mix(in srgb, var(--accent-cyan) 22%, #252d28);
+  --accent-nav-border: color-mix(in srgb, var(--accent-cyan) 40%, #3f4943);
+  --accent-nav-text: var(--accent-cyan);
   --shadow-control: 0 1px 2px rgba(5, 10, 7, 0.16), 0 9px 24px rgba(5, 10, 7, 0.18);
   --shadow-panel: 0 18px 48px rgba(5, 10, 7, 0.24);
   --shadow-dialog: 0 28px 80px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(132, 151, 138, 0.16);
+}
+
+:root[data-accent='ocean'] {
+  --accent-cyan: #176b87;
+  --accent-cyan-hover: #125a72;
+  --accent-cyan-contrast: #ffffff;
+  --accent-cyan-soft: rgba(23, 107, 135, 0.11);
+  --accent-cyan-border: rgba(23, 107, 135, 0.32);
+}
+
+:root[data-accent='indigo'] {
+  --accent-cyan: #5b5fa3;
+  --accent-cyan-hover: #4e518d;
+  --accent-cyan-contrast: #ffffff;
+  --accent-cyan-soft: rgba(91, 95, 163, 0.11);
+  --accent-cyan-border: rgba(91, 95, 163, 0.32);
+}
+
+:root[data-accent='rose'] {
+  --accent-cyan: #9b4a69;
+  --accent-cyan-hover: #853e59;
+  --accent-cyan-contrast: #ffffff;
+  --accent-cyan-soft: rgba(155, 74, 105, 0.11);
+  --accent-cyan-border: rgba(155, 74, 105, 0.32);
+}
+
+:root[data-theme='dark'][data-accent='ocean'] {
+  --accent-cyan: #63c5e3;
+  --accent-cyan-hover: #77d4ef;
+  --accent-cyan-contrast: #132228;
+  --accent-cyan-soft: rgba(99, 197, 227, 0.13);
+  --accent-cyan-border: rgba(99, 197, 227, 0.34);
+}
+
+:root[data-theme='dark'][data-accent='indigo'] {
+  --accent-cyan: #aeb8ff;
+  --accent-cyan-hover: #c0c8ff;
+  --accent-cyan-contrast: #1c2140;
+  --accent-cyan-soft: rgba(174, 184, 255, 0.13);
+  --accent-cyan-border: rgba(174, 184, 255, 0.34);
+}
+
+:root[data-theme='dark'][data-accent='rose'] {
+  --accent-cyan: #ec9bb4;
+  --accent-cyan-hover: #f6adc2;
+  --accent-cyan-contrast: #321622;
+  --accent-cyan-soft: rgba(236, 155, 180, 0.13);
+  --accent-cyan-border: rgba(236, 155, 180, 0.34);
+}
+
+:root[data-accent='custom'] {
+  --accent-cyan: var(--custom-accent-light, #357a50);
+  --accent-cyan-hover: color-mix(in srgb, var(--accent-cyan) 88%, #111a14);
+  --accent-cyan-contrast: #ffffff;
+  --accent-cyan-soft: color-mix(in srgb, var(--accent-cyan) 11%, transparent);
+  --accent-cyan-border: color-mix(in srgb, var(--accent-cyan) 32%, transparent);
+}
+
+:root[data-theme='dark'][data-accent='custom'] {
+  --accent-cyan: var(--custom-accent-dark, #71c78a);
+  --accent-cyan-hover: color-mix(in srgb, var(--accent-cyan) 88%, #ffffff);
+  --accent-cyan-contrast: #132228;
+  --accent-cyan-soft: color-mix(in srgb, var(--accent-cyan) 13%, transparent);
+  --accent-cyan-border: color-mix(in srgb, var(--accent-cyan) 34%, transparent);
 }
 
 * {
@@ -185,6 +249,8 @@ html.theme-changing .workspace-context,
 html.theme-changing .mode-segment,
 html.theme-changing .tool-group,
 html.theme-changing .theme-toggle,
+html.theme-changing .appearance-trigger,
+html.theme-changing .appearance-panel,
 html.theme-changing .level-rail,
 html.theme-changing .mission-panel {
   transition: background 260ms ease, color 220ms ease, border-color 220ms ease, box-shadow 260ms ease;
@@ -313,7 +379,7 @@ html.is-panel-resizing * {
 
 ::selection {
   color: var(--text-primary);
-  background: rgba(79, 159, 107, 0.2);
+  background: var(--accent-cyan-soft);
 }
 
 button:focus-visible,

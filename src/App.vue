@@ -23,7 +23,7 @@ import {
   TERMINAL_FONT_SIZE_MIN,
 } from './services/ui-preferences-store'
 import { getLevel, LEVELS, TOTAL_LEVELS } from './data/levels'
-import type { LabMode, ThemeName } from './types/lab'
+import type { AccentName, LabMode, ThemeName } from './types/lab'
 
 const PANEL_WIDTH_STORAGE_KEY = 'hashteam-mission-panel-width-v1'
 const THEME_STORAGE_KEY = 'hashteam-theme-v1'
@@ -77,6 +77,20 @@ let bootOverlayShownAt = performance.now()
 let overlayReturnFocus: HTMLElement | null = null
 
 document.documentElement.dataset.theme = theme.value
+
+function syncAccentRoot(): void {
+  document.documentElement.dataset.accent = preferences.state.accent
+  document.documentElement.style.setProperty(
+    '--custom-accent-light',
+    preferences.state.customAccent.light,
+  )
+  document.documentElement.style.setProperty(
+    '--custom-accent-dark',
+    preferences.state.customAccent.dark,
+  )
+}
+
+syncAccentRoot()
 
 const currentLevelDef = computed(() => getLevel(progress.state.currentLevel) ?? getLevel(1)!)
 const currentCompleted = computed(() => progress.state.completedLevels.includes(progress.state.currentLevel))
@@ -204,7 +218,14 @@ function applyTheme(nextTheme: ThemeName, animate: boolean): void {
   document.documentElement.dataset.theme = nextTheme
   layoutStorage.setItem(THEME_STORAGE_KEY, nextTheme)
 
-  if (!animate || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  if (animate) beginThemeTransition()
+}
+
+function beginThemeTransition(): void {
+  if (
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  ) return
   if (themeTransitionTimer !== null) window.clearTimeout(themeTransitionTimer)
   document.documentElement.classList.add('theme-changing')
   themeTransitionTimer = window.setTimeout(() => {
@@ -215,6 +236,18 @@ function applyTheme(nextTheme: ThemeName, animate: boolean): void {
 
 function toggleTheme(): void {
   applyTheme(theme.value === 'light' ? 'dark' : 'light', true)
+}
+
+function applyAccent(accent: AccentName): void {
+  preferences.setAccent(accent)
+  syncAccentRoot()
+  beginThemeTransition()
+}
+
+function applyCustomAccent(source: string): void {
+  preferences.setCustomAccent(source)
+  syncAccentRoot()
+  beginThemeTransition()
 }
 
 function handleViewportResize(): void {
@@ -397,11 +430,16 @@ function openHelp(trigger: HTMLElement): void {
         :current-level="progress.state.currentLevel"
         :current-level-name="currentLevelDef.name"
         :theme="theme"
+        :accent="preferences.state.accent"
+        :custom-accent="preferences.state.customAccent"
         @reset-level="handleResetLevel"
         @reset-all="handleResetAll"
         @about="openAbout"
         @help="openHelp"
         @change-mode="handleChangeMode"
+        @change-theme="applyTheme($event, true)"
+        @change-accent="applyAccent"
+        @change-custom-accent="applyCustomAccent"
         @toggle-theme="toggleTheme"
       />
 

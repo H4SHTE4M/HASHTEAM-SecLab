@@ -129,6 +129,19 @@ export interface LevelCompletionRecord {
 /** 界面配色主题。 */
 export type ThemeName = 'light' | 'dark'
 
+/** 预设界面主强调色。 */
+export type PresetAccentName = 'forest' | 'ocean' | 'indigo' | 'rose'
+
+/** 界面主强调色；状态色仍保留各自的语义。 */
+export type AccentName = PresetAccentName | 'custom'
+
+/** 用户选择的原始颜色，以及为明暗界面校正后的可访问颜色。 */
+export interface CustomAccent {
+  source: string
+  light: string
+  dark: string
+}
+
 /** 关卡展示定义，由每关目录中的 challenge.json 提供。 */
 export interface LevelDef {
   id: number
@@ -186,6 +199,10 @@ export interface LabUiPreferences {
   onboardingComplete: boolean
   /** xterm 正文使用的像素字号。 */
   terminalFontSize: number
+  /** 工作台使用的主强调色。 */
+  accent: AccentName
+  /** 自选颜色及其明暗模式校正结果。 */
+  customAccent: CustomAccent
 }
 
 /** 虚拟机启动阶段（用于加载界面展示真实阶段，不伪造百分比） */

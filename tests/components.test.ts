@@ -9,7 +9,10 @@ import LevelRail from '../src/components/LevelRail.vue'
 import MissionPanel from '../src/components/MissionPanel.vue'
 import OnboardingDialog from '../src/components/OnboardingDialog.vue'
 import TopBar from '../src/components/TopBar.vue'
+import { createCustomAccent } from '../src/services/accent-color'
 import type { LevelDef } from '../src/types/lab'
+
+const customAccent = createCustomAccent('#357a50')!
 
 const level: LevelDef = {
   id: 1,
@@ -159,7 +162,14 @@ describe('accessible components', () => {
 
   it('重新开始按钮需要二次点击才发送事件', async () => {
     const wrapper = mount(TopBar, {
-      props: { completedCount: 2, total: 10, mode: 'guided', theme: 'light' },
+      props: {
+        completedCount: 2,
+        total: 10,
+        mode: 'guided',
+        theme: 'light',
+        accent: 'forest',
+        customAccent,
+      },
     })
     const restart = wrapper.findAll('button').find((button) => button.text() === '重新开始')
     expect(restart).toBeDefined()
@@ -169,6 +179,52 @@ describe('accessible components', () => {
     expect(restart!.text()).toContain('确认')
     await restart!.trigger('click')
     expect(wrapper.emitted('reset-all')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('配色弹层公开明暗模式和可辨识色板，并支持 Escape 关闭', async () => {
+    const wrapper = mount(TopBar, {
+      props: {
+        completedCount: 2,
+        total: 10,
+        mode: 'guided',
+        theme: 'light',
+        accent: 'forest',
+        customAccent,
+      },
+      attachTo: document.body,
+    })
+
+    const trigger = wrapper.get<HTMLButtonElement>('button[aria-label="界面配色"]')
+    expect(trigger.attributes('aria-expanded')).toBe('false')
+    await trigger.trigger('click')
+    await nextTick()
+
+    expect(trigger.attributes('aria-expanded')).toBe('true')
+    expect(wrapper.get('[role="dialog"]').attributes('aria-label')).toBe('界面配色')
+    expect(wrapper.findAll('.palette-option')).toHaveLength(4)
+    expect(wrapper.get('.palette-option[aria-pressed="true"]').text()).toContain('林地')
+
+    const ocean = wrapper.findAll('.palette-option').find((button) => button.text().includes('海湾'))
+    expect(ocean).toBeDefined()
+    await ocean!.trigger('click')
+    expect(wrapper.emitted('change-accent')?.[0]).toEqual(['ocean'])
+
+    await wrapper.get('.custom-color-select').trigger('click')
+    expect(wrapper.emitted('change-accent')?.at(-1)).toEqual(['custom'])
+    await wrapper.get<HTMLInputElement>('input[type="color"]').setValue('#ff0000')
+    expect(wrapper.emitted('change-custom-accent')?.[0]).toEqual(['#ff0000'])
+
+    const dark = wrapper.findAll('.theme-options button').find((button) => button.text().includes('深色'))
+    expect(dark).toBeDefined()
+    await dark!.trigger('click')
+    expect(wrapper.emitted('change-theme')?.[0]).toEqual(['dark'])
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await nextTick()
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(trigger.element)
+    wrapper.unmount()
   })
 
   it('关卡轨道只允许选择已解锁关卡，并标记当前与完成状态', async () => {

@@ -14,6 +14,7 @@ defineProps<{
     | 'lock'
     | 'moon'
     | 'minus'
+    | 'palette'
     | 'plus'
     | 'rotate-ccw'
     | 'server'
@@ -119,6 +120,13 @@ defineProps<{
       <path d="M20 12h2" />
       <path d="m6.34 17.66-1.41 1.41" />
       <path d="m19.07 4.93-1.41 1.41" />
+    </template>
+    <template v-else-if="name === 'palette'">
+      <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" stroke="none" />
+      <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" stroke="none" />
+      <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" stroke="none" />
+      <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" stroke="none" />
+      <path d="M12 22a10 10 0 1 1 10-10c0 2.2-1.8 4-4 4h-1.8c-.9 0-1.5 1-.9 1.8l.3.5c1 1.6-.2 3.7-2.1 3.7z" />
     </template>
     <template v-else-if="name === 'minus'">
       <path d="M5 12h14" />

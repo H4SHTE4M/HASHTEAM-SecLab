@@ -12,8 +12,42 @@
         try {
           const storedTheme = localStorage.getItem('hashteam-theme-v1')
           document.documentElement.dataset.theme = storedTheme === 'dark' ? 'dark' : 'light'
+          let storedAccent = 'forest'
+          try {
+            const storedPreferences = JSON.parse(localStorage.getItem('hashteam-lab-ui-v1') || 'null')
+            const preferredAccent = storedPreferences && storedPreferences.accent
+            const customAccent = storedPreferences && storedPreferences.customAccent
+            const validHex = (value) =>
+              typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value)
+            if (
+              preferredAccent === 'ocean' ||
+              preferredAccent === 'indigo' ||
+              preferredAccent === 'rose'
+            ) {
+              storedAccent = preferredAccent
+            } else if (
+              preferredAccent === 'custom' &&
+              customAccent &&
+              validHex(customAccent.light) &&
+              validHex(customAccent.dark)
+            ) {
+              storedAccent = 'custom'
+              document.documentElement.style.setProperty(
+                '--custom-accent-light',
+                customAccent.light,
+              )
+              document.documentElement.style.setProperty(
+                '--custom-accent-dark',
+                customAccent.dark,
+              )
+            }
+          } catch {
+            // 损坏的界面偏好不应影响独立保存的明暗主题。
+          }
+          document.documentElement.dataset.accent = storedAccent
         } catch {
           document.documentElement.dataset.theme = 'light'
+          document.documentElement.dataset.accent = 'forest'
         }
       })()
     </script>
