@@ -43,8 +43,8 @@ function selectMode(mode: LabMode): void {
 }
 
 function nextStep(): void {
-  if (tutorialStep.value === 1 && !demoRun.value) return
-  tutorialStep.value = Math.min(tutorialStep.value + 1, 3)
+  if (tutorialStep.value === 2 && !demoRun.value) return
+  tutorialStep.value = Math.min(tutorialStep.value + 1, 4)
   void nextTick(() => primaryRef.value?.focus())
 }
 
@@ -96,15 +96,15 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <!-- 需要观察终端的教学步骤（0-1）降低遮罩透明度，其余步骤压暗背景聚焦弹窗 -->
-  <div class="onboarding-layer" :class="{ 'focus-terminal': tutorialStep >= 0 && tutorialStep <= 1 }">
+  <!-- 需要观察终端的教学步骤（1-2）降低遮罩透明度，其余步骤压暗背景聚焦弹窗 -->
+  <div class="onboarding-layer" :class="{ 'focus-terminal': tutorialStep >= 1 && tutorialStep <= 2 }">
     <div
-      v-if="tutorialStep >= 0 && tutorialStep <= 1"
+      v-if="tutorialStep >= 1 && tutorialStep <= 2"
       class="terminal-highlight"
       :style="highlightStyle"
       aria-hidden="true"
     >
-      <span>观察左侧真实终端</span>
+      <span>观察旁边的真实终端</span>
     </div>
     <section
       ref="dialogRef"
@@ -115,9 +115,9 @@ onBeforeUnmount(() => {
       tabindex="-1"
     >
       <template v-if="tutorialStep < 0">
-        <span class="eyebrow">开始前先选择帮助密度</span>
+        <span class="eyebrow">开始前</span>
         <h2 id="onboarding-title">你希望怎样完成新手村？</h2>
-        <p>两种模式使用相同环境和最终判题，可以随时无损切换。</p>
+        <p>两种模式使用相同环境和通关判定，可以随时无损切换。</p>
         <p v-if="progressResetNotice" class="migration-notice" role="status">
           教学路径已升级，旧版步骤进度已重置，其他浏览器数据不受影响。
         </p>
@@ -146,19 +146,43 @@ onBeforeUnmount(() => {
             <h2 id="onboarding-title">
               {{
                 tutorialStep === 0
-                  ? '提示符后面才是输入区'
+                  ? '这个黑色窗口叫终端'
                   : tutorialStep === 1
-                    ? '命令、选项和参数靠空格分开'
+                    ? '提示符后面才是输入区'
                     : tutorialStep === 2
-                      ? '占位符必须换成真实值'
-                      : '观察输出，按需提示，随时重置'
+                      ? '命令、选项和参数靠空格分开'
+                      : tutorialStep === 3
+                        ? '占位符必须换成真实值'
+                        : '观察输出，按需提示，随时重置'
               }}
             </h2>
           </div>
-          <span class="step-count">{{ tutorialStep + 1 }} / 4</span>
+          <span class="step-count">{{ tutorialStep + 1 }} / 5</span>
         </header>
 
         <div v-if="tutorialStep === 0" class="tutorial-body">
+          <div class="prompt-demo">
+            <span class="prompt">guest@hashteam:~$</span><span class="cursor">▌</span>
+          </div>
+          <p>
+            在这个窗口里不用鼠标点图标，而是打一句简短的话——叫<strong>命令</strong>——电脑用文字回答你。
+            命令不是你随便编的词，它是电脑里现成<strong>工具的名字</strong>（比如 ls 是「列出文件夹内容」那个工具的名字）；
+            拼错它会回答 not found（没有叫这个名字的工具）。
+          </p>
+          <p>
+            命令后面可以带<strong>参数</strong>（对谁做，比如一个文件名）和<strong>选项</strong>（工具的开关，
+            相当于 Windows 里勾选「显示隐藏的文件」）。读取你输入、替你执行命令的程序叫
+            <strong>Shell</strong>；<code>$</code> 就是它「我准备好了」的信号。
+          </p>
+          <ul class="key-grid">
+            <li><kbd>ls</kbd><span>≈ 打开文件夹看看</span></li>
+            <li><kbd>pwd</kbd><span>≈ 看地址栏</span></li>
+            <li><kbd>cat</kbd><span>≈ 双击打开文件</span></li>
+            <li><kbd>目录</kbd><span>就是「文件夹」</span></li>
+          </ul>
+        </div>
+
+        <div v-else-if="tutorialStep === 1" class="tutorial-body">
           <div class="prompt-demo">
             <span class="prompt">guest@hashteam:~$</span><span class="cursor">▌</span>
           </div>
@@ -168,10 +192,12 @@ onBeforeUnmount(() => {
             <li><kbd>Backspace</kbd><span>删除输错字符</span></li>
             <li><kbd>↑ / ↓</kbd><span>找回历史命令</span></li>
             <li><kbd>鼠标拖选</kbd><span>选择并复制输出</span></li>
+            <li><kbd>Ctrl+C</kbd><span>中断卡住的程序；选中文字时是复制</span></li>
+            <li><kbd>Ctrl+V</kbd><span>粘贴复制的值到输入框或终端</span></li>
           </ul>
         </div>
 
-        <div v-else-if="tutorialStep === 1" class="tutorial-body">
+        <div v-else-if="tutorialStep === 2" class="tutorial-body">
           <div class="anatomy-demo" aria-label="命令结构示例">
             <span class="command-part">echo<small>命令</small></span>
             <span class="space-part">空格</span>
@@ -179,12 +205,12 @@ onBeforeUnmount(() => {
           </div>
           <p>选项通常以 <code>-</code> 开头，用来改变命令工作方式；文件名、数字等通常是参数。它们之间缺少空格会被当成另一段文字。</p>
           <button type="button" class="demo-command" @click="runDemo">
-            在左侧终端运行示例
+            在旁边的终端运行示例
           </button>
-          <p class="observation">运行后看左侧下一行：命令是输入，系统回应才是输出。观察后才能继续。</p>
+          <p class="observation">运行后看终端的下一行：命令是输入，系统回应才是输出。观察后才能继续。</p>
         </div>
 
-        <div v-else-if="tutorialStep === 2" class="tutorial-body">
+        <div v-else-if="tutorialStep === 3" class="tutorial-body">
           <div class="placeholder-demo">
             <code>check &lt;通行证&gt;</code>
             <span>结构提示</span>
@@ -207,11 +233,11 @@ onBeforeUnmount(() => {
         <footer class="tutorial-footer">
           <button type="button" class="btn-skip" @click="complete">跳过剩余教学</button>
           <button
-            v-if="tutorialStep < 3"
+            v-if="tutorialStep < 4"
             ref="primaryRef"
             type="button"
             class="btn-primary"
-            :disabled="tutorialStep === 1 && !demoRun"
+            :disabled="tutorialStep === 2 && !demoRun"
             @click="nextStep"
           >
             下一步
@@ -241,7 +267,7 @@ onBeforeUnmount(() => {
   transition: background-color 0.3s ease;
 }
 
-/* 教学步骤 0-1 需要阅读终端内容，遮罩调亮 */
+/* 教学步骤 1-2 需要阅读终端内容，遮罩调亮 */
 .onboarding-layer.focus-terminal {
   background: var(--overlay-backdrop-soft);
 }

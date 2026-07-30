@@ -89,6 +89,31 @@ describe('application release flows', () => {
     vi.useRealTimers()
   })
 
+  it('新会话恢复旧进度时显示一次性的欢迎回来提示，首次访问不显示', async () => {
+    vi.useFakeTimers()
+    vmMock.stage.value = 'ready'
+    const firstVisit = mount(App, { attachTo: document.body })
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(1_000)
+    await nextTick()
+    expect(firstVisit.text()).not.toContain('欢迎回来')
+    firstVisit.unmount()
+
+    const progress = useLabProgress()
+    progress.complete(1, { path: 'guided', hintsUsed: 0 })
+    progress.setLevel(2)
+    const resumed = mount(App, { attachTo: document.body })
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(1_000)
+    await nextTick()
+
+    expect(resumed.text()).toContain('欢迎回来，你上次进行到第 2 关')
+    await resumed.get('.welcome-back button').trigger('click')
+    expect(resumed.find('.welcome-back').exists()).toBe(false)
+    resumed.unmount()
+    vi.useRealTimers()
+  })
+
   it('模式切换保留本关状态，打开引导会持久化混合完成资格', async () => {
     const progress = useLabProgress()
     const preferences = useLabPreferences()

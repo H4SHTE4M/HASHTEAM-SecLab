@@ -69,6 +69,14 @@ const missionPanelWidth = ref(loadPanelWidth(viewportWidth.value))
 const isPanelResizing = ref(false)
 const theme = ref<ThemeName>(loadTheme())
 const showBootOverlay = ref(!showCompletion.value)
+// 会话开始时从 LocalStorage 恢复到的进度（此后 state 会被交互改变，需先快照）。
+// 仅「新会话恢复旧进度」时显示一次性的欢迎回来提示，首次访问不显示。
+const resumedLevel = progress.state.currentLevel
+const resumedHasProgress =
+  !progress.allCompleted.value &&
+  (resumedLevel > 1 || progress.state.completedLevels.length > 0)
+const welcomeBackDismissed = ref(false)
+const mobileBannerDismissed = ref(false)
 let resizeStartX = 0
 let resizeStartWidth = 0
 let themeTransitionTimer: number | null = null
@@ -128,6 +136,17 @@ const effectiveMissionPanelWidth = computed(() =>
 const workspaceStyle = computed(() => ({
   '--mission-panel-width': `${effectiveMissionPanelWidth.value}px`,
 }))
+const showWelcomeBack = computed(
+  () =>
+    resumedHasProgress &&
+    !welcomeBackDismissed.value &&
+    !showCompletion.value &&
+    vm.stage.value === 'ready' &&
+    !showBootOverlay.value,
+)
+const showMobileBanner = computed(
+  () => !mobileBannerDismissed.value && !showCompletion.value && viewportWidth.value <= 900,
+)
 
 let unsubscribeDisplay: (() => void) | null = null
 
@@ -364,6 +383,18 @@ function openHelp(): void {
 
 <template>
   <div class="app-shell">
+    <div v-if="showMobileBanner" class="mobile-banner" role="status">
+      <span>建议用电脑打开以获得完整终端体验</span>
+      <button type="button" aria-label="关闭提示" @click="mobileBannerDismissed = true">×</button>
+    </div>
+    <Transition name="overlay-fade">
+      <div v-if="showWelcomeBack" class="welcome-back" role="status">
+        <span>
+          欢迎回来，你上次进行到第 {{ resumedLevel }} 关。进度会自动保存在这台电脑的浏览器里。
+        </span>
+        <button type="button" aria-label="关闭提示" @click="welcomeBackDismissed = true">×</button>
+      </div>
+    </Transition>
     <div
       class="app-content"
       :style="workspaceStyle"
@@ -444,11 +475,11 @@ function openHelp(): void {
                 <div
                   class="vm-status"
                   role="status"
-                  :aria-label="vm.stage.value === 'ready' ? '本地虚拟机已连接' : '本地虚拟机正在启动'"
+                  :aria-label="vm.stage.value === 'ready' ? '实验环境已就绪' : '实验环境正在启动'"
                 >
                   <span class="status-dot" aria-hidden="true" />
                   <AppIcon name="server" :size="14" />
-                  <span>{{ vm.stage.value === 'ready' ? '本地 VM' : 'VM 启动中' }}</span>
+                  <span>{{ vm.stage.value === 'ready' ? '实验环境' : '启动中' }}</span>
                 </div>
               </div>
             </header>
@@ -572,6 +603,51 @@ function openHelp(): void {
 
 .skip-link:focus {
   transform: translateY(0);
+}
+
+.mobile-banner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 7px calc(12px + var(--safe-right)) 7px calc(12px + var(--safe-left));
+  color: var(--accent-amber);
+  font-size: 12px;
+  background: var(--accent-amber-soft);
+  border-bottom: var(--hairline) solid var(--accent-amber-border);
+}
+
+.welcome-back {
+  position: fixed;
+  top: calc(10px + var(--safe-top));
+  left: 50%;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(480px, calc(100vw - 32px));
+  padding: 9px 12px;
+  color: var(--accent-amber);
+  font-size: 13px;
+  background: var(--floating-surface);
+  border: var(--hairline) solid var(--accent-amber-border);
+  border-radius: 7px;
+  box-shadow: var(--shadow-panel);
+  transform: translateX(-50%);
+  box-sizing: border-box;
+}
+
+.mobile-banner button,
+.welcome-back button {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  color: inherit;
+  font-size: 15px;
+  line-height: 1;
+  background: transparent;
+  border: none;
+  cursor: pointer;
 }
 
 .workspace {

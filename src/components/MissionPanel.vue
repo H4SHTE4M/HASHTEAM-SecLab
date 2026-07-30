@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { normalizeAnswer } from '../services/answer-normalize'
 import type {
   LabMode,
   LearningStep,
@@ -135,13 +136,13 @@ function runObservation(): void {
 function buildStructuredCommand(): string | null {
   const step = currentStep.value
   if (!step.commandTemplate || !step.fields) return null
-  const missing = step.fields.find((field) => !fieldValues[field.id]?.trim())
+  const missing = step.fields.find((field) => !normalizeAnswer(fieldValues[field.id] ?? ''))
   if (missing) {
     commandError.value = `请先填写“${missing.label}”。`
     return null
   }
   return step.commandTemplate.replace(/\{\{([a-z][a-z0-9-]*)\}\}/g, (_, id: string) =>
-    fieldValues[id].trim(),
+    normalizeAnswer(fieldValues[id] ?? ''),
   )
 }
 
@@ -158,7 +159,7 @@ function runStructuredCommand(): void {
 }
 
 function runManualCommand(): void {
-  const command = manualCommand.value.trim()
+  const command = normalizeAnswer(manualCommand.value)
   if (!command) {
     commandError.value = '请先完整输入一条命令。'
     return
@@ -202,7 +203,7 @@ function advanceStep(): void {
 }
 
 function runVerification(): void {
-  const command = verificationCommand.value.trim()
+  const command = normalizeAnswer(verificationCommand.value)
   if (!verificationAvailable.value) {
     verificationError.value = '先完成当前教学步骤，验证区才会开放。'
     return
@@ -526,7 +527,7 @@ function stepTypeLabel(type: LearningStep['type']): string {
             </form>
             <p v-if="verificationError" class="inline-error" role="alert">{{ verificationError }}</p>
           </template>
-          <p v-else>完成全部 {{ level.steps.length }} 个必要步骤后开放，不能用连续点击跳过。</p>
+          <p v-else>完成全部 {{ level.steps.length }} 个必要步骤后开放，每一步都需要你亲自确认。</p>
         </section>
       </template>
     </div>

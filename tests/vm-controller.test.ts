@@ -17,6 +17,7 @@ class FakeEmulator implements V86Emulator {
 
   private listener: ((byte: number) => void) | null = null
   private running = true
+  readonly sent: string[] = []
 
   constructor(_options: Record<string, unknown>) {
     FakeEmulator.latest = this
@@ -30,7 +31,9 @@ class FakeEmulator implements V86Emulator {
     if (this.listener === callback) this.listener = null
   }
 
-  serial0_send(): void {}
+  serial0_send(data: string): void {
+    this.sent.push(data)
+  }
   run(): void {
     this.running = true
   }
@@ -83,6 +86,16 @@ describe('V86Controller serial diagnostics', () => {
     expect(String(serialLog?.[1]).length).toBeLessThan(4_200)
     expect(displayedLength).toBe(12_001)
 
+    await controller.stop()
+  })
+
+  it('切关后在同一串口通道补发 cd "$HOME"，把学生 shell 带回主目录', async () => {
+    const controller = new V86Controller()
+    await controller.start()
+
+    await controller.restoreLevel(3)
+
+    expect(FakeEmulator.latest?.sent).toEqual(['hashteamctl goto 3\ncd "$HOME"\n'])
     await controller.stop()
   })
 })
