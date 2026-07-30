@@ -12,7 +12,7 @@ const props = withDefaults(defineProps<{
   fontSize?: number
   autoFocus?: boolean
 }>(), {
-  fontSize: 15,
+  fontSize: 14,
   autoFocus: true,
 })
 

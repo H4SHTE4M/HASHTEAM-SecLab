@@ -33,6 +33,7 @@ import App from '../src/App.vue'
 import { useLabPreferences } from '../src/composables/useLabPreferences'
 import { useLabProgress } from '../src/composables/useLabProgress'
 import { TOTAL_LEVELS } from '../src/data/levels'
+import { createCustomAccent } from '../src/services/accent-color'
 
 beforeEach(() => {
   window.localStorage.clear()
@@ -40,6 +41,8 @@ beforeEach(() => {
   const preferences = useLabPreferences()
   preferences.state.mode = 'guided'
   preferences.state.onboardingComplete = true
+  preferences.state.accent = 'forest'
+  preferences.state.customAccent = createCustomAccent('#357a50')!
   vmMock.stage.value = 'idle'
   vmMock.errorMessage.value = null
   vi.clearAllMocks()
@@ -114,6 +117,32 @@ describe('application release flows', () => {
     vi.useRealTimers()
   })
 
+  it('关闭帮助和关于弹窗后把焦点还给对应入口', async () => {
+    vi.useFakeTimers()
+    vmMock.stage.value = 'ready'
+    const wrapper = mount(App, { attachTo: document.body })
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(1_000)
+    await nextTick()
+
+    const about = wrapper.get<HTMLButtonElement>('button[aria-label="关于实验室"]')
+    await about.trigger('click')
+    await nextTick()
+    await wrapper.get<HTMLButtonElement>('.btn-close').trigger('click')
+    await nextTick()
+    expect(document.activeElement).toBe(about.element)
+
+    const help = wrapper.get<HTMLButtonElement>('button[aria-label="操作帮助"]')
+    await help.trigger('click')
+    await nextTick()
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await nextTick()
+    expect(document.activeElement).toBe(help.element)
+
+    wrapper.unmount()
+    vi.useRealTimers()
+  })
+
   it('模式切换保留本关状态，打开引导会持久化混合完成资格', async () => {
     const progress = useLabProgress()
     const preferences = useLabPreferences()
@@ -137,6 +166,45 @@ describe('application release flows', () => {
     expect(preferences.state.mode).toBe('challenge')
     expect(progress.hasGuidedAssistance(1)).toBe(true)
 
+    wrapper.unmount()
+  })
+
+  it('切换主题色后即时应用到根节点并持久化', async () => {
+    const wrapper = mount(App)
+    await nextTick()
+
+    await wrapper.get('button[aria-label="界面配色"]').trigger('click')
+    const rose = wrapper.findAll('.palette-option').find((button) => button.text().includes('莓红'))
+    expect(rose).toBeDefined()
+    await rose!.trigger('click')
+
+    expect(document.documentElement.dataset.accent).toBe('rose')
+    expect(useLabPreferences().state.accent).toBe('rose')
+    expect(JSON.parse(window.localStorage.getItem('hashteam-lab-ui-v1') ?? '{}').accent).toBe(
+      'rose',
+    )
+    wrapper.unmount()
+  })
+
+  it('填色盘自选颜色后校正明暗色值并持久化', async () => {
+    const wrapper = mount(App)
+    await nextTick()
+
+    await wrapper.get('button[aria-label="界面配色"]').trigger('click')
+    await wrapper.get<HTMLInputElement>('input[type="color"]').setValue('#f4d03f')
+    const expected = createCustomAccent('#f4d03f')!
+
+    expect(document.documentElement.dataset.accent).toBe('custom')
+    expect(document.documentElement.style.getPropertyValue('--custom-accent-light')).toBe(
+      expected.light,
+    )
+    expect(document.documentElement.style.getPropertyValue('--custom-accent-dark')).toBe(
+      expected.dark,
+    )
+    expect(useLabPreferences().state.customAccent).toEqual(expected)
+    expect(
+      JSON.parse(window.localStorage.getItem('hashteam-lab-ui-v1') ?? '{}').customAccent,
+    ).toEqual(expected)
     wrapper.unmount()
   })
 })

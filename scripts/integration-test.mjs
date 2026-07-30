@@ -102,9 +102,18 @@ async function main() {
     await waitFor(/first-light/)
   })
 
+  await step('基础文件操作：touch 可创建文件且不会清空已有内容', async () => {
+    send("rm -f touch-probe && touch touch-probe && test -f touch-probe && printf '\\nTOUCH_CREATE_OK\\n'")
+    await waitFor(/\r?\nTOUCH_CREATE_OK\r?\n/)
+    send("printf 'preserved' > touch-probe && touch touch-probe && cat touch-probe && printf '\\nTOUCH_PRESERVE_OK\\n'")
+    await waitFor(/preserved\r?\nTOUCH_PRESERVE_OK\r?\n/)
+  })
+
   await step('VM 内核运行版本与发布锁定值一致（Linux 6.12.98）', async () => {
     send('uname -r')
     await waitFor(/6\.12\.98/)
+    send("zcat /proc/config.gz | grep -q '^CONFIG_COMPAT_32BIT_TIME=y$' && printf '\\nTIME32_COMPAT_OK\\n'")
+    await waitFor(/\r?\nTIME32_COMPAT_OK\r?\n/)
   })
 
   await step('SUID 边界：仅 su，错误密码不能改变 guest 身份', async () => {
@@ -220,8 +229,14 @@ async function main() {
   await step('第 8 关：多出来的进程（端口 31337）', async () => {
     goToLevel(8)
     await waitFor(/"level-ready","level":8\}/)
+    const netstatOutputStart = buffer.length
     send('netstat -tln')
     await waitFor(/:31337 /)
+    await waitFor(GUEST_PROMPT, 30000, 'netstat 完成后的 guest 提示符')
+    const netstatOutput = buffer.slice(netstatOutputStart)
+    if (netstatOutput.includes('/proc/net/tcp6')) {
+      throw new Error(`netstat 泄漏了缺失 IPv6 proc 文件的警告：\n${netstatOutput}`)
+    }
     send('check 31337')
     await waitFor(/还在运行/)
     send('kill $(cat .backdoor/backdoor.pid)')

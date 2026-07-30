@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref } from 'vue'
-import type { LabMode, ThemeName } from '../types/lab'
+import type { AccentName, CustomAccent, LabMode, ThemeName } from '../types/lab'
 import AppIcon from './AppIcon.vue'
+import AppearancePicker from './AppearancePicker.vue'
 
 defineProps<{
   completedCount: number
   total: number
   mode: LabMode
   theme: ThemeName
+  accent: AccentName
+  customAccent: CustomAccent
   currentLevel?: number
   currentLevelName?: string
 }>()
@@ -15,11 +18,22 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'reset-level'): void
   (e: 'reset-all'): void
-  (e: 'about'): void
-  (e: 'help'): void
+  (e: 'about', trigger: HTMLElement): void
+  (e: 'help', trigger: HTMLElement): void
   (e: 'change-mode', mode: LabMode): void
+  (e: 'change-accent', accent: AccentName): void
+  (e: 'change-custom-accent', source: string): void
+  (e: 'change-theme', theme: ThemeName): void
   (e: 'toggle-theme'): void
 }>()
+
+function handleAbout(event: MouseEvent): void {
+  if (event.currentTarget instanceof HTMLElement) emit('about', event.currentTarget)
+}
+
+function handleHelp(event: MouseEvent): void {
+  if (event.currentTarget instanceof HTMLElement) emit('help', event.currentTarget)
+}
 
 /** 「重新开始」需要二次确认：第一次点击后按钮进入确认态 */
 const confirming = ref(false)
@@ -156,7 +170,7 @@ onBeforeUnmount(() => {
                 aria-label="操作帮助"
                 data-tooltip="操作帮助"
                 data-tooltip-placement="bottom"
-                @click="emit('help')"
+                @click="handleHelp"
               >
                 <AppIcon name="help-circle" />
                 <span class="btn-label">操作帮助</span>
@@ -191,7 +205,7 @@ onBeforeUnmount(() => {
                 aria-label="关于实验室"
                 data-tooltip="关于实验室"
                 data-tooltip-placement="bottom-end"
-                @click="emit('about')"
+                @click="handleAbout"
               >
                 <AppIcon name="info" />
                 <span class="btn-label">关于</span>
@@ -199,19 +213,27 @@ onBeforeUnmount(() => {
             </div>
           </nav>
 
-          <button
-            type="button"
-            class="icon-btn theme-toggle"
-            :aria-label="theme === 'light' ? '切换到深色模式' : '切换到浅色模式'"
-            :aria-pressed="theme === 'dark'"
-            :data-tooltip="theme === 'light' ? '深色模式' : '浅色模式'"
-            data-tooltip-placement="bottom-end"
-            @click="emit('toggle-theme')"
-          >
-            <Transition name="theme-icon" mode="out-in">
-              <AppIcon :key="theme" :name="theme === 'light' ? 'moon' : 'sun'" />
-            </Transition>
-          </button>
+          <div class="appearance-controls">
+            <button
+              type="button"
+              class="icon-btn theme-toggle"
+              :aria-label="theme === 'light' ? '切换到深色模式' : '切换到浅色模式'"
+              :aria-pressed="theme === 'dark'"
+              :data-tooltip="theme === 'light' ? '深色模式' : '浅色模式'"
+              data-tooltip-placement="bottom-end"
+              @click="emit('toggle-theme')"
+            >
+              <AppIcon :name="theme === 'light' ? 'moon' : 'sun'" />
+            </button>
+            <AppearancePicker
+              :theme="theme"
+              :accent="accent"
+              :custom-accent="customAccent"
+              @change-theme="emit('change-theme', $event)"
+              @change-accent="emit('change-accent', $event)"
+              @change-custom-accent="emit('change-custom-accent', $event)"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -321,6 +343,7 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
   font-size: 15px;
   font-weight: 560;
+  line-height: 1.3;
   text-overflow: ellipsis;
 }
 
@@ -522,25 +545,16 @@ onBeforeUnmount(() => {
   box-shadow: var(--shadow-control);
 }
 
+.appearance-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .tool-group .icon-btn:hover,
 .theme-toggle:hover {
   background: var(--surface-3);
   box-shadow: none;
-}
-
-.theme-icon-enter-active,
-.theme-icon-leave-active {
-  transition: opacity var(--duration-fast) ease, transform var(--duration-normal) var(--ease-out);
-}
-
-.theme-icon-enter-from {
-  opacity: 0;
-  transform: rotate(-35deg) scale(0.72);
-}
-
-.theme-icon-leave-to {
-  opacity: 0;
-  transform: rotate(35deg) scale(0.72);
 }
 
 .btn-label {
@@ -638,6 +652,10 @@ onBeforeUnmount(() => {
     grid-column: 3;
     justify-self: end;
   }
+
+  .appearance-controls {
+    grid-column: 4;
+  }
 }
 
 /* 默认任务栏宽度不足以同时容纳所有文字按钮；较宽时才恢复标签。 */
@@ -674,9 +692,9 @@ onBeforeUnmount(() => {
   .topbar {
     height: auto;
     grid-template-areas:
-      'brand progress theme'
+      'brand progress appearance'
       'actions actions actions';
-    grid-template-columns: minmax(0, 1fr) auto 44px;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 10px var(--space-4);
     padding: calc(10px + var(--safe-top)) calc(12px + var(--safe-right)) 10px calc(12px + var(--safe-left));
   }
@@ -706,8 +724,8 @@ onBeforeUnmount(() => {
     display: none;
   }
 
-  .theme-toggle {
-    grid-area: theme;
+  .appearance-controls {
+    grid-area: appearance;
   }
 }
 
@@ -842,6 +860,14 @@ onBeforeUnmount(() => {
     min-width: 44px;
     height: 44px;
     padding-inline: 7px;
+  }
+
+  .appearance-controls {
+    gap: 0;
+  }
+
+  .theme-toggle {
+    display: none;
   }
 }
 

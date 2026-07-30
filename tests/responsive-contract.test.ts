@@ -54,11 +54,28 @@ describe('responsive layout contract', () => {
     const html = source('index.html')
     const globalCss = source('src/styles/global.css')
     const topbar = source('src/components/TopBar.vue')
+    const appearancePicker = source('src/components/AppearancePicker.vue')
 
     expect(html).toContain('hashteam-theme-v1')
     expect(globalCss).toContain(":root[data-theme='dark']")
     expect(topbar).toContain('class="icon-btn theme-toggle"')
     expect(topbar).toContain("'深色模式' : '浅色模式'")
+    expect(topbar).not.toContain('<Transition name="theme-icon"')
+    expect(topbar).not.toContain('.theme-icon-leave-to')
+    expect(topbar).toContain('class="appearance-controls"')
+    expect(appearancePicker).toContain('aria-label="界面配色"')
+    expect(appearancePicker).toContain('class="palette-swatch"')
+    expect(appearancePicker).toContain('type="color"')
+    expect(appearancePicker).toContain('class="custom-color-select"')
+    expect(globalCss).toContain(":root[data-theme='dark'][data-accent='ocean']")
+    expect(globalCss).toContain(":root[data-theme='dark'][data-accent='custom']")
+    expect(globalCss).toContain(
+      '--bg-canvas: color-mix(in srgb, var(--accent-cyan) 10%',
+    )
+    expect(globalCss).toContain(
+      '--surface-2: color-mix(in srgb, var(--accent-cyan) 7%',
+    )
+    expect(globalCss).toContain('--accent-nav-text: var(--accent-cyan)')
   })
 
   it('keeps increased-contrast colors legible in both themes', () => {
@@ -78,6 +95,21 @@ describe('responsive layout contract', () => {
     expect(contrastRatio(cssColor(globalCss, '--accent-cyan'), '#ffffff')).toBeGreaterThanOrEqual(
       4.5,
     )
+  })
+
+  it('keeps every selectable accent legible in both themes', () => {
+    const globalCss = source('src/styles/global.css')
+    const lightAccents = ['#357a50', '#176b87', '#5b5fa3', '#9b4a69']
+    const darkAccents = ['#71c78a', '#63c5e3', '#aeb8ff', '#ec9bb4']
+
+    for (const color of lightAccents) {
+      expect(globalCss).toContain(`--accent-cyan: ${color}`)
+      expect(contrastRatio(color, '#ffffff')).toBeGreaterThanOrEqual(4.5)
+    }
+    for (const color of darkAccents) {
+      expect(globalCss).toContain(`--accent-cyan: ${color}`)
+      expect(contrastRatio(color, '#25302a')).toBeGreaterThanOrEqual(4.5)
+    }
   })
 
   it('stacks narrow landscape screens and only splits when both panes fit', () => {
@@ -146,6 +178,8 @@ describe('responsive layout contract', () => {
     expect(terminal).toContain('terminal.options.fontSize = fontSize')
     expect(preferences).toContain('TERMINAL_FONT_SIZE_MIN = 12')
     expect(preferences).toContain('TERMINAL_FONT_SIZE_MAX = 20')
+    expect(preferences).toContain('TERMINAL_FONT_SIZE_DEFAULT = 14')
+    expect(terminal).toContain('fontSize: 14')
     expect(app).toContain('grid-template-columns: 44px 32px 44px')
   })
 
@@ -280,6 +314,14 @@ describe('responsive layout contract', () => {
     expect(topbar).toContain('@container (max-width: 560px)')
   })
 
+  it('keeps the desktop workspace name line box tall enough to avoid clipping', () => {
+    const topbar = source('src/components/TopBar.vue')
+
+    expect(topbar).toMatch(
+      /\.context-name\s*\{[\s\S]*?font-size:\s*15px;[\s\S]*?line-height:\s*1\.3;/,
+    )
+  })
+
   it('bounds overlays to the dynamic viewport and safe areas', () => {
     for (const component of [
       'src/components/AboutModal.vue',
@@ -296,6 +338,21 @@ describe('responsive layout contract', () => {
     expect(completion).toContain('overflow-y: auto')
     expect(completion).toContain('var(--safe-top)')
     expect(completion).toContain('var(--safe-bottom)')
+  })
+
+  it('adapts the about-lab introduction to narrow, desktop, and large viewports', () => {
+    const about = source('src/components/AboutModal.vue')
+
+    expect(about).toContain('width: min(100%, clamp(42.5rem, 48vw, 54rem))')
+    expect(about).toContain('max-height: min(100%, clamp(47.5rem, 82dvh, 56rem))')
+    expect(about).toContain('--about-gutter-inline: clamp(12px, 3vw, 40px)')
+    expect(about).toMatch(/\.modal-body p,[\s\S]*?overflow-wrap:\s*anywhere;/)
+    expect(about).toMatch(
+      /@media \(min-width:\s*1440px\) and \(min-height:\s*800px\)[\s\S]*?\.modal-body p,[\s\S]*?font-size:\s*15px;/,
+    )
+    expect(about).toMatch(
+      /@media \(min-width:\s*2200px\) and \(min-height:\s*1200px\)[\s\S]*?\.modal-body p,[\s\S]*?font-size:\s*16px;/,
+    )
   })
 
   it('keeps the completed boot state visible before opening onboarding', () => {
