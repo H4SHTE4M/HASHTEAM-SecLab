@@ -29,6 +29,9 @@ const emit = defineEmits<{
 }>()
 
 const panelScrollRef = ref<HTMLElement | null>(null)
+const currentActionRef = ref<HTMLElement | null>(null)
+const stepHeadingRef = ref<HTMLElement | null>(null)
+const manualInputRef = ref<HTMLInputElement | null>(null)
 const localCompletedIds = ref<number[]>([])
 const actionPerformed = ref(false)
 const confirmChecked = ref(false)
@@ -36,6 +39,7 @@ const selectedChoice = ref('')
 const commandError = ref('')
 const answerError = ref('')
 const manualCommand = ref('')
+const lastExecutedCommand = ref('')
 const verificationCommand = ref('')
 const verificationError = ref('')
 const fieldValues = reactive<Record<string, string>>({})
@@ -103,13 +107,28 @@ watch(
     verificationCommand.value = ''
     verificationError.value = ''
     Object.keys(fieldValues).forEach((key) => delete fieldValues[key])
+
+    // 步骤高低差异很大；保留旧 scrollTop 会把新步骤标题裁到面板上方。
+    // 等 Vue 更新完当前步骤 DOM 后，从标题开始展示并把读屏/键盘焦点带到这里。
+    void nextTick(() => {
+      const panel = panelScrollRef.value
+      const action = currentActionRef.value
+      if (panel !== null && action !== null) {
+        const panelTop = panel.getBoundingClientRect().top
+        const actionTop = action.getBoundingClientRect().top
+        panel.scrollTop = Math.max(panel.scrollTop + actionTop - panelTop - 12, 0)
+      }
+      stepHeadingRef.value?.focus({ preventScroll: true })
+    })
   },
+  { flush: 'post' },
 )
 
 watch(
   () => props.level.id,
   () => {
     localCompletedIds.value = []
+    lastExecutedCommand.value = ''
   },
 )
 
@@ -129,6 +148,7 @@ function runObservation(): void {
   const command = currentStep.value.command
   if (!command) return
   emit('run-command', command)
+  lastExecutedCommand.value = command
   actionPerformed.value = true
   commandError.value = ''
 }
@@ -154,6 +174,7 @@ function runStructuredCommand(): void {
     return
   }
   emit('run-command', command)
+  lastExecutedCommand.value = command
   actionPerformed.value = true
   commandError.value = ''
 }
@@ -169,8 +190,15 @@ function runManualCommand(): void {
     return
   }
   emit('run-command', command)
+  lastExecutedCommand.value = command
   actionPerformed.value = true
   commandError.value = ''
+}
+
+function reuseLastCommand(): void {
+  if (!lastExecutedCommand.value) return
+  manualCommand.value = lastExecutedCommand.value
+  void nextTick(() => manualInputRef.value?.focus())
 }
 
 function submitAnswer(): void {
@@ -188,7 +216,9 @@ function submitAnswer(): void {
 }
 
 function confirmObservation(): void {
-  if (!actionPerformed.value) return
+  // 手动步骤允许学生直接在真实终端中使用 ↑ 取回历史命令、编辑并执行。
+  // 前端无法可靠监听 Shell 是否完成了目标，因此由最终 check 校验真实环境状态。
+  if (!actionPerformed.value && currentStep.value.type !== 'manual-command') return
   rememberStepCompletion()
 }
 
@@ -309,11 +339,18 @@ function stepTypeLabel(type: LearningStep['type']): string {
           </details>
         </section>
 
-        <section v-if="mode === 'guided'" class="current-action" aria-live="polite">
+        <section
+          v-if="mode === 'guided'"
+          ref="currentActionRef"
+          class="current-action"
+          aria-live="polite"
+        >
           <header class="action-header">
             <div>
               <span class="action-eyebrow">{{ stepTypeLabel(currentStep.type) }}</span>
-              <h3>第 {{ currentStepIndex + 1 }} / {{ level.steps.length }} 步 · {{ currentStep.title }}</h3>
+              <h3 ref="stepHeadingRef" tabindex="-1">
+                第 {{ currentStepIndex + 1 }} / {{ level.steps.length }} 步 · {{ currentStep.title }}
+              </h3>
             </div>
             <span class="step-progress" aria-hidden="true">
               <i
@@ -383,12 +420,21 @@ function stepTypeLabel(type: LearningStep['type']): string {
           >
             <label :for="`manual-${level.id}-${currentStep.id}`">输入要运行的命令</label>
             <input
+              ref="manualInputRef"
               :id="`manual-${level.id}-${currentStep.id}`"
               v-model="manualCommand"
               autocomplete="off"
               spellcheck="false"
               placeholder="这里不提供可点击答案"
             />
+            <button
+              v-if="lastExecutedCommand"
+              type="button"
+              class="btn-reuse-command"
+              @click="reuseLastCommand"
+            >
+              带入上一条已运行命令继续编辑
+            </button>
             <button type="submit">在终端运行</button>
           </form>
 
@@ -430,14 +476,18 @@ function stepTypeLabel(type: LearningStep['type']): string {
           <button
             v-if="
               ['run', 'input'].includes(currentStep.completion) &&
-              actionPerformed &&
+              (actionPerformed || currentStep.type === 'manual-command') &&
               !currentStepResolved
             "
             type="button"
             class="btn-evidence"
             @click="confirmObservation"
           >
-            我已完成操作并核对观察点
+            {{
+              currentStep.type === 'manual-command' && !actionPerformed
+                ? '我已在真实终端完成并核对观察点'
+                : '我已完成操作并核对观察点'
+            }}
           </button>
 
           <p v-if="commandError || answerError" class="inline-error" role="alert">
@@ -952,6 +1002,22 @@ input[type='text'],
   border: none;
   border-radius: 7px;
   cursor: pointer;
+}
+
+.manual-form .btn-reuse-command {
+  color: var(--accent-cyan);
+  background: var(--surface-2);
+  border: var(--hairline) solid var(--accent-cyan-border);
+}
+
+.action-header h3:focus {
+  outline: none;
+}
+
+.action-header h3:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 3px;
 }
 
 .question {

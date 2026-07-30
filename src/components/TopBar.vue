@@ -640,7 +640,8 @@ onBeforeUnmount(() => {
   }
 }
 
-@container (max-width: 392px) {
+/* 默认任务栏宽度不足以同时容纳所有文字按钮；较宽时才恢复标签。 */
+@container (max-width: 560px) {
   .mission-controls-layout {
     column-gap: 2px;
   }

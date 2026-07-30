@@ -72,7 +72,7 @@
       "type": "partial-command",
       "title": "建立分类目录",
       "objective": "一次补全多个 mkdir 参数",
-      "instruction": "mkdir 后可以跟多个目录参数。按待办填写三个目录名，参数之间各留一个空格。",
+      "instruction": "mkdir 后可以跟多个目录参数。按待办填写三个目录名，参数之间各留一个空格。创建成功时通常不会输出文字；提示符重新出现且没有报错后，再用 ls 复查。",
       "completion": "input",
       "allowRun": false,
       "uses": ["command-anatomy", "relative-path"],
@@ -85,7 +85,8 @@
         }
       ],
       "observation": "在终端再次运行 ls，确认三个新目录都已出现，原文件仍留在当前目录。",
-      "reinforcement": "一个命令可以接收多个并列参数。"
+      "commonErrors": ["没有输出不等于失败；如果提示符已经重新出现且没有报错，先用 ls 检查结果。"],
+      "reinforcement": "一个命令可以接收多个并列参数；修改命令要靠复查确认结果。"
     },
     {
       "id": 5,
@@ -110,7 +111,7 @@
       "type": "partial-command",
       "title": "示范移动一类文件",
       "objective": "完成一次源文件到目标目录的移动",
-      "instruction": "选择日志文件作为源、日志目录作为目标，自行填入两部分。",
+      "instruction": "选择日志文件作为源、日志目录作为目标，自行填入两部分。mv 成功时通常安静地返回提示符，需要再查看原位置和目标位置确认。",
       "completion": "input",
       "allowRun": false,
       "uses": ["source-target", "relative-path"],

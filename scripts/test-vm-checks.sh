@@ -401,6 +401,43 @@ if OUT=$(run_check "$SB3"); then RC=0; else RC=$?; fi
 expect_eq "相对路径 -h www 启动同样通过" "$RC" "0"
 stop_test_httpd
 
+echo "—— 分层 help ——"
+sandbox 1
+SB="$SB_DIR"
+HELP_ENV=(
+    "HOME=$SB/home/guest"
+    "PATH=$STUB:$PATH"
+    "HASHTEAM_HELP_FILE=$HASHTEAM_LIB_DIR/help.txt"
+)
+OUT=$(env "${HELP_ENV[@]}" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/help")
+expect_contains "$OUT" "默认 help 显示零基础标题" "HASHTEAM 零基础命令备忘"
+expect_contains "$OUT" "默认 help 提醒无输出也可能成功" "很多修改命令成功时没有输出"
+expect_contains "$OUT" "默认 help 给出当前关命令" "当前是第 1 关"
+HELP_LINES=$(printf '%s\n' "$OUT" | "$STUB/wc" -l)
+if [ "$HELP_LINES" -le 30 ]; then
+    ok "默认 help 控制在一屏多一点（$HELP_LINES 行）"
+else
+    bad "默认 help 仍然过长（$HELP_LINES 行）"
+fi
+
+OUT=$(env "${HELP_ENV[@]}" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/help" ls)
+expect_contains "$OUT" "help ls 只提取 ls 说明" "用途：列出目录内容"
+case "$OUT" in
+    *"用途：把文本文件内容打印到终端。"*) bad "help ls 混入了 cat 说明" ;;
+    *) ok "help ls 在下一个命令前停止" ;;
+esac
+
+OUT=$(env "${HELP_ENV[@]}" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/help" all)
+expect_contains "$OUT" "help all 仍可查看完整备忘" "文件识别与本地 HTTP"
+
+if OUT=$(env "${HELP_ENV[@]}" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/help" does-not-exist 2>&1); then
+    RC=0
+else
+    RC=$?
+fi
+expect_eq "未知 help 主题退出码为 2" "$RC" "2"
+expect_contains "$OUT" "未知 help 主题给出下一步" "输入 help 查看可查询的命令和主题"
+
 echo "—— 占位命令 ——"
 for cmd in man nano python; do
     OUT=$(PATH="$STUB:$PATH" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/$cmd" 2>&1) && RC=0 || RC=$?

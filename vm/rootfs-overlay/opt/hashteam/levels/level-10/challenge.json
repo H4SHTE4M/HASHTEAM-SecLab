@@ -62,7 +62,7 @@
       "completion": "input",
       "allowRun": false,
       "uses": ["process-pid", "listening-port", "remediation-verification"],
-      "observation": "记录服务 PID，并确认当前监听是仅本机还是所有接口。0.0.0.0 表示监听所有网络接口（任何人都能连），127.0.0.1 表示仅本机。",
+      "observation": "记录服务 PID，并确认当前监听是仅本机还是所有接口。0.0.0.0 表示绑定所有已配置网络接口，会扩大可能的连接范围；是否能从外部到达还取决于网络和防火墙。127.0.0.1 表示仅限本机连接。",
       "reinforcement": "文件写了什么和进程实际做什么，都必须检查。"
     },
     {
