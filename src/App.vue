@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import TopBar from './components/TopBar.vue'
 import LabTerminal from './components/LabTerminal.vue'
 import MissionPanel from './components/MissionPanel.vue'
@@ -74,6 +74,7 @@ let resizeStartWidth = 0
 let themeTransitionTimer: number | null = null
 let bootOverlayTimer: number | null = null
 let bootOverlayShownAt = performance.now()
+let overlayReturnFocus: HTMLElement | null = null
 
 document.documentElement.dataset.theme = theme.value
 
@@ -348,15 +349,32 @@ function handleCompleteOnboarding(): void {
   preferences.completeOnboarding()
   progress.dismissProgressResetNotice()
   showOnboarding.value = false
-  terminalRef.value?.focus()
+  restoreFocusAfterOverlayClose()
 }
 
-function openAbout(): void {
+function restoreFocusAfterOverlayClose(): void {
+  const returnFocus = overlayReturnFocus
+  overlayReturnFocus = null
+  void nextTick(() => {
+    if (showAbout.value || showOnboardingDialog.value) return
+    if (returnFocus?.isConnected) returnFocus.focus()
+    else terminalRef.value?.focus()
+  })
+}
+
+function openAbout(trigger: HTMLElement): void {
+  overlayReturnFocus = trigger
   showOnboarding.value = false
   showAbout.value = true
 }
 
-function openHelp(): void {
+function closeAbout(): void {
+  showAbout.value = false
+  restoreFocusAfterOverlayClose()
+}
+
+function openHelp(trigger: HTMLElement): void {
+  overlayReturnFocus = trigger
   showAbout.value = false
   showOnboarding.value = true
 }
@@ -517,7 +535,7 @@ function openHelp(): void {
       />
     </Transition>
     <Transition name="overlay-fade">
-      <AboutModal v-if="showAbout" @close="showAbout = false" />
+      <AboutModal v-if="showAbout" @close="closeAbout" />
     </Transition>
     <Transition name="overlay-fade">
       <OnboardingDialog

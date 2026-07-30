@@ -300,7 +300,7 @@ if [ "$SKIP_KERNEL" -eq 0 ]; then
         --enable BINFMT_ELF --enable BINFMT_SCRIPT --enable SHMEM \
         --enable EPOLL --enable FUTEX --enable EVENTFD --enable TIMERFD \
         --enable SIGNALFD --enable INOTIFY_USER --enable PROC_SYSCTL \
-        --enable SYSVIPC --enable MULTIUSER \
+        --enable SYSVIPC --enable MULTIUSER --enable COMPAT_32BIT_TIME \
         --enable IKCONFIG --enable IKCONFIG_PROC \
         --enable PRINTK_TIME \
         --enable MODULES \

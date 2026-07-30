@@ -15,11 +15,19 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'reset-level'): void
   (e: 'reset-all'): void
-  (e: 'about'): void
-  (e: 'help'): void
+  (e: 'about', trigger: HTMLElement): void
+  (e: 'help', trigger: HTMLElement): void
   (e: 'change-mode', mode: LabMode): void
   (e: 'toggle-theme'): void
 }>()
+
+function handleAbout(event: MouseEvent): void {
+  if (event.currentTarget instanceof HTMLElement) emit('about', event.currentTarget)
+}
+
+function handleHelp(event: MouseEvent): void {
+  if (event.currentTarget instanceof HTMLElement) emit('help', event.currentTarget)
+}
 
 /** 「重新开始」需要二次确认：第一次点击后按钮进入确认态 */
 const confirming = ref(false)
@@ -135,7 +143,7 @@ onBeforeUnmount(() => {
                 aria-label="操作帮助"
                 data-tooltip="操作帮助"
                 data-tooltip-placement="bottom"
-                @click="emit('help')"
+                @click="handleHelp"
               >
                 <AppIcon name="help-circle" />
                 <span class="visually-hidden">操作帮助</span>
@@ -169,7 +177,7 @@ onBeforeUnmount(() => {
                 aria-label="关于实验室"
                 data-tooltip="关于实验室"
                 data-tooltip-placement="bottom-end"
-                @click="emit('about')"
+                @click="handleAbout"
               >
                 <AppIcon name="info" />
                 <span class="visually-hidden">关于实验室</span>

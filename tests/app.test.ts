@@ -89,6 +89,32 @@ describe('application release flows', () => {
     vi.useRealTimers()
   })
 
+  it('关闭帮助和关于弹窗后把焦点还给对应入口', async () => {
+    vi.useFakeTimers()
+    vmMock.stage.value = 'ready'
+    const wrapper = mount(App, { attachTo: document.body })
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(1_000)
+    await nextTick()
+
+    const about = wrapper.get<HTMLButtonElement>('button[aria-label="关于实验室"]')
+    await about.trigger('click')
+    await nextTick()
+    await wrapper.get<HTMLButtonElement>('.btn-close').trigger('click')
+    await nextTick()
+    expect(document.activeElement).toBe(about.element)
+
+    const help = wrapper.get<HTMLButtonElement>('button[aria-label="操作帮助"]')
+    await help.trigger('click')
+    await nextTick()
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await nextTick()
+    expect(document.activeElement).toBe(help.element)
+
+    wrapper.unmount()
+    vi.useRealTimers()
+  })
+
   it('模式切换保留本关状态，打开引导会持久化混合完成资格', async () => {
     const progress = useLabProgress()
     const preferences = useLabPreferences()
