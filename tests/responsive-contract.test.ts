@@ -279,6 +279,14 @@ describe('responsive layout contract', () => {
     expect(topbar).toMatch(/\.tool-group\s*\{[\s\S]*?grid-column:\s*3;[\s\S]*?justify-self:\s*end;/)
   })
 
+  it('keeps the desktop workspace name line box tall enough to avoid clipping', () => {
+    const topbar = source('src/components/TopBar.vue')
+
+    expect(topbar).toMatch(
+      /\.context-name\s*\{[\s\S]*?font-size:\s*15px;[\s\S]*?line-height:\s*1\.3;/,
+    )
+  })
+
   it('bounds overlays to the dynamic viewport and safe areas', () => {
     for (const component of [
       'src/components/AboutModal.vue',

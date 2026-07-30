@@ -299,6 +299,7 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
   font-size: 15px;
   font-weight: 560;
+  line-height: 1.3;
   text-overflow: ellipsis;
 }
 
