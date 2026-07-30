@@ -646,9 +646,9 @@ function stepTypeLabel(type: LearningStep['type']): string {
 .level-name {
   margin: 8px 0 3px;
   color: var(--text-primary);
-  font-family: var(--font-display);
+  font-family: var(--font-cjk);
   font-size: 20px;
-  font-weight: 620;
+  font-weight: 600;
   line-height: 1.4;
 }
 

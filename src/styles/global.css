@@ -59,6 +59,7 @@
     'Microsoft YaHei', sans-serif;
   --font-display: 'Geist Variable', 'Noto Sans SC Variable', 'PingFang SC',
     'Microsoft YaHei', sans-serif;
+  --font-cjk: 'Noto Sans SC Variable', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-mono: 'JetBrains Mono Variable', 'SFMono-Regular', 'Cascadia Code',
     Consolas, 'Noto Sans Mono CJK SC', monospace;
   --font-terminal: 'CaskaydiaCove Nerd Font Mono', 'JetBrains Mono Variable',
