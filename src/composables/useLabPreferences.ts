@@ -1,5 +1,6 @@
 import { reactive } from 'vue'
-import type { LabMode, LabUiPreferences } from '../types/lab'
+import type { AccentName, LabMode, LabUiPreferences } from '../types/lab'
+import { createCustomAccent } from '../services/accent-color'
 import { createSafeStorage } from '../services/progress-store'
 import {
   loadUiPreferences,
@@ -30,10 +31,25 @@ export function useLabPreferences() {
     saveUiPreferences(storage, state)
   }
 
+  function setAccent(accent: AccentName): void {
+    state.accent = accent
+    saveUiPreferences(storage, state)
+  }
+
+  function setCustomAccent(source: string): void {
+    const customAccent = createCustomAccent(source)
+    if (customAccent === null) return
+    state.customAccent = customAccent
+    state.accent = 'custom'
+    saveUiPreferences(storage, state)
+  }
+
   return {
     state,
     setMode,
     completeOnboarding,
     setTerminalFontSize,
+    setAccent,
+    setCustomAccent,
   }
 }

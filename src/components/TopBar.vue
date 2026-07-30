@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref } from 'vue'
-import type { LabMode, ThemeName } from '../types/lab'
+import type { AccentName, CustomAccent, LabMode, ThemeName } from '../types/lab'
 import AppIcon from './AppIcon.vue'
+import AppearancePicker from './AppearancePicker.vue'
 
 defineProps<{
   completedCount: number
   total: number
   mode: LabMode
   theme: ThemeName
+  accent: AccentName
+  customAccent: CustomAccent
   currentLevel?: number
   currentLevelName?: string
 }>()
@@ -18,6 +21,9 @@ const emit = defineEmits<{
   (e: 'about', trigger: HTMLElement): void
   (e: 'help', trigger: HTMLElement): void
   (e: 'change-mode', mode: LabMode): void
+  (e: 'change-accent', accent: AccentName): void
+  (e: 'change-custom-accent', source: string): void
+  (e: 'change-theme', theme: ThemeName): void
   (e: 'toggle-theme'): void
 }>()
 
@@ -185,17 +191,27 @@ onBeforeUnmount(() => {
             </div>
           </nav>
 
-          <button
-            type="button"
-            class="icon-btn theme-toggle"
-            :aria-label="theme === 'light' ? '切换到深色模式' : '切换到浅色模式'"
-            :aria-pressed="theme === 'dark'"
-            :data-tooltip="theme === 'light' ? '深色模式' : '浅色模式'"
-            data-tooltip-placement="bottom-end"
-            @click="emit('toggle-theme')"
-          >
-            <AppIcon :name="theme === 'light' ? 'moon' : 'sun'" />
-          </button>
+          <div class="appearance-controls">
+            <button
+              type="button"
+              class="icon-btn theme-toggle"
+              :aria-label="theme === 'light' ? '切换到深色模式' : '切换到浅色模式'"
+              :aria-pressed="theme === 'dark'"
+              :data-tooltip="theme === 'light' ? '深色模式' : '浅色模式'"
+              data-tooltip-placement="bottom-end"
+              @click="emit('toggle-theme')"
+            >
+              <AppIcon :name="theme === 'light' ? 'moon' : 'sun'" />
+            </button>
+            <AppearancePicker
+              :theme="theme"
+              :accent="accent"
+              :custom-accent="customAccent"
+              @change-theme="emit('change-theme', $event)"
+              @change-accent="emit('change-accent', $event)"
+              @change-custom-accent="emit('change-custom-accent', $event)"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -507,6 +523,12 @@ onBeforeUnmount(() => {
   box-shadow: var(--shadow-control);
 }
 
+.appearance-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .tool-group .icon-btn:hover,
 .theme-toggle:hover {
   background: var(--surface-3);
@@ -613,6 +635,10 @@ onBeforeUnmount(() => {
     grid-column: 3;
     justify-self: end;
   }
+
+  .appearance-controls {
+    grid-column: 4;
+  }
 }
 
 @container (max-width: 392px) {
@@ -644,9 +670,9 @@ onBeforeUnmount(() => {
   .topbar {
     height: auto;
     grid-template-areas:
-      'brand progress theme'
+      'brand progress appearance'
       'actions actions actions';
-    grid-template-columns: minmax(0, 1fr) auto 44px;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 10px var(--space-4);
     padding: calc(10px + var(--safe-top)) calc(12px + var(--safe-right)) 10px calc(12px + var(--safe-left));
   }
@@ -671,8 +697,8 @@ onBeforeUnmount(() => {
     gap: 12px;
   }
 
-  .theme-toggle {
-    grid-area: theme;
+  .appearance-controls {
+    grid-area: appearance;
   }
 }
 
@@ -807,6 +833,14 @@ onBeforeUnmount(() => {
     min-width: 44px;
     height: 44px;
     padding-inline: 7px;
+  }
+
+  .appearance-controls {
+    gap: 0;
+  }
+
+  .theme-toggle {
+    display: none;
   }
 }
 

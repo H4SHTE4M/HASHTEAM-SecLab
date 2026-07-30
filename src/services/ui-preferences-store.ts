@@ -1,11 +1,15 @@
-import type { LabMode, LabUiPreferences } from '../types/lab'
+import type { AccentName, LabMode, LabUiPreferences } from '../types/lab'
+import {
+  createCustomAccent,
+  DEFAULT_CUSTOM_ACCENT_SOURCE,
+} from './accent-color'
 import type { StorageLike } from './progress-store'
 
 export const UI_PREFERENCES_STORAGE_KEY = 'hashteam-lab-ui-v1'
 export const TERMINAL_FONT_SIZE_MIN = 12
 export const TERMINAL_FONT_SIZE_MAX = 20
 export const TERMINAL_FONT_SIZE_DEFAULT = 14
-const UI_PREFERENCES_SCHEMA_VERSION = 2
+const UI_PREFERENCES_SCHEMA_VERSION = 4
 const LEGACY_TERMINAL_FONT_SIZE_DEFAULT = 15
 
 interface StoredLabUiPreferences extends Partial<LabUiPreferences> {
@@ -13,10 +17,13 @@ interface StoredLabUiPreferences extends Partial<LabUiPreferences> {
 }
 
 export function createDefaultUiPreferences(): LabUiPreferences {
+  const customAccent = createCustomAccent(DEFAULT_CUSTOM_ACCENT_SOURCE)!
   return {
     mode: null,
     onboardingComplete: false,
     terminalFontSize: TERMINAL_FONT_SIZE_DEFAULT,
+    accent: 'forest',
+    customAccent,
   }
 }
 
@@ -33,6 +40,16 @@ function isTerminalFontSize(value: unknown): value is number {
   )
 }
 
+function isAccentName(value: unknown): value is AccentName {
+  return (
+    value === 'forest' ||
+    value === 'ocean' ||
+    value === 'indigo' ||
+    value === 'rose' ||
+    value === 'custom'
+  )
+}
+
 export function loadUiPreferences(storage: StorageLike): LabUiPreferences {
   const raw = storage.getItem(UI_PREFERENCES_STORAGE_KEY)
   if (raw === null) return createDefaultUiPreferences()
@@ -44,8 +61,17 @@ export function loadUiPreferences(storage: StorageLike): LabUiPreferences {
     if (typeof value.onboardingComplete !== 'boolean') return createDefaultUiPreferences()
     const storedFontSize = value.terminalFontSize ?? TERMINAL_FONT_SIZE_DEFAULT
     if (!isTerminalFontSize(storedFontSize)) return createDefaultUiPreferences()
+    const accent = value.accent ?? 'forest'
+    if (!isAccentName(accent)) return createDefaultUiPreferences()
+    const storedCustomAccent = value.customAccent
+    const customAccent = createCustomAccent(
+      storedCustomAccent === undefined
+        ? DEFAULT_CUSTOM_ACCENT_SOURCE
+        : storedCustomAccent.source,
+    )
+    if (customAccent === null) return createDefaultUiPreferences()
     const terminalFontSize =
-      value.schemaVersion === UI_PREFERENCES_SCHEMA_VERSION ||
+      (typeof value.schemaVersion === 'number' && value.schemaVersion >= 2) ||
       storedFontSize !== LEGACY_TERMINAL_FONT_SIZE_DEFAULT
         ? storedFontSize
         : TERMINAL_FONT_SIZE_DEFAULT
@@ -53,6 +79,8 @@ export function loadUiPreferences(storage: StorageLike): LabUiPreferences {
       mode: value.mode,
       onboardingComplete: value.onboardingComplete,
       terminalFontSize,
+      accent,
+      customAccent,
     }
   } catch {
     return createDefaultUiPreferences()

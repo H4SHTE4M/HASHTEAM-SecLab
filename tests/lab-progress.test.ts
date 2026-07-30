@@ -29,10 +29,15 @@ import {
   loadUiPreferences,
   saveUiPreferences,
 } from '../src/services/ui-preferences-store'
+import {
+  createCustomAccent,
+  DEFAULT_CUSTOM_ACCENT_SOURCE,
+} from '../src/services/accent-color'
 import type { LabProgress } from '../src/types/lab'
 
 const TOTAL = 10
 const GUIDED_COMPLETION = { path: 'guided' as const, hintsUsed: 0 }
+const DEFAULT_CUSTOM_ACCENT = createCustomAccent(DEFAULT_CUSTOM_ACCENT_SOURCE)!
 
 describe('lab-progress（基于 localStorage）', () => {
   beforeEach(() => {
@@ -298,12 +303,16 @@ describe('lab UI preferences', () => {
       mode: null,
       onboardingComplete: false,
       terminalFontSize: TERMINAL_FONT_SIZE_DEFAULT,
+      accent: 'forest',
+      customAccent: DEFAULT_CUSTOM_ACCENT,
     })
 
     const preferences = {
       mode: 'guided' as const,
       onboardingComplete: true,
       terminalFontSize: 17,
+      accent: 'ocean' as const,
+      customAccent: createCustomAccent('#176b87')!,
     }
     saveUiPreferences(window.localStorage, preferences)
     expect(loadUiPreferences(window.localStorage)).toEqual(preferences)
@@ -326,6 +335,7 @@ describe('lab UI preferences', () => {
     expect(loadUiPreferences(window.localStorage).terminalFontSize).toBe(
       TERMINAL_FONT_SIZE_DEFAULT,
     )
+    expect(loadUiPreferences(window.localStorage).accent).toBe('forest')
 
     for (const terminalFontSize of [TERMINAL_FONT_SIZE_MIN, TERMINAL_FONT_SIZE_MAX]) {
       window.localStorage.setItem(
@@ -359,6 +369,8 @@ describe('lab UI preferences', () => {
       mode: 'guided',
       onboardingComplete: true,
       terminalFontSize: 15,
+      accent: 'forest',
+      customAccent: DEFAULT_CUSTOM_ACCENT,
     })
     expect(loadUiPreferences(window.localStorage).terminalFontSize).toBe(15)
   })
@@ -368,12 +380,54 @@ describe('lab UI preferences', () => {
       mode: 'challenge',
       onboardingComplete: true,
       terminalFontSize: 18,
+      accent: 'rose',
+      customAccent: DEFAULT_CUSTOM_ACCENT,
     })
     resetAllProgress(window.localStorage)
     expect(loadUiPreferences(window.localStorage)).toEqual({
       mode: 'challenge',
       onboardingComplete: true,
       terminalFontSize: 18,
+      accent: 'rose',
+      customAccent: DEFAULT_CUSTOM_ACCENT,
     })
+  })
+
+  it('无效主题色会安全回退为默认界面偏好', () => {
+    window.localStorage.setItem(
+      UI_PREFERENCES_STORAGE_KEY,
+      JSON.stringify({
+        mode: 'guided',
+        onboardingComplete: true,
+        terminalFontSize: 14,
+        accent: 'neon',
+      }),
+    )
+
+    expect(loadUiPreferences(window.localStorage)).toEqual(createDefaultUiPreferences())
+  })
+
+  it('自选颜色保存校正结果，并从旧偏好补齐默认值', () => {
+    const customAccent = createCustomAccent('#F4D03F')!
+    saveUiPreferences(window.localStorage, {
+      mode: 'guided',
+      onboardingComplete: true,
+      terminalFontSize: 14,
+      accent: 'custom',
+      customAccent,
+    })
+    expect(loadUiPreferences(window.localStorage).customAccent).toEqual(customAccent)
+
+    window.localStorage.setItem(
+      UI_PREFERENCES_STORAGE_KEY,
+      JSON.stringify({
+        mode: 'guided',
+        onboardingComplete: true,
+        terminalFontSize: 14,
+        accent: 'forest',
+        schemaVersion: 3,
+      }),
+    )
+    expect(loadUiPreferences(window.localStorage).customAccent).toEqual(DEFAULT_CUSTOM_ACCENT)
   })
 })

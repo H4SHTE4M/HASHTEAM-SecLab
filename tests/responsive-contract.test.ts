@@ -54,6 +54,7 @@ describe('responsive layout contract', () => {
     const html = source('index.html')
     const globalCss = source('src/styles/global.css')
     const topbar = source('src/components/TopBar.vue')
+    const appearancePicker = source('src/components/AppearancePicker.vue')
 
     expect(html).toContain('hashteam-theme-v1')
     expect(globalCss).toContain(":root[data-theme='dark']")
@@ -61,6 +62,20 @@ describe('responsive layout contract', () => {
     expect(topbar).toContain("'深色模式' : '浅色模式'")
     expect(topbar).not.toContain('<Transition name="theme-icon"')
     expect(topbar).not.toContain('.theme-icon-leave-to')
+    expect(topbar).toContain('class="appearance-controls"')
+    expect(appearancePicker).toContain('aria-label="界面配色"')
+    expect(appearancePicker).toContain('class="palette-swatch"')
+    expect(appearancePicker).toContain('type="color"')
+    expect(appearancePicker).toContain('class="custom-color-select"')
+    expect(globalCss).toContain(":root[data-theme='dark'][data-accent='ocean']")
+    expect(globalCss).toContain(":root[data-theme='dark'][data-accent='custom']")
+    expect(globalCss).toContain(
+      '--bg-canvas: color-mix(in srgb, var(--accent-cyan) 10%',
+    )
+    expect(globalCss).toContain(
+      '--surface-2: color-mix(in srgb, var(--accent-cyan) 7%',
+    )
+    expect(globalCss).toContain('--accent-nav-text: var(--accent-cyan)')
   })
 
   it('keeps increased-contrast colors legible in both themes', () => {
@@ -80,6 +95,21 @@ describe('responsive layout contract', () => {
     expect(contrastRatio(cssColor(globalCss, '--accent-cyan'), '#ffffff')).toBeGreaterThanOrEqual(
       4.5,
     )
+  })
+
+  it('keeps every selectable accent legible in both themes', () => {
+    const globalCss = source('src/styles/global.css')
+    const lightAccents = ['#357a50', '#176b87', '#5b5fa3', '#9b4a69']
+    const darkAccents = ['#71c78a', '#63c5e3', '#aeb8ff', '#ec9bb4']
+
+    for (const color of lightAccents) {
+      expect(globalCss).toContain(`--accent-cyan: ${color}`)
+      expect(contrastRatio(color, '#ffffff')).toBeGreaterThanOrEqual(4.5)
+    }
+    for (const color of darkAccents) {
+      expect(globalCss).toContain(`--accent-cyan: ${color}`)
+      expect(contrastRatio(color, '#25302a')).toBeGreaterThanOrEqual(4.5)
+    }
   })
 
   it('stacks narrow landscape screens and only splits when both panes fit', () => {
