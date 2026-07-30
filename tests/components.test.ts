@@ -124,6 +124,17 @@ describe('accessible components', () => {
     expect(wrapper.get('.btn-close').attributes('data-tooltip')).toBeUndefined()
     expect(wrapper.get('.build-info code').attributes('title')).toBe(__SOURCE_ID__)
 
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
+    expect(document.activeElement).toBe(wrapper.findAll('a')[0].element)
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
+    expect(document.activeElement).toBe(wrapper.findAll('a')[1].element)
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
+    expect(document.activeElement).toBe(wrapper.get('.btn-close').element)
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }),
+    )
+    expect(document.activeElement).toBe(wrapper.findAll('a')[1].element)
+
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     expect(wrapper.emitted('close')).toHaveLength(1)
 
