@@ -118,6 +118,9 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .modal-mask {
+  --about-gutter-inline: clamp(12px, 3vw, 40px);
+  --about-gutter-block: clamp(8px, 3dvh, 32px);
+
   position: fixed;
   inset: 0;
   z-index: 60;
@@ -128,15 +131,15 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: calc(20px + var(--safe-top)) calc(20px + var(--safe-right)) calc(20px + var(--safe-bottom)) calc(20px + var(--safe-left));
+  padding: calc(var(--about-gutter-block) + var(--safe-top)) calc(var(--about-gutter-inline) + var(--safe-right)) calc(var(--about-gutter-block) + var(--safe-bottom)) calc(var(--about-gutter-inline) + var(--safe-left));
   background: rgba(4, 8, 9, 0.82);
   backdrop-filter: blur(7px) saturate(100%);
   box-sizing: border-box;
 }
 
 .modal-card {
-  width: min(680px, 100%);
-  max-height: min(760px, 100%);
+  width: min(100%, clamp(42.5rem, 48vw, 54rem));
+  max-height: min(100%, clamp(47.5rem, 82dvh, 56rem));
   display: flex;
   flex-direction: column;
   color: #dce3e1;
@@ -153,8 +156,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 10px 12px 10px 24px;
+  gap: clamp(10px, 1.5vw, 18px);
+  padding: clamp(8px, 1vw, 12px) clamp(8px, 1.2vw, 16px) clamp(8px, 1vw, 12px) clamp(16px, 2.2vw, 32px);
   background: #0c1113;
   border-bottom: var(--hairline) solid #273034;
 }
@@ -167,6 +170,7 @@ onBeforeUnmount(() => {
   font-size: 18px;
   font-weight: 600;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .btn-close {
@@ -192,7 +196,7 @@ onBeforeUnmount(() => {
 }
 
 .modal-body {
-  padding: 20px 24px 26px;
+  padding: clamp(14px, 2vw, 24px) clamp(16px, 2.5vw, 32px) clamp(18px, 3vw, 34px);
   overflow-y: auto;
   font-family: var(--font-terminal);
   scrollbar-color: #3a474b transparent;
@@ -219,11 +223,14 @@ onBeforeUnmount(() => {
   color: #c9d2d0;
   font-size: 14px;
   line-height: 1.85;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-wrap: pretty;
 }
 
 .modal-body ul {
   margin: 0;
-  padding-left: 20px;
+  padding-left: clamp(18px, 2vw, 24px);
 }
 
 .modal-body li + li {
@@ -236,6 +243,7 @@ onBeforeUnmount(() => {
 
 .build-info {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-bottom: 0;
@@ -264,10 +272,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 480px) {
-  .modal-mask {
-    padding: calc(12px + var(--safe-top)) calc(12px + var(--safe-right)) calc(12px + var(--safe-bottom)) calc(12px + var(--safe-left));
-  }
-
   .modal-header {
     min-height: 52px;
     gap: 10px;
@@ -287,6 +291,38 @@ onBeforeUnmount(() => {
 
   .modal-body {
     padding: 14px 16px 18px;
+  }
+}
+
+@media (min-width: 1440px) and (min-height: 800px) {
+  .modal-header h2 {
+    font-size: 20px;
+  }
+
+  .modal-body h3,
+  .modal-body p,
+  .modal-body li {
+    font-size: 15px;
+  }
+
+  .build-info code {
+    font-size: 13px;
+  }
+}
+
+@media (min-width: 2200px) and (min-height: 1200px) {
+  .modal-header h2 {
+    font-size: 22px;
+  }
+
+  .modal-body h3,
+  .modal-body p,
+  .modal-body li {
+    font-size: 16px;
+  }
+
+  .build-info code {
+    font-size: 14px;
   }
 }
 
