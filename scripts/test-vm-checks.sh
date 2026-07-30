@@ -115,6 +115,8 @@ run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-1/init.sh" >/dev/null
 if OUT=$(run_check "$SB" first-light); then RC=0; else RC=$?; fi
 expect_eq "正确答案通过（退出码 0）" "$RC" "0"
 expect_contains "$OUT" "输出 passed 协议" '"status":"passed"'
+if OUT=$(run_check "$SB" "  first-light  "); then RC=0; else RC=$?; fi
+expect_eq "答案带多余空格仍通过" "$RC" "0"
 OUT=$(run_check "$SB" wrong-answer) && RC=0 || RC=$?
 expect_eq "错误答案失败（退出码 1）" "$RC" "1"
 expect_contains "$OUT" "输出 error 协议" '"type":"error"'
@@ -148,6 +150,8 @@ run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-2/init.sh" >/dev/null
 if [ -f "$SB/home/guest/.message" ]; then ok "隐藏文件已创建"; else bad "隐藏文件未创建"; fi
 if OUT=$(run_check "$SB" dotfile-42); then RC=0; else RC=$?; fi
 expect_eq "正确答案通过" "$RC" "0"
+if OUT=$(run_check "$SB" "dotfile-42  "); then RC=0; else RC=$?; fi
+expect_eq "答案带多余空格仍通过" "$RC" "0"
 OUT=$(run_check "$SB" wrong) && RC=0 || RC=$?
 expect_eq "错误答案失败" "$RC" "1"
 rm "$SB/home/guest/.message"
@@ -301,6 +305,8 @@ TOKEN=$(cd "$SB/home/guest" && PATH="$STUB:$PATH" "$BUSYBOX" wget -q -O - "http:
 expect_contains "$TOKEN" "备份文件包含令牌" "dbg-token-8848"
 if OUT=$(run_check "$SB" dbg-token-8848); then RC=0; else RC=$?; fi
 expect_eq "正确答案通过" "$RC" "0"
+if OUT=$(run_check "$SB" "  dbg-token-8848 "); then RC=0; else RC=$?; fi
+expect_eq "答案带多余空格仍通过" "$RC" "0"
 OUT=$(run_check "$SB" wrong-token) && RC=0 || RC=$?
 expect_eq "错误答案失败" "$RC" "1"
 # 服务停止后 check 应失败，reset-level 恢复后应通过
@@ -370,6 +376,78 @@ HOME="$SB2/home/guest" PATH="$STUB:$PATH" "$STUB/httpd" -p "127.0.0.1:${HASHTEAM
 sleep 1
 if OUT=$(run_check "$SB2"); then RC=0; else RC=$?; fi
 expect_eq "重写文件与符号权限修复同样通过" "$RC" "0"
+# 启动参数换序（-h 在前）与相对路径 -h www 也应通过
+HASHTEAM_SECURE_PORT=$((HASHTEAM_SECURE_PORT + 1))
+export HASHTEAM_SECURE_PORT
+sandbox 10
+SB3="$SB_DIR"
+run_level "$SB3" "$HASHTEAM_LEVELS_DIR/level-10/init.sh" >/dev/null
+sleep 1
+cd "$SB3/home/guest" && PATH="$STUB:$PATH" "$STUB/sed" -i \
+    -e 's/debug=true/debug=false/' \
+    -e 's/allow_guest=true/allow_guest=false/' \
+    -e 's/listen=0.0.0.0/listen=127.0.0.1/' server.conf
+"$STUB/chmod" 600 "$SB3/home/guest/server.conf"
+PID=$(cat "$SB3/home/guest/.hashteam/level-10-httpd.pid")
+"$STUB/kill" "$PID" 2>/dev/null || true
+sleep 1
+(cd "$SB3/home/guest" && HOME="$SB3/home/guest" PATH="$STUB:$PATH" \
+    "$STUB/httpd" -h "$SB3/home/guest/www" -p "127.0.0.1:${HASHTEAM_SECURE_PORT}")
+sleep 1
+if OUT=$(run_check "$SB3"); then RC=0; else RC=$?; fi
+expect_eq "httpd 参数换序启动同样通过" "$RC" "0"
+stop_test_httpd
+sleep 1
+(cd "$SB3/home/guest" && HOME="$SB3/home/guest" PATH="$STUB:$PATH" \
+    "$STUB/httpd" -p "127.0.0.1:${HASHTEAM_SECURE_PORT}" -h www)
+sleep 1
+if OUT=$(run_check "$SB3"); then RC=0; else RC=$?; fi
+expect_eq "相对路径 -h www 启动同样通过" "$RC" "0"
+stop_test_httpd
+
+echo "—— 分层 help ——"
+sandbox 1
+SB="$SB_DIR"
+HELP_ENV=(
+    "HOME=$SB/home/guest"
+    "PATH=$STUB:$PATH"
+    "HASHTEAM_HELP_FILE=$HASHTEAM_LIB_DIR/help.txt"
+)
+OUT=$(env "${HELP_ENV[@]}" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/help")
+expect_contains "$OUT" "默认 help 显示零基础标题" "HASHTEAM 零基础命令备忘"
+expect_contains "$OUT" "默认 help 提醒无输出也可能成功" "很多修改命令成功时没有输出"
+expect_contains "$OUT" "默认 help 给出当前关命令" "当前是第 1 关"
+HELP_LINES=$(printf '%s\n' "$OUT" | "$STUB/wc" -l)
+if [ "$HELP_LINES" -le 30 ]; then
+    ok "默认 help 控制在一屏多一点（$HELP_LINES 行）"
+else
+    bad "默认 help 仍然过长（$HELP_LINES 行）"
+fi
+
+OUT=$(env "${HELP_ENV[@]}" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/help" ls)
+expect_contains "$OUT" "help ls 只提取 ls 说明" "用途：列出目录内容"
+case "$OUT" in
+    *"用途：把文本文件内容打印到终端。"*) bad "help ls 混入了 cat 说明" ;;
+    *) ok "help ls 在下一个命令前停止" ;;
+esac
+
+OUT=$(env "${HELP_ENV[@]}" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/help" all)
+expect_contains "$OUT" "help all 仍可查看完整备忘" "文件识别与本地 HTTP"
+
+if OUT=$(env "${HELP_ENV[@]}" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/help" does-not-exist 2>&1); then
+    RC=0
+else
+    RC=$?
+fi
+expect_eq "未知 help 主题退出码为 2" "$RC" "2"
+expect_contains "$OUT" "未知 help 主题给出下一步" "输入 help 查看可查询的命令和主题"
+
+echo "—— 占位命令 ——"
+for cmd in man nano python; do
+    OUT=$(PATH="$STUB:$PATH" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/$cmd" 2>&1) && RC=0 || RC=$?
+    expect_eq "$cmd 退出码为 127" "$RC" "127"
+    expect_contains "$OUT" "$cmd 提示输入 help" "输入 help"
+done
 
 echo
 echo "—— 结果：$PASS 通过，$FAIL 失败 ——"

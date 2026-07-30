@@ -3,4 +3,15 @@
 set -eu
 level=$(cat "$HOME/.hashteam/level" 2>/dev/null || echo 1)
 printf '@@HASHTEAM:{"type":"hint-request","level":%s}\n' "$level"
-echo "提示已显示在右侧任务面板中。"
+# VM 侧用文件计数跟踪已展开层数；hashteamctl 在 goto/reset-level 时清理
+mkdir -p "$HOME/.hashteam"
+count_file="$HOME/.hashteam/hint-count-$level"
+count=$(cat "$count_file" 2>/dev/null || echo 0)
+count=$((count + 1))
+if [ "$count" -ge 3 ]; then
+    echo 3 > "$count_file"
+    echo "所有提示已全部展开，结合提示再检查一遍。"
+else
+    echo "$count" > "$count_file"
+    echo "第 $count 层提示已显示在旁边的任务面板。"
+fi

@@ -45,7 +45,7 @@ mode=$(stat -c %a "$CONF" 2>/dev/null || echo missing)
 if [ "$mode" = "600" ]; then
     echo "  ✓ 配置文件仅属主可读写"
 else
-    echo "  ✗ 配置文件仍向属主之外开放能力（当前数字形式：$mode）"
+    echo "  ✗ 配置文件仍向属主之外开放能力（当前数字形式：$mode）；目标是属主保留读写，数字形式应为 600"
     errors=$((errors + 1))
 fi
 
@@ -67,7 +67,24 @@ for proc in /proc/[0-9]*; do
     [ -r "$proc/cmdline" ] || continue
     cmdline=$(tr '\0' ' ' < "$proc/cmdline" 2>/dev/null || true)
     case "$cmdline" in
-        *httpd*"-p 127.0.0.1:$PORT"*"-h $DOCROOT"*)
+        *httpd*) ;;
+        *) continue ;;
+    esac
+    case "$cmdline" in
+        *"-p 127.0.0.1:$PORT "*) ;;
+        *) continue ;;
+    esac
+    docroot=""
+    set -- $cmdline
+    while [ $# -gt 0 ]; do
+        if [ "$1" = "-h" ]; then
+            docroot=${2:-}
+            break
+        fi
+        shift
+    done
+    case "$docroot" in
+        "$DOCROOT"|www|*/www)
             matching_httpd=1
             break
             ;;
@@ -76,7 +93,7 @@ done
 if [ "$matching_httpd" -eq 1 ]; then
     echo "  ✓ 监听进程是使用目标端口和内容目录启动的 httpd"
 else
-    echo "  ✗ 未找到按运行说明启动的 httpd；仅占用端口不能通过"
+    echo "  ✗ 监听进程需用 -p 127.0.0.1:端口 与 -h 内容目录启动；对照运行说明复查这两个参数"
     errors=$((errors + 1))
 fi
 

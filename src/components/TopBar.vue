@@ -55,8 +55,29 @@ function handleResetAll(): void {
   emit('reset-all')
 }
 
+/** 「重置本关」同样需要二次确认，避免误触丢失当前关进度 */
+const confirmingLevel = ref(false)
+let confirmLevelTimer: number | null = null
+function handleResetLevel(): void {
+  if (!confirmingLevel.value) {
+    confirmingLevel.value = true
+    confirmLevelTimer = window.setTimeout(() => {
+      confirmingLevel.value = false
+      confirmLevelTimer = null
+    }, 3000)
+    return
+  }
+  if (confirmLevelTimer !== null) {
+    window.clearTimeout(confirmLevelTimer)
+    confirmLevelTimer = null
+  }
+  confirmingLevel.value = false
+  emit('reset-level')
+}
+
 onBeforeUnmount(() => {
   if (confirmTimer !== null) window.clearTimeout(confirmTimer)
+  if (confirmLevelTimer !== null) window.clearTimeout(confirmLevelTimer)
 })
 </script>
 
@@ -152,18 +173,19 @@ onBeforeUnmount(() => {
                 @click="handleHelp"
               >
                 <AppIcon name="help-circle" />
-                <span class="visually-hidden">操作帮助</span>
+                <span class="btn-label">操作帮助</span>
               </button>
               <button
                 type="button"
                 class="icon-btn"
-                aria-label="重置本关"
-                data-tooltip="重置本关"
+                :class="{ confirming: confirmingLevel }"
+                :aria-label="confirmingLevel ? '再次点击以确认重置本关' : '重置本关'"
+                :data-tooltip="confirmingLevel ? '再次点击确认' : '重置本关'"
                 data-tooltip-placement="bottom"
-                @click="emit('reset-level')"
+                @click="handleResetLevel"
               >
                 <AppIcon name="rotate-ccw" />
-                <span class="visually-hidden">重置本关</span>
+                <span class="btn-label">{{ confirmingLevel ? '确认重置？' : '重置本关' }}</span>
               </button>
               <button
                 type="button"
@@ -175,7 +197,7 @@ onBeforeUnmount(() => {
                 @click="handleResetAll"
               >
                 <AppIcon name="server" />
-                <span class="visually-hidden">{{ confirming ? '确认重新开始？' : '重新开始' }}</span>
+                <span class="btn-label">{{ confirming ? '确认重新开始？' : '重新开始' }}</span>
               </button>
               <button
                 type="button"
@@ -186,7 +208,7 @@ onBeforeUnmount(() => {
                 @click="handleAbout"
               >
                 <AppIcon name="info" />
-                <span class="visually-hidden">关于实验室</span>
+                <span class="btn-label">关于</span>
               </button>
             </div>
           </nav>
@@ -535,13 +557,19 @@ onBeforeUnmount(() => {
   box-shadow: none;
 }
 
-.restart-btn.confirming {
+.btn-label {
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.icon-btn.confirming {
   color: var(--accent-red);
   background: color-mix(in srgb, var(--accent-red) 12%, transparent);
   border-color: color-mix(in srgb, var(--accent-red) 34%, transparent);
 }
 
-.restart-btn.confirming::after {
+.icon-btn.confirming::after {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
@@ -557,17 +585,6 @@ onBeforeUnmount(() => {
   border-radius: 5px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
   content: '再次点击确认';
-}
-
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
 }
 
 .context-shift-enter-active,
@@ -641,12 +658,17 @@ onBeforeUnmount(() => {
   }
 }
 
-@container (max-width: 392px) {
+/* 默认任务栏宽度不足以同时容纳所有文字按钮；较宽时才恢复标签。 */
+@container (max-width: 560px) {
   .mission-controls-layout {
     column-gap: 2px;
   }
 
   .mode-segment button span {
+    display: none;
+  }
+
+  .tool-group .btn-label {
     display: none;
   }
 
@@ -695,6 +717,11 @@ onBeforeUnmount(() => {
     grid-area: actions;
     justify-content: space-between;
     gap: 12px;
+  }
+
+  /* 窄屏顶栏空间紧张，工具按钮只留图标（tooltip/aria-label 仍在） */
+  .tool-group .btn-label {
+    display: none;
   }
 
   .appearance-controls {

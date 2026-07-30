@@ -4,6 +4,10 @@ set -u
 expected=$(cat "${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}/level-6"/answer)
 LOG="$HOME/auth.log"
 given=$(printf '%s' "${1:-}" | tr -d '[:space:]')
+if [ "$#" -gt 1 ]; then
+    echo "✗ 只提交地址本身，不要带前面的计数。"
+    exit 2
+fi
 if [ ! -f "$LOG" ]; then
     echo "✗ 找不到 auth.log，试试 reset-level 重置本关。"
     exit 1

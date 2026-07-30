@@ -114,8 +114,8 @@ onBeforeUnmount(clearFeedbackTimer)
         :data-level="level.id"
         :disabled="!isUnlocked(level.id)"
         :aria-current="level.id === currentLevel ? 'step' : undefined"
-        :aria-label="`第 ${level.id} 关：${level.name}${completed.has(level.id) ? completionDescription(level.id) : ''}`"
-        :title="`第 ${level.id} 关 · ${level.name}${completed.has(level.id) ? completionDescription(level.id) : ''}`"
+        :aria-label="`第 ${level.id} 关：${level.name}${completed.has(level.id) ? completionDescription(level.id) : ''}${!isUnlocked(level.id) ? '，通关上一关后解锁' : ''}`"
+        :title="`第 ${level.id} 关 · ${level.name}${completed.has(level.id) ? completionDescription(level.id) : ''}${!isUnlocked(level.id) ? ' · 通关上一关后解锁' : ''}`"
         @click="emit('select', level.id)"
       >
         <Transition name="level-state" mode="out-in">

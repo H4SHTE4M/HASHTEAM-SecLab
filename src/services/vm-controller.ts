@@ -111,7 +111,9 @@ async function assertAssetsReachable(urls: string[], signal: AbortSignal): Promi
         response = await fetch(url, { headers: { Range: 'bytes=0-0' }, signal })
       }
       if (!response.ok) {
-        throw new Error(`资源缺失：${url}（HTTP ${response.status}）。请先运行 vm/build.sh 构建虚拟机资源，详见 README。`)
+        // 技术细节留在启动日志里（供助教排查），给学生看的错误不含开发者词汇。
+        log('boot', `资源缺失：${url}（HTTP ${response.status}）`, 'warn')
+        throw new Error('实验环境文件没有加载成功。请刷新重试；多次失败请换最新版 Chrome 或 Edge，或截图联系助教。')
       }
     }),
   )
@@ -252,7 +254,7 @@ export class V86Controller implements VirtualMachineController {
       log('boot', 'wasm fallback 变体可编译，交由 v86 自行选择')
       return
     }
-    throw new Error('当前浏览器无法编译 v86 的 WebAssembly 模块（主版本与 fallback 版本均失败），请升级浏览器至最新版后重试。')
+    throw new Error('你的浏览器无法启动实验环境。请使用最新版 Chrome、Edge 或 Firefox，并确认没有禁用 WebAssembly。')
   }
 
   /** 拉取并尝试编译 wasm；任何失败（网络/编译）一律返回 false，由调用方决定处置 */
@@ -303,9 +305,10 @@ export class V86Controller implements VirtualMachineController {
    * 后续可替换为 v86 save_state/restore_state 快照实现，接口保持不变。
    */
   async restoreLevel(level: number): Promise<void> {
-    // 学生可能在上一关通过 cd 进入了子目录。切关前统一回到 HOME，
+    // hashteamctl 的 init 是子进程，改变不了学生交互 shell 的 cwd。
+    // 学生可能在上一关 cd 进了子目录，goto 之后补一行 cd 把 shell 带回 HOME，
     // 避免新关卡的相对路径命令错误地作用于旧目录。
-    this.sendSerial(`cd "$HOME" && hashteamctl goto ${level}\n`)
+    this.sendSerial(`hashteamctl goto ${level}\ncd "$HOME"\n`)
   }
 
   sendSerial(input: string): void {

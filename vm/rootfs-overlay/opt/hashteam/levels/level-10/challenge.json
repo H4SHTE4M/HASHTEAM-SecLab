@@ -26,7 +26,7 @@
       "completion": "input",
       "allowRun": false,
       "uses": ["command-anatomy"],
-      "observation": "记录配置项、服务目录、端口和运行说明，但暂时不要修改。",
+      "observation": "配置文件就是一行行“名字=值”（键=值）；其中“布尔”设置只有开/关（true/false）两种取值。记录配置项、服务目录、端口和运行说明，但暂时不要修改。",
       "reinforcement": "综合排查先建立完整现场清单。"
     },
     {
@@ -62,7 +62,7 @@
       "completion": "input",
       "allowRun": false,
       "uses": ["process-pid", "listening-port", "remediation-verification"],
-      "observation": "记录服务 PID，并确认当前监听是仅本机还是所有接口。",
+      "observation": "记录服务 PID，并确认当前监听是仅本机还是所有接口。0.0.0.0 表示绑定所有已配置网络接口，会扩大可能的连接范围；是否能从外部到达还取决于网络和防火墙。127.0.0.1 表示仅限本机连接。",
       "reinforcement": "文件写了什么和进程实际做什么，都必须检查。"
     },
     {
@@ -98,14 +98,14 @@
       "type": "observe",
       "title": "先看懂 sed 的替换结构",
       "objective": "在无关示例中观察 s/旧/新/，不直接修改答案文件",
-      "instruction": "这条示例把一小段标准输入中的旧颜色替换为新颜色，只打印结果，不修改任何文件。观察斜杠分隔的三部分。",
+      "instruction": "这条示例把一小段标准输入中的旧颜色替换为新颜色，只打印结果，不修改任何文件。printf 里的 \\n 表示换行。观察斜杠分隔的三部分。",
       "completion": "run",
       "allowRun": true,
       "introduces": [
         {
           "id": "sed-substitution",
           "term": "sed 替换结构",
-          "explanation": "sed 的 s/旧内容/新内容/ 表示替换；-i 才会原地修改文件。sed 只是可选工具，也可以使用其他熟悉的编辑方式完成同一状态。"
+          "explanation": "sed 的 s/旧内容/新内容/ 表示替换；-i 才会原地修改文件。本环境没有图形编辑器，统一用 sed 完成文本修改。"
         }
       ],
       "uses": ["pipeline", "shell-quotes"],
@@ -118,7 +118,7 @@
       "type": "manual-command",
       "title": "独立修改配置内容",
       "objective": "把安全基线翻译成实际配置值",
-      "instruction": "选择 sed 或其他熟悉的编辑方式，关闭不必要的布尔功能，并把监听地址收紧到本机。你可以在本步连续运行多条命令；修改并复查全部目标后再继续。",
+      "instruction": "用 sed 关闭不必要的布尔功能，并把监听地址收紧到本机。替换结构是 sed -i 's/键=旧值/键=新值/' server.conf，把键、旧值、新值换成配置文件里的实际内容。你可以在本步连续运行多条命令；修改并复查全部目标后再继续。",
       "completion": "input",
       "allowRun": false,
       "uses": ["secure-config-baseline", "sed-substitution"],
@@ -196,12 +196,12 @@
     {
       "level": 2,
       "kind": "tool",
-      "text": "cat/grep 看配置，ls -l 看权限，ps/netstat 看运行状态；文本可用 sed 或编辑器修改，进程用 kill 后按运行说明重启。"
+      "text": "cat/grep 看配置，ls -l 看权限，ps/netstat 看运行状态；文本统一用 sed 修改，进程用 kill 后按运行说明重启。"
     },
     {
       "level": 3,
       "kind": "structure",
-      "text": "布尔风险从开启改为关闭，监听收紧到本机回环；sed 原地替换结构为 sed -i 's/旧/新/' 文件。重启结构与参数见现场运行说明，具体值仍需你填写。"
+      "text": "布尔风险从开启改为关闭，监听收紧到本机（127.0.0.1）；sed 原地替换结构为 sed -i 's/旧/新/' 文件。重启结构与参数见现场运行说明，具体值仍需你填写。"
     }
   ],
   "verification": {
@@ -216,7 +216,7 @@
   },
   "completionSummary": {
     "solved": "你从多项检查中发现风险，修改配置与权限，重启服务并验证真实状态。",
-    "mastered": ["综合读取与搜索", "按用途制定安全基线", "用 sed 或编辑器修改文本", "让配置进入运行状态", "完成发现—修复—复查闭环"],
+    "mastered": ["综合读取与搜索", "按用途制定安全基线", "用 sed 修改文本", "让配置进入运行状态", "完成发现—修复—复查闭环"],
     "next": "你已经完成新手村；后续可以把同一方法迁移到真实的授权运维与安全研究任务。"
   }
 }

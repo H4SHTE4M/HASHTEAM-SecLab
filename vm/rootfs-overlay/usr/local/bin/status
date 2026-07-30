@@ -1,5 +1,7 @@
 #!/bin/sh
 set -eu
 level=$(cat "$HOME/.hashteam/level" 2>/dev/null || echo 1)
+max_completed=$(cat "$HOME/.hashteam/max-completed" 2>/dev/null || echo 0)
 echo "当前关卡：第 $level 关"
+echo "已完成最高关：第 $max_completed 关"
 echo "完成后运行 check 验证；卡住时可以输入 hint。"

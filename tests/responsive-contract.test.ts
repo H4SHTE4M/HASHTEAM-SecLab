@@ -311,6 +311,7 @@ describe('responsive layout contract', () => {
       /\.mission-controls-layout\s*\{[\s\S]*?grid-template-columns:\s*auto minmax\(0, 1fr\) auto auto;/,
     )
     expect(topbar).toMatch(/\.tool-group\s*\{[\s\S]*?grid-column:\s*3;[\s\S]*?justify-self:\s*end;/)
+    expect(topbar).toContain('@container (max-width: 560px)')
   })
 
   it('keeps the desktop workspace name line box tall enough to avoid clipping', () => {

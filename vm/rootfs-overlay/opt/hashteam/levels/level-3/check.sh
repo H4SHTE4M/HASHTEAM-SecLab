@@ -22,7 +22,7 @@ expect_exact_file() {
         echo "  ✗ inbox/$1 应存在（$3）"
         errors=$((errors + 1))
     elif ! cmp -s "$target" "$expected"; then
-        echo "  ✗ inbox/$1 内容与原文件不一致，不能用空文件代替移动"
+        echo "  ✗ inbox/$1 内容与初始文件不一致，可能是误操作覆盖了它"
         errors=$((errors + 1))
     else
         echo "  ✓ inbox/$1"
@@ -59,4 +59,5 @@ if [ "$errors" -eq 0 ]; then
     exit 0
 fi
 echo "还有 $errors 处没归置好，继续加油（提示见 ~/todo.txt）。"
+echo "可用 reset-level 恢复本关初始文件后重做。"
 exit 1

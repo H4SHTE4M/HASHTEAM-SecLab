@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import AboutModal from '../src/components/AboutModal.vue'
 import LoadingScreen from '../src/components/LoadingScreen.vue'
 import CompletionPage from '../src/components/CompletionPage.vue'
@@ -227,6 +227,27 @@ describe('accessible components', () => {
     wrapper.unmount()
   })
 
+  it('重置本关按钮需要二次点击才发送事件', async () => {
+    const wrapper = mount(TopBar, {
+      props: {
+        completedCount: 2,
+        total: 10,
+        mode: 'guided',
+        theme: 'light',
+        accent: 'forest',
+        customAccent,
+      },
+    })
+    const resetLevel = wrapper.findAll('button').find((button) => button.text() === '重置本关')
+    expect(resetLevel).toBeDefined()
+
+    await resetLevel!.trigger('click')
+    expect(wrapper.emitted('reset-level')).toBeUndefined()
+    expect(resetLevel!.text()).toContain('确认')
+    await resetLevel!.trigger('click')
+    expect(wrapper.emitted('reset-level')).toHaveLength(1)
+  })
+
   it('关卡轨道只允许选择已解锁关卡，并标记当前与完成状态', async () => {
     const levels = Array.from({ length: 4 }, (_, index) => ({
       ...level,
@@ -251,6 +272,8 @@ describe('accessible components', () => {
     expect(buttons[0].attributes('aria-label')).toContain('挑战模式完成，展开 1 层提示')
     expect(buttons[1].attributes('disabled')).toBeUndefined()
     expect(buttons[2].attributes('disabled')).toBeDefined()
+    expect(buttons[2].attributes('aria-label')).toContain('通关上一关后解锁')
+    expect(buttons[2].attributes('title')).toContain('通关上一关后解锁')
 
     await buttons[1].trigger('click')
     expect(wrapper.emitted('select')?.[0]).toEqual([2])
@@ -258,25 +281,43 @@ describe('accessible components', () => {
     expect(wrapper.emitted('select')).toHaveLength(1)
   })
 
-  it('Onboarding 覆盖提示符、按键、命令结构、占位符、复制、提示与重置', async () => {
+  it('Onboarding 覆盖概念、提示符、按键、命令结构、占位符、复制、提示与重置', async () => {
     const wrapper = mount(OnboardingDialog, {
       props: { mode: null, progressResetNotice: true },
       attachTo: document.body,
     })
 
     expect(wrapper.text()).toContain('你希望怎样完成新手村')
+    expect(wrapper.text()).toContain('通关判定')
     expect(wrapper.text()).toContain('旧版步骤进度已重置')
     await wrapper.get('.mode-card-recommended').trigger('click')
     expect(wrapper.emitted('select-mode')?.[0]).toEqual(['guided'])
+
+    // 第 0 步：概念层（终端 / 命令 / 参数 / 选项 / Shell 与类比列表）
+    expect(wrapper.text()).toContain('这个黑色窗口叫终端')
+    expect(wrapper.text()).toContain('工具的名字')
+    expect(wrapper.text()).toContain('Shell')
+    expect(wrapper.text()).toContain('打开文件夹看看')
+    expect(wrapper.text()).toContain('Win+Space')
+    expect(wrapper.text()).toContain('英文半角')
+    expect(wrapper.get('.step-count').text()).toBe('1 / 5')
+
+    await wrapper.get('.btn-primary').trigger('click')
     expect(wrapper.text()).toContain('提示符后面才是输入区')
     expect(wrapper.text()).toContain('Backspace')
     expect(wrapper.text()).toContain('↑ / ↓')
+    expect(wrapper.text()).toContain('鼠标滚轮')
+    expect(wrapper.text()).toContain('Ctrl+C')
+    expect(wrapper.text()).toContain('Ctrl+V')
 
     await wrapper.get('.btn-primary').trigger('click')
     expect(wrapper.text()).toContain('命令、选项和参数靠空格分开')
     expect(wrapper.get<HTMLButtonElement>('.btn-primary').element.disabled).toBe(true)
     await wrapper.get('.demo-command').trigger('click')
     expect(wrapper.emitted('run-demo')).toHaveLength(1)
+    expect(wrapper.get('.demo-result').text()).toContain('hello, HASHTEAM')
+    expect(wrapper.get('.demo-result').text()).toContain('输入')
+    expect(wrapper.get('.demo-result').text()).toContain('输出')
     await wrapper.get('.btn-primary').trigger('click')
     expect(wrapper.text()).toContain('占位符必须换成真实值')
     expect(wrapper.text()).toContain('不要带上提示符')
@@ -284,6 +325,7 @@ describe('accessible components', () => {
     await wrapper.get('.btn-primary').trigger('click')
     expect(wrapper.text()).toContain('按需提示')
     expect(wrapper.text()).toContain('重置本关')
+    expect(wrapper.text()).toContain('很多修改命令成功时不会说话')
     await wrapper.get('.btn-primary').trigger('click')
     expect(wrapper.emitted('complete')).toHaveLength(1)
     wrapper.unmount()
@@ -308,6 +350,29 @@ describe('accessible components', () => {
     expect(wrapper.emitted('complete-step')?.at(-1)).toEqual([1, 2])
   })
 
+  it('切换步骤后把新标题滚入面板并转移焦点', async () => {
+    const wrapper = mount(MissionPanel, {
+      props: missionProps(),
+      attachTo: document.body,
+    })
+    const panel = wrapper.get<HTMLElement>('.panel-scroll').element
+    const action = wrapper.get<HTMLElement>('.current-action').element
+    vi.spyOn(panel, 'getBoundingClientRect').mockReturnValue({
+      top: 40,
+    } as DOMRect)
+    vi.spyOn(action, 'getBoundingClientRect').mockReturnValue({
+      top: -80,
+    } as DOMRect)
+    panel.scrollTop = 420
+
+    await wrapper.setProps({ guideStep: 1 })
+    await nextTick()
+
+    expect(panel.scrollTop).toBe(288)
+    expect(document.activeElement).toBe(wrapper.get('.action-header h3').element)
+    wrapper.unmount()
+  })
+
   it('补全步骤没有一键答案，字段为空不能运行，填写后仍需观察确认', async () => {
     const wrapper = mount(MissionPanel, {
       props: missionProps({ guideStep: 2, completedSteps: [1, 2] }),
@@ -326,6 +391,44 @@ describe('accessible components', () => {
     expect(wrapper.emitted('complete-step')).toBeUndefined()
     await wrapper.get('.btn-evidence').trigger('click')
     expect(wrapper.emitted('complete-step')?.[0]).toEqual([1, 3])
+  })
+
+  it('手动步骤可带入上一条命令，也允许真实终端操作后确认', async () => {
+    const manualLevel: LevelDef = {
+      ...level,
+      steps: [
+        ...level.steps.slice(0, 3),
+        {
+          id: 4,
+          type: 'manual-command',
+          title: '继续编辑命令',
+          objective: '从上一条命令继续',
+          instruction: '可用终端历史或面板输入。',
+          completion: 'input',
+          allowRun: false,
+          observation: '确认输出符合预期。',
+          reinforcement: '真实终端操作同样有效。',
+        },
+      ],
+    }
+    const wrapper = mount(MissionPanel, {
+      props: missionProps({
+        level: manualLevel,
+        guideStep: 2,
+        completedSteps: [1, 2],
+      }),
+    })
+
+    await wrapper.get('.structured-form input').setValue('README')
+    await wrapper.get('.structured-form').trigger('submit')
+    await wrapper.setProps({ guideStep: 3, completedSteps: [1, 2, 3] })
+    await nextTick()
+
+    expect(wrapper.get('.btn-evidence').text()).toContain('真实终端')
+    await wrapper.get('.btn-reuse-command').trigger('click')
+    expect(wrapper.get<HTMLInputElement>('.manual-form input').element.value).toBe('cat README')
+    await wrapper.get('.btn-evidence').trigger('click')
+    expect(wrapper.emitted('complete-step')?.at(-1)).toEqual([1, 4])
   })
 
   it('挑战模式隐藏全部教学步骤，只保留目标、提示与开放的最终验证', async () => {
@@ -370,6 +473,23 @@ describe('accessible components', () => {
     expect(wrapper.get('.hints').text()).toContain('第 2 层 · 工具')
     await wrapper.setProps({ hintsUsed: 3 })
     expect(wrapper.get('.hints').text()).toContain('第 3 层 · 结构')
+  })
+
+  it('全角输入在进入终端前归一化为半角', async () => {
+    const wrapper = mount(MissionPanel, {
+      props: missionProps({ guideStep: 2, completedSteps: [1, 2] }),
+    })
+
+    // 补全字段：全角字母 → 半角
+    await wrapper.get('.structured-form input').setValue('ＲＥＡＤＭＥ')
+    await wrapper.get('.structured-form').trigger('submit')
+    expect(wrapper.emitted('run-command')?.at(-1)).toEqual(['cat README'])
+
+    // 验证命令：全角空格与全角引号 → 半角
+    await wrapper.setProps({ guideStep: 3, completedSteps: [1, 2, 3, 4] })
+    await wrapper.get('.verification-form input').setValue('check　＂discovered-value＂')
+    await wrapper.get('.verification-form').trigger('submit')
+    expect(wrapper.emitted('run-command')?.at(-1)).toEqual(['check "discovered-value"'])
   })
 
   it('验证区在全部步骤完成前锁定，并拒绝原样占位符', async () => {

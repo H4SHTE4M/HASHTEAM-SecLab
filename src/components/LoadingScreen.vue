@@ -128,7 +128,7 @@ function toggleLogs(): void {
             {{
               stage === 'ready'
                 ? 'Linux 已在浏览器中启动，正在打开实验工作台。'
-                : 'Linux 正在你的浏览器中本地启动，首次加载可能需要一些时间。'
+                : 'Linux 正在你的浏览器中本地启动，首次加载约需 10–15 秒（下载约 7MB），请稍候。'
             }}
           </p>
 
@@ -147,6 +147,7 @@ function toggleLogs(): void {
               <span class="log-count">{{ logs.length }}</span>
             </button>
             <div v-if="showLogs" id="boot-log-list" ref="logContainer" class="log-list">
+              <p class="log-reassure">以下是技术日志，不用看懂</p>
               <p v-if="logs.length === 0" class="log-empty">暂无日志</p>
               <div
                 v-for="entry in logs.slice(-80)"
@@ -170,6 +171,7 @@ function toggleLogs(): void {
               <AppIcon name="rotate-ccw" :size="16" />
               <span>重试</span>
             </button>
+            <p class="error-fallback">多次重试仍失败：换最新版 Chrome / Edge，或截图联系助教</p>
           </div>
         </template>
       </div>
@@ -486,6 +488,13 @@ function toggleLogs(): void {
   word-break: break-all;
 }
 
+.error-fallback {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: var(--text-faint);
+  line-height: 1.6;
+}
+
 .btn-retry {
   min-height: 44px;
   display: inline-flex;
@@ -580,6 +589,12 @@ function toggleLogs(): void {
 .log-empty {
   margin: 0;
   color: var(--text-faint);
+}
+
+.log-reassure {
+  margin: 0 0 6px;
+  color: var(--text-faint);
+  font-family: var(--font-ui);
 }
 
 .log-line {

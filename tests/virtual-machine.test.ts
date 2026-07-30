@@ -155,7 +155,7 @@ describe('virtual machine lifecycle', () => {
     await vm.dispose()
   })
 
-  it('重置关卡前先回到 HOME，避免停留在被重建的子目录', async () => {
+  it('重置关卡后把学生 shell 带回 HOME，避免停留在被重建的子目录', async () => {
     let controller: FakeController | undefined
     const vm = createVirtualMachine({
       createController: (onStageChange) => {
@@ -169,7 +169,7 @@ describe('virtual machine lifecycle', () => {
     vm.resetCurrentLevel()
 
     expect(controller?.sent).toContain('\x03')
-    expect(controller?.sent).toContain('cd "$HOME" && reset-level\n')
+    expect(controller?.sent).toContain('reset-level\ncd "$HOME"\n')
     await vm.dispose()
   })
 

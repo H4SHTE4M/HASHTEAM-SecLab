@@ -2,11 +2,11 @@
 # 第 1 关验证：以 guest 身份交出 README 中的通行证
 set -u
 expected=$(cat "${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}/level-1"/answer)
-given=${1:-}
+given=$(printf '%s' "${1:-}" | tr -d '[:space:]')
 # HASHTEAM_USER 仅用于宿主机自动化测试注入；VM 内未设置，使用真实身份
 current_user=${HASHTEAM_USER:-$(whoami)}
 if [ "$current_user" != "guest" ]; then
-    echo "✗ 请使用 guest 账号完成实验。"
+    echo "✗ 请使用 guest 账号完成实验。输入 exit 返回 guest 账号。"
     exit 1
 fi
 if [ ! -f "$HOME/README" ]; then
@@ -22,4 +22,5 @@ if [ "$given" = "$expected" ]; then
     exit 0
 fi
 echo "✗ 通行证不对。重新确认说明文件中标签、真实值和复制范围。"
+echo "  仍失败时检查输入法是否带入了全角字符（如全角空格）。"
 exit 1

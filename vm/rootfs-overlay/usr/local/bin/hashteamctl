@@ -39,9 +39,11 @@ case "$cmd" in
             fi
         fi
         mkdir -p "$STATE_DIR"
+        rm -f "$STATE_DIR"/hint-count-*
         echo "$level" > "$STATE_DIR/level"
         run_init "$level"
         printf '@@HASHTEAM:{"type":"level-ready","level":%s}\n' "$level"
+        echo "卡住时输入 help 或 hint。"
         ;;
     mark-completed)
         # 记录某关已完成（供 check 通过后调用，以及前端开机时回放进度）
@@ -58,8 +60,10 @@ case "$cmd" in
     reset-level)
         level=$(current_level)
         ht_notice "正在重置第 $level 关的实验环境..."
+        rm -f "$STATE_DIR"/hint-count-*
         run_init "$level"
         printf '@@HASHTEAM:{"type":"level-ready","level":%s}\n' "$level"
+        echo "卡住时输入 help 或 hint。"
         ;;
     factory-reset)
         rm -rf "$STATE_DIR"

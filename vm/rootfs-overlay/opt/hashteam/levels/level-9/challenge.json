@@ -51,7 +51,7 @@
       "type": "partial-command",
       "title": "访问首页并观察响应",
       "objective": "用监听输出补全本地 URL",
-      "instruction": "填写刚记录的地址和端口，保留末尾首页路径。curl 会把 HTTP 响应正文打印到终端。",
+      "instruction": "填写刚记录的地址和端口，保留末尾首页路径。curl 会把 HTTP 响应正文打印到终端。网页在终端里显示为一堆尖括号标签，文字夹在标签中间；文件中 # 开头的行是注释，不是内容。",
       "completion": "input",
       "allowRun": false,
       "uses": ["url-parts", "listening-port"],
@@ -90,7 +90,7 @@
       "type": "explain",
       "title": "理解路径和公开指引",
       "objective": "知道公开爬虫指引可能反向暴露敏感路径",
-      "instruction": "URL 最后的路径选择服务资源。robots.txt 是公开的爬虫指引；它不能实施访问控制，写在其中的“不收录”路径仍可被任何访问者看到。",
+      "instruction": "URL 最后的路径选择服务资源。爬虫是搜索引擎自动抓取网页的程序，robots.txt 是给它的公开指引；它不能实施访问控制，写在其中的“不收录”路径仍可被任何访问者看到。令牌是一串用来证明身份的字符，像钥匙；接口是服务对外提供功能的地址。",
       "completion": "acknowledge",
       "allowRun": false,
       "introduces": [
@@ -135,7 +135,7 @@
       "completion": "input",
       "allowRun": false,
       "uses": ["url-parts", "http-path-exploration", "information-disclosure"],
-      "observation": "判断响应是无关内容、调试状态，还是指向另一个遗留资源。",
+      "observation": "判断响应是无关内容、调试状态，还是指向另一个遗留资源。有的候选路径可能直接泄露答案，那也是真实的信息泄露。",
       "commonErrors": ["路径若已经以 / 开头，不要在 URL 中重复成 //。"],
       "reinforcement": "响应内容决定下一步，而不是固定答案路线。"
     },

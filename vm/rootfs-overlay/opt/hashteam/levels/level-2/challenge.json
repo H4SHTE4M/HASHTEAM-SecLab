@@ -38,7 +38,7 @@
       "type": "observe",
       "title": "建立默认视图",
       "objective": "记住普通 ls 当前显示的文件",
-      "instruction": "先运行不带选项的 ls，把它作为比较基线。",
+      "instruction": "先运行不带选项的 ls，把它作为比较基线（基线 = 用来对照的标准状态）。",
       "completion": "run",
       "allowRun": true,
       "uses": ["command-anatomy"],
@@ -58,7 +58,7 @@
         {
           "id": "hidden-files",
           "term": "隐藏文件",
-          "explanation": "Linux 中以 . 开头的名称默认不在普通 ls 输出中；隐藏只是显示约定，不是访问控制。"
+          "explanation": "Linux 中以 . 开头的名称默认不在普通 ls 输出中；隐藏只是显示约定，不是访问控制。. 和 .. 也是点开头的条目，但它们是每个目录都有的特殊条目（当前目录和上一级目录），不是隐藏文件。"
         }
       ],
       "uses": ["command-options"],
@@ -71,7 +71,7 @@
         }
       ],
       "observation": "找出普通 ls 没显示、现在新出现且名称以 . 开头的消息文件。",
-      "commonErrors": ["选项前要有 -，并与 ls 之间保留空格。"],
+      "commonErrors": ["选项前要有 -，并与 ls 之间保留空格。", "选了 -l？它是显示详情，不会显示隐藏条目；这里需要的是 all（全部）的含义。"],
       "reinforcement": "默认没显示，不等于不存在。"
     },
     {

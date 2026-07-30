@@ -1,3 +1,138 @@
 #!/bin/sh
 set -eu
-cat /etc/hashteam/help.txt
+
+HELP_FILE="${HASHTEAM_HELP_FILE:-/etc/hashteam/help.txt}"
+STATE_DIR="${HASHTEAM_STATE_DIR:-$HOME/.hashteam}"
+level=$(cat "$STATE_DIR/level" 2>/dev/null || echo 1)
+
+show_current() {
+    echo "当前是第 $level 关，建议先查这些命令："
+    case "$level" in
+        1) echo "  whoami  pwd  ls  cat  check" ;;
+        2) echo "  ls  cat  check" ;;
+        3) echo "  ls  cat  cd  pwd  mkdir  mv  check" ;;
+        4) echo "  ls  chmod  stat  check" ;;
+        5) echo "  head  grep  wc  管道(|)  check" ;;
+        6) echo "  grep  awk  sort  uniq  head  管道(|)  check" ;;
+        7) echo "  ls  file  base64  strings  check" ;;
+        8) echo "  ps  netstat  kill  check" ;;
+        9) echo "  netstat  curl  check" ;;
+        10) echo "  ls  cat  grep  chmod  ps  netstat  kill  sed  check" ;;
+        *) echo "  status  hint  check" ;;
+    esac
+}
+
+show_overview() {
+    cat <<'EOF'
+HASHTEAM 零基础命令备忘
+========================
+
+用法：
+  help <命令>     只看一个命令，例如 help ls
+  help current    查看当前关建议使用哪些命令
+  help basics     查看文件与目录命令列表
+  help analysis   查看搜索与统计命令列表
+  help security   查看权限、进程与网络命令列表
+  help web        查看文件识别与本地 HTTP 命令列表
+  help all        查看完整备忘（内容较长，可用鼠标滚轮回看）
+
+卡住时输入 hint；完成后输入 check；需要恢复环境时输入 reset-level。
+很多修改命令成功时没有输出：提示符重新出现且没有报错后，再用 ls、cat 等复查。
+EOF
+    echo
+    show_current
+}
+
+show_group() {
+    case "$1" in
+        basics)
+            echo "基础与文件：whoami pwd ls cat head cd mkdir mv"
+            ;;
+        analysis)
+            echo "搜索与统计：grep awk sort uniq wc 管道(|)"
+            ;;
+        security)
+            echo "权限、进程与网络：chmod stat ps netstat kill"
+            ;;
+        web)
+            echo "文件识别与本地 HTTP：file base64 strings curl sed"
+            ;;
+    esac
+    echo "继续输入 help <命令> 查看用途、格式、例子和常见错误。"
+}
+
+show_command() {
+    topic="$1"
+    case "$topic" in
+        whoami)
+            cat <<'EOF'
+  whoami
+    用途：显示当前用户名，回答“我是谁”。
+    格式：whoami
+    注意：下一行输出才是用户名，不要把提示符一起复制。
+EOF
+            return
+            ;;
+        help) header='  help' ;;
+        hint) header='  hint' ;;
+        check) header='  check [答案]' ;;
+        status) header='  status' ;;
+        reset-level) header='  reset-level' ;;
+        pwd) header='  pwd' ;;
+        ls) header='  ls [选项] [路径]' ;;
+        cat) header='  cat 文件' ;;
+        head) header='  head [选项] 文件' ;;
+        cd) header='  cd 目录' ;;
+        mkdir) header='  mkdir 目录...' ;;
+        mv) header='  mv 源... 目标' ;;
+        grep) header='  grep "短语" 文件' ;;
+        awk) header="  awk '{print \$N}'" ;;
+        sort) header='  sort' ;;
+        uniq) header='  uniq -c' ;;
+        wc) header='  wc -l' ;;
+        '|'|pipeline|管道) header='  管道 |' ;;
+        chmod) header='  chmod 三位权限 文件' ;;
+        stat) header="  stat -c '%a %n' 文件" ;;
+        ps) header='  ps' ;;
+        netstat) header='  netstat -tln' ;;
+        kill) header='  kill PID' ;;
+        file) header='  file 文件' ;;
+        base64) header='  base64 -d 文件' ;;
+        strings) header='  strings 文件' ;;
+        curl) header='  curl URL' ;;
+        sed) header="  sed 's/旧/新/' 文件" ;;
+        *)
+            echo "没有找到“$topic”的实验帮助。"
+            echo "输入 help 查看可查询的命令和主题。"
+            exit 2
+            ;;
+    esac
+
+    awk -v header="$header" '
+        $0 == header {
+            found = 1
+        }
+        found && $0 != header && $0 ~ /^  [^ ]/ {
+            exit
+        }
+        found {
+            print
+        }
+        END {
+            if (!found) exit 1
+        }
+    ' "$HELP_FILE"
+}
+
+if [ "$#" -gt 1 ]; then
+    echo "用法：help [命令|current|basics|analysis|security|web|all]" >&2
+    exit 2
+fi
+
+case "${1:-}" in
+    '') show_overview ;;
+    current) show_current ;;
+    basics|analysis|security|web) show_group "$1" ;;
+    all) cat "$HELP_FILE" ;;
+    *) show_command "$1" ;;
+esac
