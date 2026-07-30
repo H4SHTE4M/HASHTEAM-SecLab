@@ -14,7 +14,7 @@
     "记录排名第一的来源地址"
   ],
   "prerequisites": ["grep 筛选", "引号", "管道", "观察每个中间输出"],
-  "newConcepts": ["字段", "awk 字段引用", "分组计数管道"],
+  "newConcepts": ["awk 字段引用", "分组计数管道", "排序选项"],
   "steps": [
     {
       "id": 1,
@@ -46,15 +46,10 @@
       "type": "explain",
       "title": "理解字段和 awk 写法",
       "objective": "知道 $N 表示第 N 个字段，并理解引号边界",
-      "instruction": "awk 默认按空白把每行切成字段。程序写在单引号中，{print $N} 表示打印第 N 个字段；$ 和数字属于 awk 语法，单引号不能漏，也不要把 $N 当成 Shell 提示符。",
+      "instruction": "一行文本按分隔规则切开后，每一段就是一个字段；字段位置必须从实际数据观察，不能凭记忆套用。awk 默认按空白把每行切成字段。程序写在单引号中，{print $N} 表示打印第 N 个字段；$ 和数字属于 awk 语法，单引号不能漏，也不要把 $N 当成 Shell 提示符。",
       "completion": "acknowledge",
       "allowRun": false,
       "introduces": [
-        {
-          "id": "text-fields",
-          "term": "字段",
-          "explanation": "一行文本按分隔规则切开后，每一段就是一个字段。字段位置必须从实际数据观察，不能凭记忆套用。"
-        },
         {
           "id": "awk-field-reference",
           "term": "awk 字段引用",
@@ -69,10 +64,10 @@
       "type": "question",
       "title": "确认来源地址字段",
       "objective": "根据真实日志选择字段编号",
-      "instruction": "回到单行输出重新数，不要从后续命令猜答案。",
+      "instruction": "回到单行输出重新数，不要从后续命令猜答案。IP 地址是四段数字组成的机器地址，如 192.0.2.10。",
       "completion": "answer",
       "allowRun": false,
-      "uses": ["text-fields", "awk-field-reference"],
+      "uses": ["awk-field-reference"],
       "question": {
         "prompt": "这份认证日志中，来源 IP 位于第几个空白分隔字段？",
         "choices": [
@@ -152,7 +147,14 @@
       "instruction": "在计数结果后加入按数字降序排序的步骤；需要时可以再只看开头几行。完整命令仍需你自己组合。",
       "completion": "input",
       "allowRun": false,
-      "uses": ["counting-pipeline", "pipeline", "command-options"],
+      "introduces": [
+        {
+          "id": "sort-options",
+          "term": "排序选项",
+          "explanation": "sort 默认按文字顺序排（字典序，10 会排在 2 前面）；-n 按数字排序，-r 反向（降序），可合并写成 -rn。"
+        }
+      ],
+      "uses": ["counting-pipeline", "pipeline", "command-options", "sort-options"],
       "observation": "第一行的计数应不小于后续行；记录第一行右侧的地址。",
       "commonErrors": ["普通字典序会把数字当作文字，确认同时使用数字排序和降序选项。"],
       "reinforcement": "排名第一的对象来自完整、逐段验证过的统计链。"
@@ -165,7 +167,7 @@
       "instruction": "最终验证需要地址，不需要前面的计数。确认复制范围。",
       "completion": "confirm",
       "allowRun": false,
-      "uses": ["text-fields", "terminal-prompt"],
+      "uses": ["terminal-prompt"],
       "observation": "我已记录第一行的 IP 地址，没有带上次数、提示符或空格。",
       "reinforcement": "分析输出可能有多列，提交前要重新确认目标字段。"
     }

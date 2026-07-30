@@ -3,7 +3,7 @@
 set -u
 expected=$(cat "${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}/level-9"/answer)
 PORT="${HASHTEAM_HTTP_PORT:-8080}"
-given=${1:-}
+given=$(printf '%s' "${1:-}" | tr -d '[:space:]')
 if ! wget -q -O /dev/null "http://127.0.0.1:$PORT/robots.txt" 2>/dev/null; then
     echo "✗ 本地服务没有响应，试试 reset-level 重新启动它。"
     exit 1
@@ -17,4 +17,5 @@ if [ "$given" = "$expected" ]; then
     exit 0
 fi
 echo "✗ 令牌不对。回到公开入口，按每次响应给出的线索逐步检查。"
+echo "  确认只提交了等号后的值，没有带标签、等号或空格；仍失败时检查输入法是否带入了全角字符。"
 exit 1

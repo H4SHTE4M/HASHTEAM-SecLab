@@ -111,6 +111,8 @@ run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-1/init.sh" >/dev/null
 if OUT=$(run_check "$SB" first-light); then RC=0; else RC=$?; fi
 expect_eq "正确答案通过（退出码 0）" "$RC" "0"
 expect_contains "$OUT" "输出 passed 协议" '"status":"passed"'
+if OUT=$(run_check "$SB" "  first-light  "); then RC=0; else RC=$?; fi
+expect_eq "答案带多余空格仍通过" "$RC" "0"
 OUT=$(run_check "$SB" wrong-answer) && RC=0 || RC=$?
 expect_eq "错误答案失败（退出码 1）" "$RC" "1"
 expect_contains "$OUT" "输出 error 协议" '"type":"error"'
@@ -144,6 +146,8 @@ run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-2/init.sh" >/dev/null
 if [ -f "$SB/home/guest/.message" ]; then ok "隐藏文件已创建"; else bad "隐藏文件未创建"; fi
 if OUT=$(run_check "$SB" dotfile-42); then RC=0; else RC=$?; fi
 expect_eq "正确答案通过" "$RC" "0"
+if OUT=$(run_check "$SB" "dotfile-42  "); then RC=0; else RC=$?; fi
+expect_eq "答案带多余空格仍通过" "$RC" "0"
 OUT=$(run_check "$SB" wrong) && RC=0 || RC=$?
 expect_eq "错误答案失败" "$RC" "1"
 rm "$SB/home/guest/.message"
@@ -297,6 +301,8 @@ TOKEN=$(cd "$SB/home/guest" && PATH="$STUB:$PATH" "$BUSYBOX" wget -q -O - "http:
 expect_contains "$TOKEN" "备份文件包含令牌" "dbg-token-8848"
 if OUT=$(run_check "$SB" dbg-token-8848); then RC=0; else RC=$?; fi
 expect_eq "正确答案通过" "$RC" "0"
+if OUT=$(run_check "$SB" "  dbg-token-8848 "); then RC=0; else RC=$?; fi
+expect_eq "答案带多余空格仍通过" "$RC" "0"
 OUT=$(run_check "$SB" wrong-token) && RC=0 || RC=$?
 expect_eq "错误答案失败" "$RC" "1"
 # 服务停止后 check 应失败，reset-level 恢复后应通过
@@ -366,6 +372,41 @@ HOME="$SB2/home/guest" PATH="$STUB:$PATH" "$STUB/httpd" -p "127.0.0.1:${HASHTEAM
 sleep 1
 if OUT=$(run_check "$SB2"); then RC=0; else RC=$?; fi
 expect_eq "重写文件与符号权限修复同样通过" "$RC" "0"
+# 启动参数换序（-h 在前）与相对路径 -h www 也应通过
+HASHTEAM_SECURE_PORT=$((HASHTEAM_SECURE_PORT + 1))
+export HASHTEAM_SECURE_PORT
+sandbox 10
+SB3="$SB_DIR"
+run_level "$SB3" "$HASHTEAM_LEVELS_DIR/level-10/init.sh" >/dev/null
+sleep 1
+cd "$SB3/home/guest" && PATH="$STUB:$PATH" "$STUB/sed" -i \
+    -e 's/debug=true/debug=false/' \
+    -e 's/allow_guest=true/allow_guest=false/' \
+    -e 's/listen=0.0.0.0/listen=127.0.0.1/' server.conf
+"$STUB/chmod" 600 "$SB3/home/guest/server.conf"
+PID=$(cat "$SB3/home/guest/.hashteam/level-10-httpd.pid")
+"$STUB/kill" "$PID" 2>/dev/null || true
+sleep 1
+(cd "$SB3/home/guest" && HOME="$SB3/home/guest" PATH="$STUB:$PATH" \
+    "$STUB/httpd" -h "$SB3/home/guest/www" -p "127.0.0.1:${HASHTEAM_SECURE_PORT}")
+sleep 1
+if OUT=$(run_check "$SB3"); then RC=0; else RC=$?; fi
+expect_eq "httpd 参数换序启动同样通过" "$RC" "0"
+stop_test_httpd
+sleep 1
+(cd "$SB3/home/guest" && HOME="$SB3/home/guest" PATH="$STUB:$PATH" \
+    "$STUB/httpd" -p "127.0.0.1:${HASHTEAM_SECURE_PORT}" -h www)
+sleep 1
+if OUT=$(run_check "$SB3"); then RC=0; else RC=$?; fi
+expect_eq "相对路径 -h www 启动同样通过" "$RC" "0"
+stop_test_httpd
+
+echo "—— 占位命令 ——"
+for cmd in man nano python; do
+    OUT=$(PATH="$STUB:$PATH" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/$cmd" 2>&1) && RC=0 || RC=$?
+    expect_eq "$cmd 退出码为 127" "$RC" "127"
+    expect_contains "$OUT" "$cmd 提示输入 help" "输入 help"
+done
 
 echo
 echo "—— 结果：$PASS 通过，$FAIL 失败 ——"

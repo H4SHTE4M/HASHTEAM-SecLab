@@ -21,14 +21,14 @@
       "type": "explain",
       "title": "先看懂终端在等什么",
       "objective": "能区分提示符和自己应该输入的位置",
-      "instruction": "终端末尾的 $ 是 Shell 提示符，表示系统已经准备好。提示符 $ 之后、光标所在处才是输入区；提示符本身不用输入。按回车（Enter）提交，退格（Backspace）删除，方向键 ↑/↓ 可以找回之前的命令。",
+      "instruction": "终端末尾的 $ 是 Shell 提示符，表示系统已经准备好。提示符 $ 之后、光标所在处才是输入区；提示符本身不用输入。按回车（Enter）提交，退格（Backspace）删除，方向键 ↑/↓ 可以找回之前的命令。命令卡住不动时，可以按 Ctrl+C 中断它。",
       "completion": "acknowledge",
       "allowRun": false,
       "introduces": [
         {
           "id": "terminal-prompt",
           "term": "Shell 提示符与输入区",
-          "explanation": "提示符显示当前会话已就绪；真正的命令从它后面的光标处开始。复制输出时也不要把提示符一起带走。"
+          "explanation": "Shell 是读取你输入、替你执行命令的程序。提示符显示 Shell 已就绪；真正的命令从它后面的光标处开始。复制输出时也不要把提示符一起带走。"
         },
         {
           "id": "command-anatomy",
@@ -49,6 +49,7 @@
       "uses": ["terminal-prompt", "command-anatomy"],
       "command": "whoami",
       "observation": "观察命令下方只包含用户名的那一行，不要把提示符算进用户名。",
+      "commonErrors": ["not found 表示没有这个名字的命令，检查拼写。"],
       "reinforcement": "whoami 回答的是“我是谁”。"
     },
     {
@@ -62,7 +63,8 @@
       "uses": ["command-anatomy"],
       "command": "pwd",
       "observation": "找到以 / 开头的路径，确认自己位于 guest 的主目录。",
-      "reinforcement": "pwd 回答的是“我在哪”。"
+      "commonErrors": ["not found 表示没有这个名字的命令，检查拼写。"],
+      "reinforcement": "pwd 回答的是“我在哪”。/ 是所有目录的起点（根目录），目录名之间也用 / 分隔；/home/guest 是你的主目录，相当于 Windows 里 C:\\Users\\你的名字。"
     },
     {
       "id": 4,
@@ -75,6 +77,7 @@
       "uses": ["command-anatomy"],
       "command": "ls",
       "observation": "找出名称像说明文档的文件，并准确记下大小写。",
+      "commonErrors": ["not found 表示没有这个名字的命令，检查拼写。"],
       "reinforcement": "ls 回答的是“这里有什么”。"
     },
     {
