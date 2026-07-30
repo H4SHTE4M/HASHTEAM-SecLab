@@ -615,6 +615,8 @@ function stepTypeLabel(type: LearningStep['type']): string {
 .level-badge,
 .mode-badge,
 .done-badge {
+  display: inline-flex;
+  align-items: center;
   min-height: 23px;
   padding: 2px 7px;
   font-size: 11px;
