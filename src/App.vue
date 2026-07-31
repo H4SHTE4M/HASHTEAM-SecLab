@@ -26,6 +26,7 @@ import { getLevel, LEVELS, TOTAL_LEVELS } from './data/levels'
 import type { AccentName, LabMode, ThemeName } from './types/lab'
 
 const PANEL_WIDTH_STORAGE_KEY = 'hashteam-mission-panel-width-v1'
+const PANEL_COLLAPSED_STORAGE_KEY = 'hashteam-mission-panel-collapsed-v1'
 const THEME_STORAGE_KEY = 'hashteam-theme-v1'
 const PANEL_DEFAULT_MIN = 420
 const PANEL_DEFAULT_MAX = 520
@@ -50,6 +51,10 @@ function loadPanelWidth(viewportWidth: number): number {
   return Number.isFinite(stored) && stored > 0 ? stored : defaultPanelWidth(viewportWidth)
 }
 
+function loadPanelCollapsed(): boolean {
+  return layoutStorage.getItem(PANEL_COLLAPSED_STORAGE_KEY) === 'true'
+}
+
 const vm = useVirtualMachine()
 const progress = useLabProgress()
 const preferences = useLabPreferences()
@@ -66,6 +71,7 @@ const viewportWidth = ref(window.innerWidth)
 const viewportHeight = ref(window.innerHeight)
 const horizontalSafeArea = ref(measureHorizontalSafeArea(document))
 const missionPanelWidth = ref(loadPanelWidth(viewportWidth.value))
+const isMissionPanelCollapsed = ref(loadPanelCollapsed())
 const isPanelResizing = ref(false)
 const theme = ref<ThemeName>(loadTheme())
 const showBootOverlay = ref(!showCompletion.value)
@@ -148,8 +154,16 @@ const effectiveMissionPanelWidth = computed(() =>
     panelWidthBounds.value.max,
   ),
 )
+const isMissionPanelVisuallyCollapsed = computed(
+  () =>
+    isMissionPanelCollapsed.value &&
+    (viewportWidth.value > 900 || shortLandscapeSplit.value),
+)
 const workspaceStyle = computed(() => ({
   '--mission-panel-width': `${effectiveMissionPanelWidth.value}px`,
+  '--workspace-panel-width': isMissionPanelVisuallyCollapsed.value
+    ? '0px'
+    : `${effectiveMissionPanelWidth.value}px`,
 }))
 const showWelcomeBack = computed(
   () =>
@@ -280,7 +294,7 @@ function persistPanelWidth(): void {
 }
 
 function startPanelResize(event: PointerEvent): void {
-  if (event.button !== 0) return
+  if (event.button !== 0 || isMissionPanelVisuallyCollapsed.value) return
   const handle = event.currentTarget
   if (!(handle instanceof HTMLElement)) return
 
@@ -335,6 +349,15 @@ function handlePanelResizeKeydown(event: KeyboardEvent): void {
     panelWidthBounds.value.max,
   )
   persistPanelWidth()
+}
+
+function toggleMissionPanel(): void {
+  stopPanelResize()
+  isMissionPanelCollapsed.value = !isMissionPanelCollapsed.value
+  layoutStorage.setItem(
+    PANEL_COLLAPSED_STORAGE_KEY,
+    String(isMissionPanelCollapsed.value),
+  )
 }
 
 function handleTerminalInput(data: string): void {
@@ -482,6 +505,7 @@ function openHelp(trigger: HTMLElement): void {
           class="workspace"
           :class="{
             'is-resizing': isPanelResizing,
+            'is-panel-collapsed': isMissionPanelVisuallyCollapsed,
             'short-landscape-split': shortLandscapeSplit,
           }"
         >
@@ -550,41 +574,67 @@ function openHelp(trigger: HTMLElement): void {
           </section>
           <div
             class="panel-resizer"
-            role="separator"
-            tabindex="0"
-            aria-label="调整任务栏宽度"
-            aria-orientation="vertical"
-            :aria-valuemin="panelWidthBounds.min"
-            :aria-valuemax="panelWidthBounds.max"
-            :aria-valuenow="Math.round(effectiveMissionPanelWidth)"
-            :aria-valuetext="`${Math.round(effectiveMissionPanelWidth)} 像素`"
-            data-tooltip="拖动调整任务栏"
-            data-tooltip-placement="left"
-            @pointerdown="startPanelResize"
-            @pointermove="movePanelResize"
-            @pointerup="stopPanelResize"
-            @pointercancel="stopPanelResize"
-            @dblclick="resetPanelWidth"
-            @keydown="handlePanelResizeKeydown"
+            :class="{ 'is-collapsed': isMissionPanelVisuallyCollapsed }"
           >
-            <span class="resizer-grip" aria-hidden="true" />
+            <div
+              class="resizer-drag-handle"
+              role="separator"
+              :tabindex="isMissionPanelVisuallyCollapsed ? -1 : 0"
+              aria-label="调整任务栏宽度"
+              aria-orientation="vertical"
+              :aria-disabled="isMissionPanelVisuallyCollapsed"
+              :aria-valuemin="panelWidthBounds.min"
+              :aria-valuemax="panelWidthBounds.max"
+              :aria-valuenow="Math.round(effectiveMissionPanelWidth)"
+              :aria-valuetext="`${Math.round(effectiveMissionPanelWidth)} 像素`"
+              data-tooltip="拖动调整任务栏"
+              data-tooltip-placement="left"
+              @pointerdown="startPanelResize"
+              @pointermove="movePanelResize"
+              @pointerup="stopPanelResize"
+              @pointercancel="stopPanelResize"
+              @dblclick="resetPanelWidth"
+              @keydown="handlePanelResizeKeydown"
+            >
+              <span class="resizer-grip" aria-hidden="true" />
+            </div>
+            <button
+              type="button"
+              class="panel-collapse-toggle"
+              :aria-label="isMissionPanelVisuallyCollapsed ? '展开任务栏' : '收起任务栏'"
+              :aria-expanded="!isMissionPanelVisuallyCollapsed"
+              aria-controls="mission-panel"
+              :data-tooltip="isMissionPanelVisuallyCollapsed ? '展开任务栏' : '收起任务栏'"
+              data-tooltip-placement="left"
+              @click="toggleMissionPanel"
+            >
+              <AppIcon name="chevron-right" :size="16" />
+            </button>
           </div>
-          <MissionPanel
-            :level="currentLevelDef"
-            :completed="currentCompleted"
-            :hints-used="currentHintsUsed"
-            :is-last="isLastLevel"
-            :mode="currentMode"
-            :guide-step="currentGuideStep"
-            :completed-steps="currentCompletedSteps"
-            :completion-record="currentCompletionRecord"
-            @next="handleNextLevel"
-            @use-hint="progress.useHint"
-            @run-command="handleRunCommand"
-            @advance-guide="progress.advanceGuide"
-            @complete-step="progress.completeStep"
-            @change-mode="handleChangeMode"
-          />
+          <div
+            id="mission-panel"
+            class="mission-panel-slot"
+            :class="{ 'is-collapsed': isMissionPanelVisuallyCollapsed }"
+            :inert="isMissionPanelVisuallyCollapsed"
+            :aria-hidden="isMissionPanelVisuallyCollapsed ? 'true' : undefined"
+          >
+            <MissionPanel
+              :level="currentLevelDef"
+              :completed="currentCompleted"
+              :hints-used="currentHintsUsed"
+              :is-last="isLastLevel"
+              :mode="currentMode"
+              :guide-step="currentGuideStep"
+              :completed-steps="currentCompletedSteps"
+              :completion-record="currentCompletionRecord"
+              @next="handleNextLevel"
+              @use-hint="progress.useHint"
+              @run-command="handleRunCommand"
+              @advance-guide="progress.advanceGuide"
+              @complete-step="progress.completeStep"
+              @change-mode="handleChangeMode"
+            />
+          </div>
         </main>
         <CompletionPage
           v-else
@@ -709,7 +759,7 @@ function openHelp(trigger: HTMLElement): void {
 .workspace {
   flex: 1;
   display: grid;
-  grid-template-columns: var(--workspace-rail-width) minmax(0, 1fr) var(--workspace-resizer-width) var(--mission-panel-width);
+  grid-template-columns: var(--workspace-rail-width) minmax(0, 1fr) var(--workspace-resizer-width) var(--workspace-panel-width);
   gap: var(--workspace-column-gap);
   padding: 0 calc(var(--space-4) + var(--safe-right)) max(var(--space-4), var(--safe-bottom)) calc(var(--space-4) + var(--safe-left));
   min-height: 0;
@@ -750,39 +800,123 @@ function openHelp(trigger: HTMLElement): void {
   z-index: 4;
   min-width: 24px;
   display: grid;
+  place-items: stretch;
+}
+
+.resizer-drag-handle,
+.panel-collapse-toggle {
+  grid-area: 1 / 1;
+}
+
+.resizer-drag-handle {
+  display: grid;
   place-items: center;
+  min-width: 24px;
   padding: 0;
   background: transparent;
   border: 0;
   border-radius: 8px;
   cursor: col-resize;
   touch-action: none;
-  transition: background-color var(--duration-normal) ease, border-color var(--duration-normal) ease;
+  transition: background-color var(--duration-normal) ease;
 }
 
 .resizer-grip {
   width: 3px;
-  height: 44px;
-  background: var(--resizer-color);
-  border-radius: 3px;
-  box-shadow: 0 -8px 0 -1px var(--resizer-color), 0 8px 0 -1px var(--resizer-color);
-  transition: height var(--duration-normal) var(--ease-out), background-color var(--duration-normal) ease, box-shadow var(--duration-normal) ease;
+  height: 104px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: height var(--duration-normal) var(--ease-out);
 }
 
-.panel-resizer:hover,
-.panel-resizer:focus-visible,
-.panel-resizer:active {
+.resizer-grip::before,
+.resizer-grip::after {
+  width: 100%;
+  height: 32px;
+  background: var(--resizer-color);
+  border-radius: 3px;
+  content: '';
+  transition: height var(--duration-normal) var(--ease-out), background-color var(--duration-normal) ease;
+}
+
+.panel-resizer:hover .resizer-drag-handle,
+.resizer-drag-handle:focus-visible,
+.resizer-drag-handle:active {
   background: var(--accent-cyan-soft);
-  border-color: var(--accent-cyan-border);
 }
 
 .panel-resizer:hover .resizer-grip,
-.panel-resizer:focus-visible .resizer-grip,
-.panel-resizer:active .resizer-grip,
+.resizer-drag-handle:focus-visible .resizer-grip,
+.resizer-drag-handle:active .resizer-grip,
 .workspace.is-resizing .resizer-grip {
-  height: 56px;
+  height: 120px;
+}
+
+.panel-resizer:hover .resizer-grip::before,
+.panel-resizer:hover .resizer-grip::after,
+.resizer-drag-handle:focus-visible .resizer-grip::before,
+.resizer-drag-handle:focus-visible .resizer-grip::after,
+.resizer-drag-handle:active .resizer-grip::before,
+.resizer-drag-handle:active .resizer-grip::after,
+.workspace.is-resizing .resizer-grip::before,
+.workspace.is-resizing .resizer-grip::after {
+  height: 40px;
   background: var(--accent-cyan);
-  box-shadow: 0 -9px 0 -1px var(--accent-cyan), 0 9px 0 -1px var(--accent-cyan);
+}
+
+.panel-collapse-toggle {
+  z-index: 1;
+  width: 24px;
+  height: 40px;
+  align-self: center;
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--resizer-color);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: color var(--duration-normal) ease;
+}
+
+.panel-collapse-toggle:hover,
+.panel-collapse-toggle:focus-visible {
+  color: var(--accent-cyan);
+}
+
+.panel-collapse-toggle svg {
+  transition: transform var(--duration-normal) var(--ease-out);
+}
+
+.panel-resizer.is-collapsed .resizer-drag-handle {
+  pointer-events: none;
+}
+
+.panel-resizer.is-collapsed .panel-collapse-toggle svg {
+  transform: rotate(180deg);
+}
+
+.mission-panel-slot {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity var(--duration-fast) ease, visibility 0s;
+}
+
+.mission-panel-slot.is-collapsed {
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity var(--duration-fast) ease, visibility 0s var(--duration-normal);
+}
+
+.mission-panel-slot :deep(.mission-panel) {
+  box-sizing: border-box;
 }
 
 .terminal-header {
@@ -973,6 +1107,11 @@ function openHelp(trigger: HTMLElement): void {
     display: none;
   }
 
+  .workspace:not(.short-landscape-split) .mission-panel-slot {
+    height: auto;
+    overflow: visible;
+  }
+
   .workspace:not(.short-landscape-split) :deep(.mission-panel),
   .workspace:not(.short-landscape-split) :deep(.panel-scroll) {
     height: auto;
@@ -982,7 +1121,7 @@ function openHelp(trigger: HTMLElement): void {
 
 @media (max-width: 900px) and (max-height: 600px) and (orientation: landscape) {
   .workspace.short-landscape-split {
-    grid-template-columns: 56px minmax(0, 1fr) 24px var(--mission-panel-width);
+    grid-template-columns: 56px minmax(0, 1fr) 24px var(--workspace-panel-width);
     grid-template-rows: minmax(0, 1fr);
     gap: 6px;
     padding: 0 calc(8px + var(--safe-right)) max(8px, var(--safe-bottom)) calc(8px + var(--safe-left));

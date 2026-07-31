@@ -207,4 +207,34 @@ describe('application release flows', () => {
     ).toEqual(expected)
     wrapper.unmount()
   })
+
+  it('可点击收起任务栏并保留原来的面板宽度', async () => {
+    const wrapper = mount(App)
+    await nextTick()
+
+    const toggle = wrapper.get<HTMLButtonElement>('.panel-collapse-toggle')
+    const panel = wrapper.get('#mission-panel')
+    const appContent = wrapper.get<HTMLElement>('.app-content')
+
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    expect(panel.attributes('aria-hidden')).toBeUndefined()
+    expect(appContent.element.style.getPropertyValue('--workspace-panel-width')).not.toBe('0px')
+
+    await toggle.trigger('click')
+
+    expect(toggle.attributes('aria-label')).toBe('展开任务栏')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(panel.attributes('aria-hidden')).toBe('true')
+    expect(panel.attributes()).toHaveProperty('inert')
+    expect(appContent.element.style.getPropertyValue('--workspace-panel-width')).toBe('0px')
+    expect(window.localStorage.getItem('hashteam-mission-panel-collapsed-v1')).toBe('true')
+
+    await toggle.trigger('click')
+
+    expect(toggle.attributes('aria-label')).toBe('收起任务栏')
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    expect(panel.attributes('aria-hidden')).toBeUndefined()
+    expect(appContent.element.style.getPropertyValue('--workspace-panel-width')).not.toBe('0px')
+    wrapper.unmount()
+  })
 })
