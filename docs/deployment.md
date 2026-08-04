@@ -3,7 +3,7 @@
 `.github/workflows/ci.yml` 将同一个已验证、SHA-256 固定的静态 artifact 并行发布到
 现有 Nginx 主站和 EdgeOne Makers Production。过渡期主站仍是
 `https://labtest.lwzheng.tech`；EO 独立验收域名是
-`https://seclabtest.lwzheng.tech`，本流程不修改主域 DNS。
+`https://lab.lwzheng.tech`，本流程不修改主域 DNS。
 
 ## 发布拓扑与安全边界
 
@@ -20,7 +20,7 @@ verify：测试、audit、构建、verify-dist、确定性 tar + SHA-256
 production / Nginx                           production / EO
 SSH 原子切换，失败自动回滚                   直接发布 Production，失败人工恢复
         │                                             │
-labtest.lwzheng.tech                         seclabtest.lwzheng.tech
+labtest.lwzheng.tech                         lab.lwzheng.tech
 ```
 
 - workflow 的 `GITHUB_TOKEN` 只有 `contents: read`，所有 Action 固定到完整 commit。
@@ -63,7 +63,7 @@ workflow 中：
 | 项目名 | `seclabtest` |
 | 项目 ID | `makers-iehfqellwnxf` |
 | 项目类型 | Direct Upload |
-| Environment URL | `https://seclabtest.lwzheng.tech` |
+| Environment URL | `https://lab.lwzheng.tech` |
 
 Environment 必须在 GitHub 仓库设置中配置 deployment branch rule，只允许
 `main`。不要把 Token 放入仓库、artifact、缓存或 workflow output。

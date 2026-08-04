@@ -225,7 +225,7 @@ jobs:
       contents: read
     environment:
       name: production
-      url: https://seclabtest.lwzheng.tech
+      url: https://lab.lwzheng.tech
     concurrency:
       group: hashteam-edgeone-production
       cancel-in-progress: false
@@ -275,7 +275,7 @@ jobs:
           EDGEONE_PAGES_API_REGION: china
           EDGEONE_PROJECT_NAME: seclabtest
           EDGEONE_PROJECT_ID: makers-iehfqellwnxf
-          EDGEONE_DEPLOY_URL: https://seclabtest.lwzheng.tech
+          EDGEONE_DEPLOY_URL: https://lab.lwzheng.tech
           EXPECTED_SOURCE_ID: ${{ github.sha }}
         run: |
           set -euo pipefail
