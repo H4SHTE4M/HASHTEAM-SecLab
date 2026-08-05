@@ -1,9 +1,11 @@
 #!/bin/sh
 # 第 8 关验证：后门端口已确认 + 后门进程已清除（只检查最终状态）
 set -u
-expected=$(cat "${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}/level-8"/answer)
+# 答案以加盐 SHA-256 存储，判定行为与明文时代一致（tr 去空白后比对哈希）
+expected_hash=$(cat "${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}/level-8"/answer.sha256)
 PORT=31337
 given=$(printf '%s' "${1:-}" | tr -d '[:space:]')
+given_hash=$(printf '%s' "hashteam-lab answer v1 level-8:$given" | sha256sum | cut -d ' ' -f 1)
 
 if [ ! -f "$HOME/incident.txt" ]; then
     echo "✗ 实验环境不完整，试试 reset-level 重置本关。"
@@ -13,7 +15,7 @@ if [ -z "$given" ]; then
     echo "用法：check <端口号>"
     exit 2
 fi
-if [ "$given" != "$expected" ]; then
+if [ "$given_hash" != "$expected_hash" ]; then
     echo "✗ $given 不是陌生监听的端口。回到监听状态，找 LISTEN 中不属于基线的那个端口；"
     echo "  如果异常进程已被你结束，reset-level 可以让它重新出现。"
     exit 1

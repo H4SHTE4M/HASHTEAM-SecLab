@@ -15,6 +15,16 @@ max_completed() {
     cat "$STATE_DIR/max-completed" 2>/dev/null || echo 0
 }
 
+# 经 SUID 签名检查器签发 level-ready（前端验签+解锁门控双重防伪）；
+# 宿主机测试环境没有 htcheck，退回未签名行（该环境无前端消费）。
+emit_level_ready() {
+    if [ -x "${HASHTEAM_HTCHECK:-/usr/local/bin/htcheck}" ]; then
+        "${HASHTEAM_HTCHECK:-/usr/local/bin/htcheck}" level-ready "$1"
+    else
+        printf '@@HASHTEAM:{"type":"level-ready","level":%s}\n' "$1"
+    fi
+}
+
 run_init() {
     sh "$LEVELS_DIR/level-$1/init.sh"
 }
@@ -42,7 +52,7 @@ case "$cmd" in
         rm -f "$STATE_DIR"/hint-count-*
         echo "$level" > "$STATE_DIR/level"
         run_init "$level"
-        printf '@@HASHTEAM:{"type":"level-ready","level":%s}\n' "$level"
+        emit_level_ready "$level"
         echo "卡住时输入 help 或 hint。"
         ;;
     mark-completed)
@@ -62,7 +72,7 @@ case "$cmd" in
         ht_notice "正在重置第 $level 关的实验环境..."
         rm -f "$STATE_DIR"/hint-count-*
         run_init "$level"
-        printf '@@HASHTEAM:{"type":"level-ready","level":%s}\n' "$level"
+        emit_level_ready "$level"
         echo "卡住时输入 help 或 hint。"
         ;;
     factory-reset)
@@ -70,7 +80,7 @@ case "$cmd" in
         mkdir -p "$STATE_DIR"
         echo 1 > "$STATE_DIR/level"
         run_init 1
-        printf '@@HASHTEAM:{"type":"level-ready","level":1}\n'
+        emit_level_ready 1
         ;;
     current)
         current_level

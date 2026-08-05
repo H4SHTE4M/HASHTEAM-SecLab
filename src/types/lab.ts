@@ -167,11 +167,17 @@ export interface ChallengeManifest extends LevelDef {
   slug: string
 }
 
-/** 串口控制协议消息（@@HASHTEAM:{...}） */
+/** 串口控制协议消息（@@HASHTEAM:{...}）
+ *
+ * 防伪约定（version 2 起）：
+ * - ready 由 init（root）携带本次启动随机生成的会话密钥 key 签发，前端只采信首个 ready；
+ * - level-result / level-ready 必须附带 sig（VM 内 SUID 评分检查器对消息的 HMAC-SHA256），
+ *   缺失或验签失败的消息前端一律忽略，学生手敲的协议行因此无法伪造进度。
+ */
 export type ProtocolMessage =
-  | { type: 'ready'; version?: number }
-  | { type: 'level-ready'; level: number }
-  | { type: 'level-result'; level: number; status: 'passed' | 'failed' }
+  | { type: 'ready'; version?: number; key?: string }
+  | { type: 'level-ready'; level: number; sig?: string }
+  | { type: 'level-result'; level: number; status: 'passed' | 'failed'; sig?: string }
   | { type: 'hint-request'; level: number }
   | { type: 'progress'; level: number; value: number }
   | { type: 'error'; message: string }

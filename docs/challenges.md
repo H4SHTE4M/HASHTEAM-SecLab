@@ -203,6 +203,10 @@ vm/rootfs-overlay/opt/hashteam/levels/
 - 成功退出 `0`，失败退出非零。
 - 不在失败输出中打印完整命令管道或最终修复值。
 - 涉及运行配置时，同时检查配置文件和真实进程/监听状态。
+- 需要固定答案时，明文只放在 `tests/fixtures/level-answers.json`；运行
+  `scripts/hash-answer.sh` 生成镜像内的 `answer.sha256`，不要添加明文 `answer` 文件。
+- 生产环境中的 `HOME`、`PATH` 和答案目录由 SUID `htcheck` 固定；测试专用的
+  `HASHTEAM_*` 覆盖不得成为判题前提。
 
 ## 自动校验
 
@@ -219,17 +223,19 @@ vm/rootfs-overlay/opt/hashteam/levels/
 - 三层提示按方向、工具、结构排列。
 - 验证占位符都有解释。
 - 通关前不引用通关后内容。
-- 答案文件内容不出现在通关前教学文本。
+- 测试夹具中的答案不出现在通关前教学文本，且镜像不包含明文 `answer` 文件。
 - 第 8–10 关受保护的端口、路径、令牌和最终配置不在初始内容泄露。
 - 日志规模描述与当前训练数据一致。
 
 ## 新增或修改关卡
 
 1. 添加或修改 `challenge.json`、`init.sh`、`check.sh` 和素材。
-2. 运行 `pnpm validate:challenges`。
-3. 在 `tests/components.test.ts` 增加教学交互测试。
-4. 在 `scripts/test-vm-checks.sh` 增加环境判题与替代合法方法。
-5. 依次运行：
+2. 若关卡使用固定答案，同步修改 `tests/fixtures/level-answers.json` 并运行
+   `scripts/hash-answer.sh`。
+3. 运行 `pnpm validate:challenges`。
+4. 在 `tests/components.test.ts` 增加教学交互测试。
+5. 在 `scripts/test-vm-checks.sh` 增加环境判题与替代合法方法。
+6. 依次运行：
 
    ```sh
    pnpm test
@@ -237,4 +243,4 @@ vm/rootfs-overlay/opt/hashteam/levels/
    pnpm build
    ```
 
-6. 修改 VM 文件后，发布前运行 `pnpm build:vm` 重打包 initramfs，再执行集成测试。
+7. 修改 VM 文件后，发布前运行 `pnpm build:vm` 重打包 initramfs，再执行集成测试。

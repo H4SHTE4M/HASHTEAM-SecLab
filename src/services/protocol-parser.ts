@@ -81,14 +81,26 @@ export class SerialProtocolParser {
       switch (value.type) {
         case 'ready':
           if (value.version !== undefined && !isNonNegativeInteger(value.version)) return null
-          return value.version === undefined
-            ? { type: 'ready' }
-            : { type: 'ready', version: value.version as number }
+          if (value.key !== undefined && !isSessionKey(value.key)) return null
+          return {
+            type: 'ready',
+            ...(value.version === undefined ? {} : { version: value.version as number }),
+            ...(value.key === undefined ? {} : { key: value.key as string }),
+          }
         case 'level-ready':
-          return isPositiveInteger(value.level) ? { type: 'level-ready', level: value.level } : null
+          return isPositiveInteger(value.level) && isOptionalSig(value.sig)
+            ? { type: 'level-ready', level: value.level, ...(value.sig === undefined ? {} : { sig: value.sig }) }
+            : null
         case 'level-result':
-          return isPositiveInteger(value.level) && (value.status === 'passed' || value.status === 'failed')
-            ? { type: 'level-result', level: value.level, status: value.status }
+          return isPositiveInteger(value.level) &&
+            (value.status === 'passed' || value.status === 'failed') &&
+            isOptionalSig(value.sig)
+            ? {
+                type: 'level-result',
+                level: value.level,
+                status: value.status,
+                ...(value.sig === undefined ? {} : { sig: value.sig }),
+              }
             : null
         case 'hint-request':
           return isPositiveInteger(value.level) ? { type: 'hint-request', level: value.level } : null
@@ -120,4 +132,18 @@ function isNonNegativeInteger(value: unknown): value is number {
 
 function isPositiveInteger(value: unknown): value is number {
   return isNonNegativeInteger(value) && value >= 1
+}
+
+/** 会话密钥：base64 编码的随机字节（init 写入 32 字节 → 44 字符，留出余量） */
+const SESSION_KEY_PATTERN = /^[A-Za-z0-9+/]{16,128}={0,2}$/
+
+/** HMAC-SHA256 签名：64 位小写十六进制 */
+const SIG_PATTERN = /^[0-9a-f]{64}$/
+
+function isSessionKey(value: unknown): value is string {
+  return typeof value === 'string' && SESSION_KEY_PATTERN.test(value)
+}
+
+function isOptionalSig(value: unknown): value is string | undefined {
+  return value === undefined || (typeof value === 'string' && SIG_PATTERN.test(value))
 }

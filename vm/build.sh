@@ -276,6 +276,27 @@ verify_sha256 "$_expected_suid_sha256" "$BUSYBOX_SUID" >/dev/null || {
 rm -rf "$_busybox_build"
 trap - EXIT
 
+# ---------- 1c. SUID 签名评分检查器 htcheck ----------
+# 与 busybox-suid 共用同一条锁定工具链；源码在 vm/toolchain-source/htcheck/。
+HTCHECK_SOURCE="$ROOT/vm/toolchain-source/htcheck/htcheck.c"
+[ -f "$HTCHECK_SOURCE" ] || {
+    echo "错误：缺少 $HTCHECK_SOURCE" >&2
+    exit 1
+}
+log "编译 SUID 签名评分检查器 htcheck（i386 静态）"
+env SOURCE_DATE_EPOCH="$BUSYBOX_BUILD_EPOCH" TZ=UTC \
+    "${BUSYBOX_CROSS_COMPILE}gcc" -static -Os -Wall -Wextra -Werror \
+        -o "$WORK/htcheck" "$HTCHECK_SOURCE"
+_htcheck_machine="$(LC_ALL=C readelf -h "$WORK/htcheck" | sed -n 's/^.*Machine:[[:space:]]*//p')"
+[ "$_htcheck_machine" = "Intel 80386" ] || {
+    echo "错误：htcheck 不是 i386 可执行文件：$_htcheck_machine" >&2
+    exit 1
+}
+LC_ALL=C readelf -l "$WORK/htcheck" | grep -q 'INTERP' && {
+    echo "错误：htcheck 不是静态链接（含 INTERP 段）" >&2
+    exit 1
+}
+
 # ---------- 2. 定制 32 位内核 ----------
 if [ "$SKIP_KERNEL" -eq 0 ]; then
     if ! verify_sha256 "$KERNEL_SOURCE_SHA256" "linux-$KERNEL_VERSION.tar.xz" >/dev/null 2>&1; then
@@ -317,9 +338,10 @@ else
 fi
 
 # ---------- 3. 打包 initramfs ----------
-log "打包 initramfs（busybox + SUID busybox + 关卡系统）"
+log "打包 initramfs（busybox + SUID busybox + htcheck + 关卡系统）"
 python3 "$ROOT/scripts/pack-initramfs.py" \
     --root "$OVERLAY" --busybox "$WORK/busybox" --busybox-suid "$BUSYBOX_SUID" \
+    --htcheck "$WORK/htcheck" \
     --out "$OUT_VM/rootfs.cpio.gz"
 
 # ---------- 4. v86 运行时与 BIOS ----------

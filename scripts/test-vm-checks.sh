@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Linux 检查脚本测试（宿主机版）：
-# 用 busybox 在临时 HOME 中运行每一关的 init.sh + check 流程，验证：
-#   - 正确答案通过（退出码 0，且 check 包装器输出 passed 协议）
-#   - 错误答案失败（非零退出码，且输出 error 协议）
+# 用「htcheck 的宿主机构建 + busybox」在临时 HOME 中运行每一关的 init.sh + check 流程，
+# 走的是与 VM 内完全一致的生产评分路径（SUID 检查器 → 关卡 check.sh → 签名协议），验证：
+#   - 正确答案通过（退出码 0，且输出带有效 HMAC 签名的 passed 协议）
+#   - 错误答案失败（非零退出码，且输出不带签名的 error 协议）
 #   - 未完成状态失败（缺少挑战文件时失败）
 #   - 使用不同但合法的方法完成时仍能通过
 #
+# 依赖：gcc（编译 htcheck 宿主构建）、python3（计算期望签名）、busybox。
 # 运行：scripts/test-vm-checks.sh  （可用 BUSYBOX=/path/busybox 指定二进制）
 set -euo pipefail
 
@@ -66,6 +68,29 @@ expect_contains() { # desc haystack needle
     case "$1" in *"$3"*) ok "$2" ;; *) bad "$2（输出中未找到：$3）" ;; esac
 }
 
+# 生产评分路径是 SUID 的 htcheck（i386）；宿主机无法执行 i386 二进制，
+# 这里用同一源码现场编译宿主机版本，行为由 RFC 4231 自测与 vitest 共同保障。
+HTCHECK="$WORK/htcheck-host"
+if ! gcc -O2 -Wall -Werror -o "$HTCHECK" "$ROOT/vm/toolchain-source/htcheck/htcheck.c"; then
+    echo "错误：无法编译 htcheck 宿主机版本（需要 gcc）" >&2
+    exit 1
+fi
+"$HTCHECK" selftest >/dev/null || { echo "错误：htcheck 自检失败" >&2; exit 1; }
+
+# 测试会话密钥（等价于 VM 内 init 生成的 32 字节密钥）；签名期望由 python3 现算。
+TEST_KEY="$WORK/protocol.key"
+printf 'hashteam-test-session-key-32byte' > "$TEST_KEY"
+expected_sig() { # level —— 计算 level-result:N:passed 的期望 HMAC-SHA256
+    python3 - "$TEST_KEY" "$1" <<'PYEOF'
+import hashlib
+import hmac
+import sys
+
+key = open(sys.argv[1], "rb").read()
+print(hmac.new(key, f"level-result:{sys.argv[2]}:passed".encode(), hashlib.sha256).hexdigest())
+PYEOF
+}
+
 # 为某关准备独立沙箱：HOME + 当前关卡号（每次调用都是独立目录）
 SB_N=0
 SB_DIR=
@@ -79,11 +104,12 @@ run_level() { # sandbox script [args...]
     local sb="$1"; shift
     HOME="$sb/home/guest" HASHTEAM_USER=guest PATH="$STUB:$PATH" "$BUSYBOX" sh "$@"
 }
-run_check() { # sandbox [args...] → 运行 check 包装器
+run_check() { # sandbox [args...] → 经 htcheck（生产评分路径的宿主构建）运行 check
     local sb="$1"; shift
     HOME="$sb/home/guest" HASHTEAM_USER=guest PATH="$STUB:$PATH" \
+        HASHTEAM_KEY_FILE="$TEST_KEY" HASHTEAM_TEST_SHELL="$BUSYBOX" \
         HASHTEAM_FORCE_COLOR="${HASHTEAM_FORCE_COLOR:-}" \
-        "$BUSYBOX" sh "$OVERLAY/usr/local/bin/check" "$@"
+        "$HTCHECK" run "$@"
 }
 
 echo "使用 busybox: $BUSYBOX"
@@ -95,18 +121,19 @@ MOTD_OUT=$(PATH="$STUB:$PATH" HASHTEAM_FORCE_COLOR=0 "$BUSYBOX" sh -c \
 MOTD_EXPECTED=$("$STUB/cat" "$HASHTEAM_LIB_DIR/motd")
 expect_eq "非交互 MOTD 保持纯文本" "$MOTD_OUT" "$MOTD_EXPECTED"
 
-COLOR_SAMPLE=$(PATH="$STUB:$PATH" HASHTEAM_FORCE_COLOR=1 "$BUSYBOX" sh -c \
-    '. "$1"; ht_render_result 1 "  ✓ 成功项
-  ✗ 失败项"' sh "$HASHTEAM_LIB_DIR/colors.sh")
-ESC=$(printf '\033')
-case "$COLOR_SAMPLE" in
-    *"${ESC}[1;92m  ✓ 成功项${ESC}[0m"*) ok "成功行使用语义色" ;;
-    *) bad "成功行缺少绿色 ANSI" ;;
-esac
-case "$COLOR_SAMPLE" in
-    *"${ESC}[1;91m  ✗ 失败项${ESC}[0m"*) ok "失败行使用语义色" ;;
-    *) bad "失败行缺少红色 ANSI" ;;
-esac
+# check 包装器必须委托给 SUID 评分检查器 htcheck（语义色与签名都在 htcheck 内，
+# ✓/✗ 行着色由下方各关卡的交互断言覆盖）
+if grep -q 'htcheck}" run "$@"' "$OVERLAY/usr/local/bin/check"; then
+    ok "check 包装器委托 htcheck"
+else
+    bad "check 包装器未委托 htcheck"
+fi
+# colors.sh 不再保留旧的 shell 版结果渲染（避免与 htcheck.c 双份实现漂移）
+if grep -q 'ht_render_result' "$HASHTEAM_LIB_DIR/colors.sh"; then
+    bad "colors.sh 仍残留 ht_render_result"
+else
+    ok "结果渲染实现唯一（htcheck.c）"
+fi
 
 echo "—— 第 1 关 ——"
 sandbox 1
@@ -123,12 +150,14 @@ expect_contains "$OUT" "输出 error 协议" '"type":"error"'
 
 if OUT=$(HASHTEAM_FORCE_COLOR=1 run_check "$SB" first-light); then RC=0; else RC=$?; fi
 expect_eq "强制颜色不改变成功退出码" "$RC" "0"
+ESC=$(printf '\033')
 case "$OUT" in
     *"${ESC}[1;92m✓ 验证通过！"*) ok "交互成功结果包含 ANSI" ;;
     *) bad "交互成功结果缺少 ANSI" ;;
 esac
 PROTOCOL=$(printf '%s\n' "$OUT" | "$STUB/sed" -n '/^@@HASHTEAM:/p')
-expect_eq "成功协议行保持纯文本" "$PROTOCOL" '@@HASHTEAM:{"type":"level-result","level":1,"status":"passed"}'
+expect_eq "成功协议行带有效签名且保持纯文本" "$PROTOCOL" \
+    "@@HASHTEAM:{\"type\":\"level-result\",\"level\":1,\"status\":\"passed\",\"sig\":\"$(expected_sig 1)\"}"
 
 OUT=$(HASHTEAM_FORCE_COLOR=1 run_check "$SB" wrong-answer) && RC=0 || RC=$?
 expect_eq "强制颜色不改变失败退出码" "$RC" "1"

@@ -16,6 +16,17 @@ hostname -F /etc/hostname
 # 仅启用回环：训练中的 Web 服务都只能在虚拟机本机访问。
 ifconfig lo 127.0.0.1 up
 
+# 评分会话密钥：每次启动随机生成，仅 root 可读。
+# htcheck（SUID）在 check 通过时用它签名结果，前端据签名防伪；
+# su 已被 passwd 锁定（无 shadow），学生无法读取此密钥。
+head -c 32 /dev/urandom > /etc/hashteam/protocol.key
+chmod 600 /etc/hashteam/protocol.key
+HT_READY_KEY=$(base64 < /etc/hashteam/protocol.key | tr -d '\n')
+
 echo "HASHTEAM Security Lab 正在进入实验环境..."
-# 以普通用户 guest 自动登录（root 切换无需密码）
+# ready 由 init（root）在登录前签发并附带回话密钥；学生 shell 启动晚于本行，
+# 无法抢在首个 ready 之前注入伪造密钥（前端只采信首个 ready）。
+printf '@@HASHTEAM:{"type":"ready","version":2,"key":"%s"}\n' "$HT_READY_KEY"
+unset HT_READY_KEY
+# 以普通用户 guest 自动登录（root 切换需密码，而密码未设置，即无法提权）
 exec setsid cttyhack su - guest
