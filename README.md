@@ -175,7 +175,8 @@ pnpm verify:dist        # 校验内容寻址 VM 资产及其 SHA-256 清单
   通关总结；前端在构建时自动发现并加载。
 - `init.sh`：幂等的关卡环境初始化，每次进入或重置本关都会执行。
 - `check.sh`：只检查最终状态；成功 `exit 0`，失败输出可读提示并退出非零。
-- `answer`、日志或二进制等文件：本关需要的只读素材。
+- `answer.sha256`、日志或二进制等文件：本关需要的只读素材；需要固定答案时，
+  明文只写入 `tests/fixtures/level-answers.json`，再运行 `scripts/hash-answer.sh` 生成哈希。
 
 新增关卡时只需建立下一个连续编号的目录，不再修改前端关卡数组或总关卡数。
 运行 `pnpm validate:challenges` 会校验 manifest 字段、目录编号、唯一 slug 以及
@@ -185,24 +186,24 @@ pnpm verify:dist        # 校验内容寻址 VM 资产及其 SHA-256 清单
 完整字段说明、最小模板和脚本约定见
 [关卡开发指南](docs/challenges.md)。
 
-判题协议（`passed` / `error` 消息）由 `/usr/local/bin/check` 包装器
-自动发出，关卡脚本无需关心协议格式。
+判题协议（`passed` / `error` 消息）由 `/usr/local/bin/check` 委托 SUID
+`htcheck` 自动发出；只有真实通过的结果才带签名，关卡脚本无需关心协议格式。
 
 ## 9. 关卡协议说明
 
 虚拟机通过串口输出机器可识别的控制行，格式为单行 JSON 加固定前缀：
 
 ```text
-@@HASHTEAM:{"type":"level-result","level":3,"status":"passed"}
+@@HASHTEAM:{"type":"level-result","level":3,"status":"passed","sig":"<64 位十六进制签名>"}
 ```
 
 已定义的消息类型：
 
 | type | 字段 | 含义 |
 | --- | --- | --- |
-| `ready` | `version` | Linux 启动并完成自动登录，环境就绪 |
-| `level-ready` | `level` | 关卡环境初始化完成（进入/重置某关后发出） |
-| `level-result` | `level`, `status` | 关卡验证结果（`passed`） |
+| `ready` | `version`, `key` | Linux 启动，提供本次 VM 的临时验签材料 |
+| `level-ready` | `level`, `sig` | 关卡环境初始化完成（进入/重置某关后发出） |
+| `level-result` | `level`, `status`, `sig` | 关卡验证结果（`passed`） |
 | `hint-request` | `level` | 用户在终端输入了 `hint`，请求前端显示提示 |
 | `progress` | `level`, `value` | （预留）细粒度进度 |
 | `error` | `message` | 检查失败等错误信息 |
@@ -212,7 +213,8 @@ pnpm verify:dist        # 校验内容寻址 VM 资产及其 SHA-256 清单
 1. 只识别**行首**以 `@@HASHTEAM:` 开头的行；
 2. 协议行**不显示**在终端中，普通输出原样显示；
 3. 支持半包 / 粘包（按行缓冲），非法 JSON 静默忽略不会导致崩溃；
-4. 前端只根据协议消息更新状态，从不监听用户输入判题。
+4. 前端只根据协议消息更新状态，从不监听用户输入判题；version 2 的关卡切换与
+   通过结果必须验签，且只接受当前会话和顺序解锁范围内的消息。
 
 前端 → 虚拟机方向：通过串口输入调用虚拟机内的
 `hashteamctl goto N / reset-level / factory-reset` 等命令。
@@ -243,9 +245,10 @@ bash scripts/verify-build.sh
 推送到受保护的 `main` 后，GitHub Actions 会在无生产凭据的 `verify` job
 完成全部门禁与发布包 SHA-256 固化；同一个约 8 MiB 的确定性 artifact 随后并行
 进入 `production` Environment 的 Nginx 原子发布和 EdgeOne Makers Production
-发布。Nginx 使用无 sudo 的专用 SSH 账号、独立 release、共享内容寻址 VM 资源、
-原子软链接切换和失败自动回滚；EO 固定部署到 `seclabtest`
-（`makers-iehfqellwnxf`），并通过 `https://seclabtest.lwzheng.tech` 验收。
+发布。Nginx 主站使用无 sudo 的专用 SSH 账号、独立 release、共享内容寻址 VM 资源、
+原子软链接切换和失败自动回滚，验收地址是
+`https://labtest.lwzheng.tech`；EO 固定部署到 `seclabtest`
+（`makers-iehfqellwnxf`），并通过 `https://lab.lwzheng.tech` 验收。
 PR（包括 fork PR）不会运行部署 job，也不会获得生产 Secret。
 
 受版本控制的日常原子发布逻辑位于 `scripts/deploy-release.sh`；服务器账号初始化、
@@ -269,8 +272,9 @@ GitHub Environment、密钥轮换和故障恢复见
 - **中文输入法**：在终端内输入命令前请切换到英文输入状态——全角引号、
   全角空格不会被 Shell 识别。任务面板的答案输入框会自动做全角→半角
   归一化，但终端内直接输入不受影响。
-- **客户端答案可知**：答案文件就在虚拟机内（如
-  `/opt/hashteam/levels/level-1/answer`），认真的同学可以直接翻到——
+- **客户端答案可推导**：明文答案文件不再进入镜像（关卡只携带
+  `answer.sha256` 校验值，评分由 SUID 的 `htcheck` 完成并对结果签名）；
+  但镜像与前端都运行在用户浏览器里，认真分析仍能推出答案——
   这在教学场景是可接受的（见安全说明）。
 
 ## 12. 浏览器兼容性
@@ -287,7 +291,9 @@ GitHub Environment、密钥轮换和故障恢复见
 - 不连接宿主机 Shell，不提供浏览器到任何服务器的命令执行接口。
 - 前端与磁盘镜像中**不包含任何真实密钥**；所有令牌均为教学道具。
 - **客户端状态不是安全边界**：关卡逻辑、答案、进度都运行在用户浏览器里，
-  可以被分析和修改——这是刻意的教学取舍。
+  可以被分析和修改——这是刻意的教学取舍。为抬高直接伪造通关记录的门槛，
+  VM 内的评分结果由 SUID 的 `htcheck` 用每次启动随机生成的会话密钥签名，
+  前端验签通过后才计入进度；但这仍不构成服务端可信边界。
 - 本项目用于**教学和纳新体验**，不适合直接作为有奖金或正式排名的比赛系统。
 - 所有安全实验仅作用于随网页提供的隔离环境；请勿把其中的思路
   用于任何未经授权的真实系统。

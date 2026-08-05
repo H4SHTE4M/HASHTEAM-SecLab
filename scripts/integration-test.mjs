@@ -10,6 +10,7 @@
  *
  * 运行：node scripts/integration-test.mjs
  */
+import { createHash, createHmac } from 'node:crypto'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -17,6 +18,12 @@ import { fileURLToPath } from 'node:url'
 const { V86 } = await import('v86')
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
+// 评分协议签名（version 2）：init 每次启动随机生成会话密钥并随 ready 下发；
+// htcheck 用 HMAC-SHA256 给通过结果与关卡切换签名。本测试捕获密钥并验签。
+let sessionKeyB64 = ''
+const answerHash = (answer) =>
+  createHash('sha256').update(`hashteam-lab answer v1 level-1:${answer}`).digest('hex')
 
 // Node 端 libv86 使用 fs 直接读取所有资源路径
 
@@ -87,12 +94,17 @@ async function main() {
 
   await step('Linux 启动并自动登录 guest（欢迎信息 + ready 协议）', async () => {
     await waitFor(/HASHTEAM Security Lab/, 60000, '欢迎信息')
-    await waitFor(/@@HASHTEAM:\{"type":"ready"/, 5000, 'ready 协议')
+    const ready = await waitFor(
+      /@@HASHTEAM:\{"type":"ready","version":2,"key":"([A-Za-z0-9+/]{43}=)"\}/,
+      5000,
+      '带会话密钥的 ready 协议',
+    )
+    sessionKeyB64 = ready[1]
   })
 
-  await step('进入第 1 关（level-ready 协议）', async () => {
+  await step('进入第 1 关（签名的 level-ready 协议）', async () => {
     goToLevel(1)
-    await waitFor(/@@HASHTEAM:\{"type":"level-ready","level":1\}/)
+    await waitFor(/@@HASHTEAM:\{"type":"level-ready","level":1,"sig":"[0-9a-f]{64}"\}/)
   })
 
   await step('基本命令可用：whoami / pwd / ls / cat', async () => {
@@ -116,9 +128,13 @@ async function main() {
     await waitFor(/\r?\nTIME32_COMPAT_OK\r?\n/)
   })
 
-  await step('SUID 边界：仅 su，错误密码不能改变 guest 身份', async () => {
+  await step('SUID 边界：仅 su 与 htcheck，错误密码不能改变 guest 身份', async () => {
     send("stat -c 'SUID=%a:%u:%g' /bin/busybox-suid")
     await waitFor(/SUID=4755:0:0/)
+    send("stat -c 'HTCHECK=%a:%u:%g' /usr/local/bin/htcheck")
+    await waitFor(/HTCHECK=4755:0:0/)
+    send("find / -perm -4000 2>/dev/null | sort | tr '\\n' ' '")
+    await waitFor(/\/bin\/busybox-suid \/usr\/local\/bin\/htcheck/)
     send('/bin/busybox-suid --help')
     await waitFor(/Usage: su /)
 
@@ -139,9 +155,44 @@ async function main() {
     await waitFor(/@@HASHTEAM:\{"type":"error"/)
   })
 
-  await step('第 1 关：正确答案通过', async () => {
+  await step('SUID 评分路径忽略恶意环境覆盖并以 guest 写入状态', async () => {
+    // 伪造答案目录：旧实现固定了 check.sh 路径，却把该变量继续传给脚本，
+    // 导致任意答案都能匹配攻击者自建的 answer.sha256。
+    send(
+      `mkdir -p /tmp/fake-levels/level-1 && printf '%s\n' '${answerHash('wrong-token')}' > /tmp/fake-levels/level-1/answer.sha256 && HASHTEAM_LEVELS_DIR=/tmp/fake-levels check wrong-token`,
+    )
+    await waitFor(/✗ 通行证不对/)
+    await waitFor(/@@HASHTEAM:\{"type":"error"/)
+
+    // PATH 劫持：伪造 sha256sum 永远吐出正确答案哈希；生产 SUID 路径必须用固定 PATH。
+    send(
+      `mkdir -p /tmp/fake-bin && printf '#!/bin/sh\\nprintf "%s  -\\\\n" "${answerHash('first-light')}"\\n' > /tmp/fake-bin/sha256sum && chmod +x /tmp/fake-bin/sha256sum && PATH=/tmp/fake-bin:$PATH check wrong-token`,
+    )
+    await waitFor(/✗ 通行证不对/)
+    await waitFor(/@@HASHTEAM:\{"type":"error"/)
+
+    // HOME + 符号链接：旧实现会以 root 跟随到 /etc/hashteam/write-probe。
+    send(
+      "mkdir -p /tmp/evil-home/.hashteam && cp README /tmp/evil-home/README && printf '1\\n' > /tmp/evil-home/.hashteam/level && ln -sf /etc/hashteam/write-probe /tmp/evil-home/.hashteam/max-completed && HOME=/tmp/evil-home check first-light",
+    )
+    await waitFor(/"level-result","level":1,"status":"passed"/)
+    send(
+      "test ! -e /etc/hashteam/write-probe && stat -c 'STATE_OWNER=%u:%g' /home/guest/.hashteam/max-completed",
+    )
+    await waitFor(/STATE_OWNER=1000:1000/)
+  })
+
+  await step('第 1 关：正确答案通过（签名可验）', async () => {
     send('check first-light')
-    await waitFor(/@@HASHTEAM:\{"type":"level-result","level":1,"status":"passed"\}/)
+    const passed = await waitFor(
+      /@@HASHTEAM:\{"type":"level-result","level":1,"status":"passed","sig":"([0-9a-f]{64})"\}/,
+    )
+    const expected = createHmac('sha256', Buffer.from(sessionKeyB64, 'base64'))
+      .update('level-result:1:passed', 'utf8')
+      .digest('hex')
+    if (passed[1] !== expected) {
+      throw new Error(`level-result 签名不符：${passed[1]} != ${expected}`)
+    }
   })
 
   await step('辅助命令：status / help / hint', async () => {
@@ -155,7 +206,7 @@ async function main() {
 
   await step('第 2 关：隐藏文件', async () => {
     goToLevel(2)
-    await waitFor(/"level-ready","level":2\}/)
+    await waitFor(/"level-ready","level":2,"sig":"[0-9a-f]{64}"\}/)
     send('ls -la')
     await waitFor(/\.message/)
     send('file .message')
@@ -166,7 +217,7 @@ async function main() {
 
   await step('第 3 关：进入 inbox 搬家与整理', async () => {
     goToLevel(3)
-    await waitFor(/"level-ready","level":3\}/)
+    await waitFor(/"level-ready","level":3,"sig":"[0-9a-f]{64}"\}/)
     send('cd inbox && pwd && ls')
     await waitFor(/\/home\/guest\/inbox/)
     await waitFor(/app\.log/)
@@ -180,7 +231,7 @@ async function main() {
 
   await step('第 4 关：过宽的权限', async () => {
     goToLevel(4)
-    await waitFor(/"level-ready","level":4\}/)
+    await waitFor(/"level-ready","level":4,"sig":"[0-9a-f]{64}"\}/)
     send('stat -c %a deploy.sh')
     await waitFor(/777/)
     send('check')
@@ -195,7 +246,7 @@ async function main() {
 
   await step('第 5 关：读懂日志', async () => {
     goToLevel(5)
-    await waitFor(/"level-ready","level":5\}/)
+    await waitFor(/"level-ready","level":5,"sig":"[0-9a-f]{64}"\}/)
     send("grep 'Failed password' auth.log | wc -l")
     await waitFor(/30/)
     send('check 29')
@@ -206,7 +257,7 @@ async function main() {
 
   await step('第 6 关：日志分析定位最高频来源', async () => {
     goToLevel(6)
-    await waitFor(/"level-ready","level":6\}/)
+    await waitFor(/"level-ready","level":6,"sig":"[0-9a-f]{64}"\}/)
     send("grep 'Failed password' auth.log | awk '{print $11}' | sort | uniq -c | sort -nr | head")
     await waitFor(/17 203\.0\.113\.66/)
     send('check 198.51.100.23')
@@ -217,7 +268,7 @@ async function main() {
 
   await step('第 7 关：编码与二进制取证', async () => {
     goToLevel(7)
-    await waitFor(/"level-ready","level":7\}/)
+    await waitFor(/"level-ready","level":7,"sig":"[0-9a-f]{64}"\}/)
     send('base64 -d message.b64')
     await waitFor(/nebula/)
     send('strings secret.bin')
@@ -228,7 +279,7 @@ async function main() {
 
   await step('第 8 关：多出来的进程（端口 31337）', async () => {
     goToLevel(8)
-    await waitFor(/"level-ready","level":8\}/)
+    await waitFor(/"level-ready","level":8,"sig":"[0-9a-f]{64}"\}/)
     const netstatOutputStart = buffer.length
     send('netstat -tln')
     await waitFor(/:31337 /)
@@ -246,7 +297,7 @@ async function main() {
 
   await step('第 9 关：本地 Web 服务（curl 访问 127.0.0.1:8080）', async () => {
     goToLevel(9)
-    await waitFor(/"level-ready","level":9\}/)
+    await waitFor(/"level-ready","level":9,"sig":"[0-9a-f]{64}"\}/)
     send('curl http://127.0.0.1:8080/')
     await waitFor(/HASHTEAM 内部系统/)
     send('curl http://127.0.0.1:8080/robots.txt')
@@ -259,7 +310,7 @@ async function main() {
 
   await step('第 10 关：综合配置、权限与运行状态判题', async () => {
     goToLevel(10)
-    await waitFor(/"level-ready","level":10\}/)
+    await waitFor(/"level-ready","level":10,"sig":"[0-9a-f]{64}"\}/)
     send('check')
     await waitFor(/还有 7 项检查/)
     send("sed -i 's/debug=true/debug=false/' server.conf")
@@ -275,7 +326,7 @@ async function main() {
 
   await step('reset-level 还原当前关卡环境', async () => {
     send('reset-level')
-    await waitFor(/"level-ready","level":10\}/)
+    await waitFor(/"level-ready","level":10,"sig":"[0-9a-f]{64}"\}/)
     send('cat server.conf')
     await waitFor(/debug=true/)
   })

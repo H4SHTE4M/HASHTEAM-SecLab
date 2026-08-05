@@ -1,31 +1,6 @@
 #!/bin/sh
-# 关卡验证入口：调用当前关卡的 check.sh，并向前端发送验证结果
-set -u
-
-STATE_DIR="$HOME/.hashteam"
-level=$(cat "$STATE_DIR/level" 2>/dev/null || echo 1)
-LEVELS_DIR="${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}"
-script="$LEVELS_DIR/level-$level/check.sh"
-. "${HASHTEAM_LIB_DIR:-/etc/hashteam}/colors.sh"
-
-if [ ! -f "$script" ]; then
-    ht_error "当前关卡没有检查脚本。"
-    exit 2
-fi
-
-if output=$(sh "$script" "$@" 2>&1); then
-    rc=0
-else
-    rc=$?
-fi
-ht_render_result "$rc" "$output"
-
-if [ "$rc" -eq 0 ]; then
-    # 记录完成状态，供 hashteamctl goto 的解锁校验使用
-    hashteamctl mark-completed "$level" 2>/dev/null || true
-    printf '@@HASHTEAM:{"type":"level-result","level":%s,"status":"passed"}\n' "$level"
-    exit 0
-else
-    printf '@@HASHTEAM:{"type":"error","message":"level %s check failed"}\n' "$level"
-    exit "$rc"
-fi
+# 关卡验证入口：实际评分逻辑在 SUID 签名检查器 htcheck 中。
+# htcheck 以调用者身份运行当前关卡的 check.sh，只有退出码为 0 的结果
+# 才会用 root-only 会话密钥签名；学生绕过本包装器直接调用 htcheck
+# 同样只能得到「真实通过」的签名，无法伪造。
+exec "${HASHTEAM_HTCHECK:-/usr/local/bin/htcheck}" run "$@"

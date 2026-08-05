@@ -1,9 +1,11 @@
 #!/bin/sh
 # 第 6 关验证：失败登录次数最多的 IP
 set -u
-expected=$(cat "${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}/level-6"/answer)
+# 答案以加盐 SHA-256 存储，判定行为与明文时代一致（tr 去空白后比对哈希）
+expected_hash=$(cat "${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}/level-6"/answer.sha256)
 LOG="$HOME/auth.log"
 given=$(printf '%s' "${1:-}" | tr -d '[:space:]')
+given_hash=$(printf '%s' "hashteam-lab answer v1 level-6:$given" | sha256sum | cut -d ' ' -f 1)
 if [ "$#" -gt 1 ]; then
     echo "✗ 只提交地址本身，不要带前面的计数。"
     exit 2
@@ -20,7 +22,7 @@ if ! grep -q "$given" "$LOG"; then
     echo "✗ $given 并没有出现在日志里。"
     exit 1
 fi
-if [ "$given" = "$expected" ]; then
+if [ "$given_hash" = "$expected_hash" ]; then
     echo "✓ 正确！$given 是失败登录次数最多的来源 IP。"
     echo "  你已经从日志中定位了失败登录最频繁的来源。"
     exit 0

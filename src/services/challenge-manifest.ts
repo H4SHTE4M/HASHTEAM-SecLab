@@ -31,6 +31,20 @@ const STEP_COMPLETIONS = new Set<StepCompletion>([
   'answer',
   'confirm',
 ])
+
+/**
+ * 步骤类型 → 完成证据的固定映射（与 scripts/validate-challenges.mjs 一致）。
+ * 运行时同样强制，防止绕过构建期校验的畸形清单进入 UI。
+ */
+const COMPLETION_BY_TYPE: Record<LearningStepType, StepCompletion> = {
+  explain: 'acknowledge',
+  observe: 'run',
+  'partial-command': 'input',
+  'manual-command': 'input',
+  question: 'answer',
+  checkpoint: 'confirm',
+  reflection: 'acknowledge',
+}
 const HINT_KINDS = ['direction', 'tool', 'structure'] as const
 const ALLOWED_FIELDS = new Set([
   '$schema',
@@ -214,6 +228,43 @@ function readSteps(record: UnknownRecord, source: string): LearningStep[] {
     }
     if (typeof step.allowRun !== 'boolean') fail(itemSource, 'allowRun 必须是布尔值')
 
+    // 类型 ↔ completion 固定映射与类型专属约束（与 validate-challenges.mjs 同则）
+    const type = step.type as LearningStepType
+    const completion = step.completion as StepCompletion
+    if (COMPLETION_BY_TYPE[type] !== completion) {
+      fail(itemSource, `${type} 步骤必须使用 completion=${COMPLETION_BY_TYPE[type]}`)
+    }
+    const allowRun = step.allowRun as boolean
+    if (allowRun && (step.command === undefined || completion !== 'run')) {
+      fail(itemSource, '允许一键运行的步骤必须提供 command，并以 run 作为完成证据')
+    }
+    if (step.command !== undefined && !allowRun) {
+      fail(itemSource, 'command 只能出现在 allowRun=true 的观察步骤')
+    }
+    if ((type === 'observe' || type === 'checkpoint') && step.observation === undefined) {
+      fail(itemSource, `${type} 必须说明需要观察什么`)
+    }
+    if (type === 'partial-command') {
+      if (allowRun) fail(itemSource, 'partial-command 不允许一键运行')
+      if (step.commandTemplate === undefined) {
+        fail(itemSource, 'partial-command 必须提供 commandTemplate')
+      }
+      if (step.fields === undefined) fail(itemSource, 'partial-command 必须提供 fields')
+    }
+    if (type === 'manual-command') {
+      if (allowRun) fail(itemSource, 'manual-command 不允许一键运行')
+      if (
+        step.command !== undefined ||
+        step.commandTemplate !== undefined ||
+        step.fields !== undefined
+      ) {
+        fail(itemSource, 'manual-command 不能预置命令、模板或字段')
+      }
+    }
+    if (type === 'question' && step.question === undefined) {
+      fail(itemSource, 'question 步骤必须提供 question 对象')
+    }
+
     const introducesValue = step.introduces
     let introduces: Concept[] | undefined
     if (introducesValue !== undefined) {
@@ -231,19 +282,37 @@ function readSteps(record: UnknownRecord, source: string): LearningStep[] {
         ? undefined
         : readStringList(step, 'commonErrors', itemSource)
 
+    const commandTemplate = readOptionalString(step, 'commandTemplate', itemSource)
+    const fields = readFields(step.fields, `${itemSource}#fields`)
+    if (type === 'partial-command' && commandTemplate !== undefined && fields !== undefined) {
+      // 模板空位 {{field-id}} 与 fields 声明必须一一对应（集合语义）
+      const used = [
+        ...new Set(
+          [...commandTemplate.matchAll(/\{\{([a-z][a-z0-9-]*)\}\}/g)].map((match) => match[1]),
+        ),
+      ].sort()
+      const declared = [...new Set(fields.map((field) => field.id))].sort()
+      if (JSON.stringify(declared) !== JSON.stringify(used)) {
+        fail(
+          itemSource,
+          `commandTemplate 空位 ${used.join(', ')} 与 fields ${declared.join(', ')} 不一致`,
+        )
+      }
+    }
+
     return {
       id: step.id as number,
-      type: step.type as LearningStepType,
+      type,
       title: readNonEmptyString(step, 'title', itemSource),
       objective: readNonEmptyString(step, 'objective', itemSource),
       instruction: readNonEmptyString(step, 'instruction', itemSource),
-      completion: step.completion as StepCompletion,
-      allowRun: step.allowRun,
+      completion,
+      allowRun,
       introduces,
       uses,
       command: readOptionalString(step, 'command', itemSource),
-      commandTemplate: readOptionalString(step, 'commandTemplate', itemSource),
-      fields: readFields(step.fields, `${itemSource}#fields`),
+      commandTemplate,
+      fields,
       observation: readOptionalString(step, 'observation', itemSource),
       question: readQuestion(step.question, `${itemSource}#question`),
       commonErrors,
@@ -274,20 +343,29 @@ function readHints(record: UnknownRecord, source: string): HintLayer[] {
 function readVerification(record: UnknownRecord, source: string): VerificationDef {
   const value = expectRecord(record.verification, `${source}#verification`)
   assertAllowedFields(value, ['usage', 'instruction', 'placeholders', 'feedback'], source)
+  const usage = readNonEmptyString(value, 'usage', source)
   if (!Array.isArray(value.placeholders)) fail(source, 'verification.placeholders 必须是数组')
   const placeholders: VerificationPlaceholder[] = value.placeholders.map((item, index) => {
     const itemSource = `${source}#verification.placeholders[${index}]`
     const placeholder = expectRecord(item, itemSource)
     assertAllowedFields(placeholder, ['token', 'meaning'], itemSource)
+    const token = readNonEmptyString(placeholder, 'token', itemSource)
+    if (!/^<[^<>\n]+>$/.test(token)) fail(itemSource, 'token 必须是 <占位符> 形式')
     return {
-      token: readNonEmptyString(placeholder, 'token', itemSource),
+      token,
       meaning: readNonEmptyString(placeholder, 'meaning', itemSource),
     }
   })
+  // usage 中出现的每个 <占位符> 都必须有解释（与 validate-challenges.mjs 同则）
+  const described = placeholders.map((item) => item.token).sort()
+  const used = [...usage.matchAll(/<[^<>\n]+>/g)].map((match) => match[0]).sort()
+  if (JSON.stringify(described) !== JSON.stringify(used)) {
+    fail(source, `验证命令占位符 ${used.join(', ')} 必须逐一提供解释`)
+  }
   const feedback = expectRecord(value.feedback, `${source}#verification.feedback`)
   assertAllowedFields(feedback, ['empty', 'incorrect', 'success'], `${source}#verification.feedback`)
   return {
-    usage: readNonEmptyString(value, 'usage', source),
+    usage,
     instruction: readNonEmptyString(value, 'instruction', source),
     placeholders,
     feedback: {
@@ -349,7 +427,7 @@ export function parseChallengeManifest(raw: unknown, source = 'unknown'): Challe
   }
 }
 
-/** 加载全部 manifest，并保证编号连续、slug 唯一。 */
+/** 加载全部 manifest，保证编号连续、slug 唯一，并校验跨关卡概念时序。 */
 export function loadChallengeManifests(modules: Record<string, unknown>): ChallengeManifest[] {
   const levels = Object.entries(modules)
     .map(([source, raw]) => parseChallengeManifest(raw, source))
@@ -366,6 +444,38 @@ export function loadChallengeManifests(modules: Record<string, unknown>): Challe
     if (slugs.has(level.slug)) fail(`level-${level.id}`, `slug ${level.slug} 重复`)
     slugs.add(level.slug)
   })
+
+  // 概念时序（与 validate-challenges.mjs 的 validateConceptTiming 同则）：
+  // 概念 id 全局唯一、按关卡顺序累积；uses 不得引用尚未介绍的概念；
+  // 单关新增概念不超过 3 个，且 newConcepts 必须与步骤实际引入的概念一致。
+  const knownConcepts = new Set<string>()
+  for (const level of levels) {
+    const introducedTerms: string[] = []
+    const introducedHere = new Set<string>()
+    level.steps.forEach((step, index) => {
+      const stepSource = `level-${level.id}#steps[${index}]`
+      for (const concept of step.introduces ?? []) {
+        if (knownConcepts.has(concept.id) || introducedHere.has(concept.id)) {
+          fail(stepSource, `概念 id ${concept.id} 重复定义`)
+        }
+        knownConcepts.add(concept.id)
+        introducedHere.add(concept.id)
+        introducedTerms.push(concept.term)
+      }
+      for (const conceptId of step.uses ?? []) {
+        if (!knownConcepts.has(conceptId)) {
+          fail(stepSource, `概念 ${conceptId} 在首次解释前被使用`)
+        }
+      }
+    })
+    if (introducedTerms.length > 3) fail(`level-${level.id}`, '单关主要新增概念不能超过 3 个')
+    if (
+      JSON.stringify([...introducedTerms].sort()) !==
+      JSON.stringify([...level.newConcepts].sort())
+    ) {
+      fail(`level-${level.id}`, 'newConcepts 必须与步骤中实际首次出现的概念一致')
+    }
+  }
 
   return levels
 }

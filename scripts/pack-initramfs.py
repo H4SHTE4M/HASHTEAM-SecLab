@@ -50,7 +50,7 @@ class Entry:
         self.linkname = linkname
 
 
-def collect_entries(root: str, busybox_path: str | None, busybox_suid_path: str | None = None) -> list[Entry]:
+def collect_entries(root: str, busybox_path: str | None, busybox_suid_path: str | None = None, htcheck_path: str | None = None) -> list[Entry]:
     entries: list[Entry] = []
     dir_added: set[str] = set()
 
@@ -112,6 +112,12 @@ def collect_entries(root: str, busybox_path: str | None, busybox_suid_path: str 
         with open(busybox_suid_path, "rb") as fh:
             add("bin/busybox-suid", stat.S_IFREG | 0o4755, 0, 0, fh.read())
 
+    # SUID 签名评分检查器：4755 root:root；只有经它验证通过的 check 结果
+    # 才会得到 root-only 密钥的签名（详见 htcheck.c 头部注释）
+    if htcheck_path is not None:
+        with open(htcheck_path, "rb") as fh:
+            add("usr/local/bin/htcheck", stat.S_IFREG | 0o4755, 0, 0, fh.read())
+
     # 空的挂载点/系统目录：没有文件所以 os.walk 看不到、git 也不跟踪空目录，
     # 但 init 需要 /dev /proc /sys /tmp /root 存在才能 mount 成功。
     for empty_dir in ("dev", "proc", "root", "sys", "tmp"):
@@ -170,10 +176,11 @@ def main() -> int:
     parser.add_argument("--root", required=True, help="rootfs-overlay 目录")
     parser.add_argument("--busybox", default=None, help="busybox 静态二进制路径（完整的 applet 集合）")
     parser.add_argument("--busybox-suid", default=None, help="最小 SUID busybox 路径（仅含 su）")
+    parser.add_argument("--htcheck", default=None, help="SUID 签名评分检查器路径")
     parser.add_argument("--out", required=True, help="输出 .cpio.gz 路径")
     args = parser.parse_args()
 
-    entries = collect_entries(args.root, args.busybox, args.busybox_suid)
+    entries = collect_entries(args.root, args.busybox, args.busybox_suid, args.htcheck)
     with open(args.out, "wb") as raw:
         with gzip.GzipFile(fileobj=raw, mode="wb", compresslevel=9, mtime=0) as gz:
             write_cpio(entries, gz)

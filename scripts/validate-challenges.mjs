@@ -5,6 +5,7 @@
  * 这里刻意只检查可以结构化判断的退化：步骤/提示顺序、独立操作、
  * 命令模板、概念时机、占位符说明、答案泄露和明显失真的规模描述。
  */
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -12,6 +13,9 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const levelsRoot = path.join(root, 'vm/rootfs-overlay/opt/hashteam/levels')
+const answersFixture = path.join(root, 'tests/fixtures/level-answers.json')
+// 明文答案仅存于测试夹具；VM 镜像内是对应的加盐 SHA-256（scripts/hash-answer.sh 生成）。
+const testAnswers = JSON.parse(readFileSync(answersFixture, 'utf8'))
 const errors = []
 const allowedTypes = new Set([
   'explain',
@@ -348,10 +352,27 @@ function validateManifest(manifest, directoryId, source) {
   if (/几百行|成千上万行|上千行/.test(early)) {
     report(source, '日志规模描述与当前 84 行训练数据不一致')
   }
-  const answerFile = path.join(levelsRoot, `level-${directoryId}`, 'answer')
-  if (existsSync(answerFile)) {
-    const answer = readFileSync(answerFile, 'utf8').trim()
+  const answer = testAnswers[String(directoryId)]?.trim()
+  if (answer !== undefined) {
     if (answer.length >= 3 && early.includes(answer)) report(source, `通关答案 ${answer} 在通关前内容中泄露`)
+    const hashFile = path.join(levelsRoot, `level-${directoryId}`, 'answer.sha256')
+    let storedHash = null
+    try {
+      storedHash = readFileSync(hashFile, 'utf8').trim()
+    } catch {
+      report(source, `存在测试答案但缺少 answer.sha256（用 scripts/hash-answer.sh 生成）`)
+    }
+    if (storedHash !== null) {
+      const expectedHash = createHash('sha256')
+        .update(`hashteam-lab answer v1 level-${directoryId}:${answer}`)
+        .digest('hex')
+      if (storedHash !== expectedHash) {
+        report(source, 'answer.sha256 与测试答案夹具不一致（用 scripts/hash-answer.sh 重新生成）')
+      }
+    }
+  }
+  if (existsSync(path.join(levelsRoot, `level-${directoryId}`, 'answer'))) {
+    report(source, '明文 answer 文件不得进入镜像；答案改用 answer.sha256 + 测试夹具')
   }
   for (const discovery of guardedDiscoveries.get(directoryId) ?? []) {
     if (early.includes(discovery)) report(source, `关键发现 ${discovery} 在初始教学内容中泄露`)

@@ -77,7 +77,7 @@ def verify_overlay_manifest(entries: dict[str, Entry], repository: Path) -> None
         str(repository / "vm" / "rootfs-overlay"), None, None
     )
     expected = {entry.name: entry for entry in expected_entries}
-    expected_names = set(expected) | {"bin/busybox", "bin/busybox-suid"}
+    expected_names = set(expected) | {"bin/busybox", "bin/busybox-suid", "usr/local/bin/htcheck"}
     actual_names = set(entries)
     missing = sorted(expected_names - actual_names)
     unexpected = sorted(actual_names - expected_names)
@@ -110,12 +110,14 @@ def main() -> int:
 
     main_busybox = entries.get("bin/busybox")
     suid_busybox = entries.get("bin/busybox-suid")
+    htcheck = entries.get("usr/local/bin/htcheck")
     shell_link = entries.get("bin/sh")
     init = entries.get("init")
     passwd = entries.get("etc/passwd")
     group = entries.get("etc/group")
     require(main_busybox is not None, "initramfs 缺少 bin/busybox")
     require(suid_busybox is not None, "initramfs 缺少 bin/busybox-suid")
+    require(htcheck is not None, "initramfs 缺少 usr/local/bin/htcheck")
     require(shell_link is not None, "initramfs 缺少 bin/sh")
     require(init is not None, "initramfs 缺少 init")
     require(passwd is not None, "initramfs 缺少 etc/passwd")
@@ -134,6 +136,12 @@ def main() -> int:
         f"bin/busybox-suid 权限错误：{describe(suid_busybox)}",
     )
     require(
+        stat.S_IFMT(htcheck.mode) == stat.S_IFREG
+        and stat.S_IMODE(htcheck.mode) == 0o4755
+        and (htcheck.uid, htcheck.gid) == (0, 0),
+        f"usr/local/bin/htcheck 权限错误：{describe(htcheck)}",
+    )
+    require(
         stat.S_IFMT(shell_link.mode) == stat.S_IFLNK and shell_link.data == b"busybox",
         "bin/sh 必须是指向普通 busybox 的符号链接",
     )
@@ -144,7 +152,7 @@ def main() -> int:
         and stat.S_IMODE(entry.mode) & (stat.S_ISUID | stat.S_ISGID)
     ]
     require(
-        privileged == ["bin/busybox-suid"],
+        sorted(privileged) == ["bin/busybox-suid", "usr/local/bin/htcheck"],
         f"initramfs 出现未授权的 SUID/SGID 文件：{privileged}",
     )
     require(
@@ -166,6 +174,31 @@ def main() -> int:
     elf = suid_busybox.data
     require(elf[:7] == b"\x7fELF\x01\x01\x01", "SUID helper 不是 32 位小端 ELF")
     require(int.from_bytes(elf[18:20], "little") == 3, "SUID helper 不是 i386 ELF")
+    htcheck_elf = htcheck.data
+    require(htcheck_elf[:7] == b"\x7fELF\x01\x01\x01", "htcheck 不是 32 位小端 ELF")
+    require(int.from_bytes(htcheck_elf[18:20], "little") == 3, "htcheck 不是 i386 ELF")
+
+    # 评分防伪姿态：镜像内不得出现明文答案或会话密钥（密钥由 init 每次启动生成）
+    plaintext_answers = [
+        name
+        for name in entries
+        if name.startswith("opt/hashteam/levels/level-") and name.endswith("/answer")
+    ]
+    require(not plaintext_answers, f"initramfs 不应携带明文答案文件：{plaintext_answers}")
+    require(
+        "etc/hashteam/protocol.key" not in entries,
+        "评分会话密钥必须由 init 启动时生成，不得打进镜像",
+    )
+    require(
+        b"protocol.key" in init.data and b'"version":2' in init.data,
+        "init 必须生成评分密钥并以 version:2 ready 签发",
+    )
+    profile = entries.get("home/guest/.profile")
+    require(profile is not None, "initramfs 缺少 home/guest/.profile")
+    require(
+        b'"type":"ready"' not in profile.data,
+        ".profile 不得再签发 ready（ready 由 init 携带密钥签发）",
+    )
 
     main_busybox_sha256 = hashlib.sha256(main_busybox.data).hexdigest()
     require(
@@ -183,7 +216,8 @@ def main() -> int:
     )
     print(
         "✓ initramfs：overlay 清单/内容/权限一致，普通 busybox 0755，"
-        "helper 4755 root:root，唯一特权文件与 su-only 审核哈希一致"
+        "SUID 白名单仅 busybox-suid 与 htcheck（均 4755 root:root、i386），"
+        "无明文答案/预置密钥，init 签发带密钥的 ready"
     )
     return 0
 

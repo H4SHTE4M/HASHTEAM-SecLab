@@ -8,6 +8,7 @@ vi.mock('../src/services/boot-logger', () => ({
 }))
 
 import {
+  redactSerialLogLine,
   V86Controller,
   type V86Emulator,
 } from '../src/services/vm-controller'
@@ -69,6 +70,14 @@ afterEach(() => {
 })
 
 describe('V86Controller serial diagnostics', () => {
+  it('启动日志会脱敏 ready 会话密钥，但不改写其他串口内容', () => {
+    const ready = '@@HASHTEAM:{"type":"ready","version":2,"key":"c2VjcmV0"}'
+    expect(redactSerialLogLine(ready)).toBe(
+      '@@HASHTEAM:{"type":"ready","version":2,"key":"[redacted]"}',
+    )
+    expect(redactSerialLogLine('普通输出 key=visible')).toBe('普通输出 key=visible')
+  })
+
   it('超长串口单行只保留有界诊断，同时仍完整转发给终端', async () => {
     const controller = new V86Controller()
     let displayedLength = 0

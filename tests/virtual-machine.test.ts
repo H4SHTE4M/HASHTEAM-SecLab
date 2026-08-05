@@ -1,9 +1,42 @@
 // @vitest-environment jsdom
+import { createHmac, webcrypto } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createVirtualMachine } from '../src/composables/useVirtualMachine'
 import { useLabProgress } from '../src/composables/useLabProgress'
 import { getLevel } from '../src/data/levels'
 import type { BootStage, VirtualMachineController } from '../src/types/lab'
+
+// jsdom 的 crypto 没有 subtle；验签服务走全局 crypto，测试注入 Node 的 WebCrypto
+vi.stubGlobal('crypto', webcrypto)
+
+/** 与 VM 内 init 等价的测试会话密钥（32 字节 → base64） */
+const SESSION_KEY_BYTES = Buffer.alloc(32, 7)
+const SESSION_KEY_BASE64 = SESSION_KEY_BYTES.toString('base64')
+
+function sign(message: string, key: Buffer = SESSION_KEY_BYTES): string {
+  return createHmac('sha256', key).update(message, 'utf8').digest('hex')
+}
+
+function protocolLine(payload: Record<string, unknown>): string {
+  return `@@HASHTEAM:${JSON.stringify(payload)}\n`
+}
+
+function readyLine(key: string | null = SESSION_KEY_BASE64): string {
+  return protocolLine({ type: 'ready', version: 2, ...(key === null ? {} : { key }) })
+}
+
+function passedLine(level: number, key: Buffer = SESSION_KEY_BYTES): string {
+  return protocolLine({
+    type: 'level-result',
+    level,
+    status: 'passed',
+    sig: sign(`level-result:${level}:passed`, key),
+  })
+}
+
+function levelReadyLine(level: number, key: Buffer = SESSION_KEY_BYTES): string {
+  return protocolLine({ type: 'level-ready', level, sig: sign(`level-ready:${level}`, key) })
+}
 
 class FakeController implements VirtualMachineController {
   readonly serialCallbacks = new Set<(data: string) => void>()
@@ -79,7 +112,8 @@ describe('virtual machine lifecycle', () => {
 
     await vm.boot()
     expect(controllers[1].startCount).toBe(1)
-    controllers[1].emit('@@HASHTEAM:{"type":"ready","version":1}\n')
+    controllers[1].emit(readyLine())
+    await vm.waitForProtocolIdle()
     expect(vm.stage.value).toBe('ready')
 
     await vm.dispose()
@@ -150,7 +184,10 @@ describe('virtual machine lifecycle', () => {
     expect(controllers[0].stopCount).toBe(1)
 
     await vm.boot()
-    controllers[1].emit('@@HASHTEAM:{"type":"ready","version":1}\n')
+    // ready 的验签走 WebCrypto（libuv 宏任务），fake timers 驱动不了，切回真实时钟再断言
+    vi.useRealTimers()
+    controllers[1].emit(readyLine())
+    await vm.waitForProtocolIdle()
     expect(vm.stage.value).toBe('ready')
     await vm.dispose()
   })
@@ -165,7 +202,7 @@ describe('virtual machine lifecycle', () => {
     })
 
     await vm.boot()
-    controller?.emit('@@HASHTEAM:{"type":"ready","version":1}\n')
+    controller?.emit(readyLine())
     vm.resetCurrentLevel()
 
     expect(controller?.sent).toContain('\x03')
@@ -186,15 +223,18 @@ describe('virtual machine lifecycle', () => {
     vm.onDisplay((data) => display.push(data))
 
     await vm.boot()
-    controller?.emit('@@HASHTEAM:{"type":"ready","version":1}\n')
-    controller?.emit('@@HASHTEAM:{"type":"level-result","level":1,"status":"passed"}\n')
+    controller?.emit(readyLine())
+    await vm.waitForProtocolIdle()
+    controller?.emit(passedLine(1))
+    await vm.waitForProtocolIdle()
 
     const progress = useLabProgress()
     expect(progress.state.completedLevels).not.toContain(1)
     expect(display.join('')).toContain('还需要完成右侧当前教学步骤')
 
     for (const step of getLevel(1)!.steps) progress.completeStep(1, step.id)
-    controller?.emit('@@HASHTEAM:{"type":"level-result","level":1,"status":"passed"}\n')
+    controller?.emit(passedLine(1))
+    await vm.waitForProtocolIdle()
     expect(progress.state.completedLevels).toContain(1)
     expect(progress.state.completionRecords[1]).toEqual({ path: 'guided', hintsUsed: 0 })
     await vm.dispose()
@@ -214,11 +254,14 @@ describe('virtual machine lifecycle', () => {
     progress.useHint(1)
 
     await vm.boot()
-    controller?.emit('@@HASHTEAM:{"type":"ready","version":1}\n')
-    controller?.emit('@@HASHTEAM:{"type":"level-result","level":1,"status":"failed"}\n')
+    controller?.emit(readyLine())
+    await vm.waitForProtocolIdle()
+    controller?.emit(protocolLine({ type: 'level-result', level: 1, status: 'failed' }))
+    await vm.waitForProtocolIdle()
     expect(progress.state.completedLevels).not.toContain(1)
 
-    controller?.emit('@@HASHTEAM:{"type":"level-result","level":1,"status":"passed"}\n')
+    controller?.emit(passedLine(1))
+    await vm.waitForProtocolIdle()
     expect(progress.state.completedLevels).toContain(1)
     expect(progress.state.completionRecords[1]).toEqual({
       path: 'challenge',
@@ -240,10 +283,183 @@ describe('virtual machine lifecycle', () => {
     progress.markGuided(1)
 
     await vm.boot()
-    controller?.emit('@@HASHTEAM:{"type":"ready","version":1}\n')
-    controller?.emit('@@HASHTEAM:{"type":"level-result","level":1,"status":"passed"}\n')
+    controller?.emit(readyLine())
+    await vm.waitForProtocolIdle()
+    controller?.emit(passedLine(1))
+    await vm.waitForProtocolIdle()
 
     expect(progress.state.completionRecords[1]).toEqual({ path: 'mixed', hintsUsed: 0 })
+    await vm.dispose()
+  })
+})
+
+describe('评分协议防伪与解锁门控', () => {
+  function createTrackedVm(): { vm: ReturnType<typeof createVirtualMachine>; controllers: FakeController[] } {
+    const controllers: FakeController[] = []
+    const vm = createVirtualMachine({
+      getMode: () => 'challenge',
+      createController: (onStageChange) => {
+        const controller = new FakeController(onStageChange)
+        controllers.push(controller)
+        return controller
+      },
+    })
+    return { vm, controllers }
+  }
+
+  it('伪造的 level-result（错密钥或无签名）不被采信', async () => {
+    const { vm, controllers } = createTrackedVm()
+    const progress = useLabProgress()
+
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+
+    controllers[0].emit(passedLine(1, Buffer.alloc(32, 8)))
+    controllers[0].emit(protocolLine({ type: 'level-result', level: 1, status: 'passed' }))
+    await vm.waitForProtocolIdle()
+    expect(progress.state.completedLevels).not.toContain(1)
+
+    controllers[0].emit(passedLine(1))
+    await vm.waitForProtocolIdle()
+    expect(progress.state.completedLevels).toContain(1)
+    await vm.dispose()
+  })
+
+  it('ready 未携带会话密钥时整局评分结果被拒绝', async () => {
+    const { vm, controllers } = createTrackedVm()
+    const progress = useLabProgress()
+    const attackerKey = Buffer.alloc(32, 19)
+
+    await vm.boot()
+    controllers[0].emit(readyLine(null))
+    await vm.waitForProtocolIdle()
+    expect(vm.stage.value).toBe('ready')
+
+    // 首条无密钥 ready 也必须钉住会话，后补攻击者密钥不能把失败会话修成自选密钥。
+    controllers[0].emit(readyLine(attackerKey.toString('base64')))
+    controllers[0].emit(passedLine(1, attackerKey))
+    await vm.waitForProtocolIdle()
+    expect(progress.state.completedLevels).not.toContain(1)
+    await vm.dispose()
+  })
+
+  it('首个 ready 钉住会话密钥，后续 ready 不得替换', async () => {
+    const { vm, controllers } = createTrackedVm()
+    const progress = useLabProgress()
+    const attackerKey = Buffer.alloc(32, 13)
+
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+    controllers[0].emit(readyLine(attackerKey.toString('base64')))
+    await vm.waitForProtocolIdle()
+
+    // 攻击者补发的 ready 密钥不得生效
+    controllers[0].emit(passedLine(1, attackerKey))
+    await vm.waitForProtocolIdle()
+    expect(progress.state.completedLevels).not.toContain(1)
+
+    // 原密钥签名的结果仍然有效
+    controllers[0].emit(passedLine(1))
+    await vm.waitForProtocolIdle()
+    expect(progress.state.completedLevels).toContain(1)
+    await vm.dispose()
+  })
+
+  it('level-ready 必须验签且只允许顺序解锁内的关卡切换', async () => {
+    const { vm, controllers } = createTrackedVm()
+    const progress = useLabProgress()
+
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+    expect(progress.state.currentLevel).toBe(1)
+
+    // 未解锁的越级切换（第 3 关尚未解锁）：忽略
+    controllers[0].emit(levelReadyLine(3))
+    await vm.waitForProtocolIdle()
+    expect(progress.state.currentLevel).toBe(1)
+
+    // 伪造签名的切换：忽略
+    controllers[0].emit(levelReadyLine(2, Buffer.alloc(32, 8)))
+    await vm.waitForProtocolIdle()
+    expect(progress.state.currentLevel).toBe(1)
+
+    // 完成前两关后，签名正确的顺序切换生效
+    progress.complete(1, { path: 'challenge', hintsUsed: 0 })
+    progress.complete(2, { path: 'challenge', hintsUsed: 0 })
+    controllers[0].emit(levelReadyLine(3))
+    await vm.waitForProtocolIdle()
+    expect(progress.state.currentLevel).toBe(3)
+
+    // 未知关卡编号：忽略
+    controllers[0].emit(levelReadyLine(99))
+    await vm.waitForProtocolIdle()
+    expect(progress.state.currentLevel).toBe(3)
+    await vm.dispose()
+  })
+
+  it('gotoLevel 只允许顺序解锁内的跳转', async () => {
+    const { vm, controllers } = createTrackedVm()
+    const progress = useLabProgress()
+
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+
+    vm.gotoLevel(3)
+    expect(controllers[0].sent).not.toContain('goto:3')
+
+    progress.complete(1, { path: 'challenge', hintsUsed: 0 })
+    progress.complete(2, { path: 'challenge', hintsUsed: 0 })
+    vm.gotoLevel(3)
+    expect(controllers[0].sent).toContain('goto:3')
+    await vm.dispose()
+  })
+
+  it('dispose 之后可以重新 boot（bootPromise 不残留）', async () => {
+    const { vm, controllers } = createTrackedVm()
+
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+    expect(vm.stage.value).toBe('ready')
+
+    await vm.dispose()
+    expect(vm.stage.value).toBe('idle')
+    expect(controllers[0].stopCount).toBe(1)
+
+    // M1 回归：dispose 必须丢弃 bootPromise，否则这里不会创建新控制器
+    await vm.boot()
+    expect(controllers).toHaveLength(2)
+    controllers[1].emit(readyLine())
+    await vm.waitForProtocolIdle()
+    expect(vm.stage.value).toBe('ready')
+    await vm.dispose()
+  })
+
+  it('dispose 使已排队的旧会话消息失效，且不污染下一次 boot', async () => {
+    const { vm, controllers } = createTrackedVm()
+    const progress = useLabProgress()
+    const nextKey = Buffer.alloc(32, 23)
+
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+
+    // level-result 已入异步队列但尚未获得执行机会；dispose 必须先提升 generation，
+    // 排空时只能丢弃它，不能在 VM 已释放后补写前端进度。
+    controllers[0].emit(passedLine(1))
+    await vm.dispose()
+    expect(progress.state.completedLevels).not.toContain(1)
+
+    await vm.boot()
+    controllers[1].emit(readyLine(nextKey.toString('base64')))
+    await vm.waitForProtocolIdle()
+    controllers[1].emit(passedLine(1, nextKey))
+    await vm.waitForProtocolIdle()
+    expect(progress.state.completedLevels).toContain(1)
     await vm.dispose()
   })
 })

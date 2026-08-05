@@ -1,0 +1,10 @@
+{
+  "$comment": "测试用明文答案（仅此处于仓库可见；VM 镜像内只存加盐 SHA-256）。新增/改答案时同步更新：scripts/hash-answer.sh 会按本文件生成 answer.sha256，validate-challenges.mjs 会校验两者一致。键为关卡号字符串。",
+  "1": "first-light",
+  "2": "dotfile-42",
+  "5": "30",
+  "6": "203.0.113.66",
+  "7": "nebula-comet-7",
+  "8": "31337",
+  "9": "dbg-token-8848"
+}

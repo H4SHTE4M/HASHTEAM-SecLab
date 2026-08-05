@@ -17,7 +17,7 @@ function manifest(id = 1, slug = `level-${id}`): Record<string, unknown> {
     story: '可展开的完整背景',
     goals: ['完成目标'],
     prerequisites: [],
-    newConcepts: ['测试概念'],
+    newConcepts: [`测试概念${id}`],
     steps: [
       {
         id: 1,
@@ -28,7 +28,7 @@ function manifest(id = 1, slug = `level-${id}`): Record<string, unknown> {
         completion: 'acknowledge',
         allowRun: false,
         introduces: [
-          { id: 'test-concept', term: '测试概念', explanation: '只解释当前任务需要的部分' },
+          { id: `test-concept-${id}`, term: `测试概念${id}`, explanation: '只解释当前任务需要的部分' },
         ],
       },
     ],
@@ -191,5 +191,192 @@ describe('challenge manifest v2', () => {
         '/levels/level-2/challenge.json': manifest(2, 'duplicate'),
       }),
     ).toThrow('slug duplicate 重复')
+  })
+})
+
+describe('challenge manifest 运行时语义校验（与 validate-challenges.mjs 同则）', () => {
+  const SOURCE = '/levels/level-1/challenge.json'
+
+  function withStep(step: Record<string, unknown>): Record<string, unknown> {
+    const raw = manifest()
+    raw.steps = [step]
+    return raw
+  }
+
+  function baseStep(type: string, extra: Record<string, unknown> = {}): Record<string, unknown> {
+    const completionByType: Record<string, string> = {
+      explain: 'acknowledge',
+      observe: 'run',
+      'partial-command': 'input',
+      'manual-command': 'input',
+      question: 'answer',
+      checkpoint: 'confirm',
+      reflection: 'acknowledge',
+    }
+    return {
+      id: 1,
+      type,
+      title: '标题',
+      objective: '目标',
+      instruction: '说明',
+      completion: completionByType[type],
+      allowRun: false,
+      ...extra,
+    }
+  }
+
+  it('步骤类型必须使用其固定 completion', () => {
+    expect(() => parseChallengeManifest(withStep(baseStep('explain', { completion: 'run' })), SOURCE)).toThrow(
+      'explain 步骤必须使用 completion=acknowledge',
+    )
+  })
+
+  it('observe 与 checkpoint 必须说明观察点', () => {
+    expect(() => parseChallengeManifest(withStep(baseStep('observe')), SOURCE)).toThrow(
+      'observe 必须说明需要观察什么',
+    )
+    expect(() => parseChallengeManifest(withStep(baseStep('checkpoint')), SOURCE)).toThrow(
+      'checkpoint 必须说明需要观察什么',
+    )
+  })
+
+  it('一键运行必须提供 command 且以 run 为完成证据', () => {
+    expect(() =>
+      parseChallengeManifest(withStep(baseStep('observe', { allowRun: true, observation: '看输出' })), SOURCE),
+    ).toThrow('允许一键运行的步骤必须提供 command')
+    // command 出现在不允许一键运行的步骤同样非法
+    expect(() =>
+      parseChallengeManifest(withStep(baseStep('observe', { command: 'ls', observation: '看输出' })), SOURCE),
+    ).toThrow('command 只能出现在 allowRun=true 的观察步骤')
+  })
+
+  it('partial-command 必须有模板且空位与 fields 一一对应', () => {
+    expect(() => parseChallengeManifest(withStep(baseStep('partial-command')), SOURCE)).toThrow(
+      'partial-command 必须提供 commandTemplate',
+    )
+    expect(() =>
+      parseChallengeManifest(
+        withStep(
+          baseStep('partial-command', {
+            commandTemplate: 'grep {{pattern}} auth.log',
+            fields: [{ id: 'other', label: '其他', placeholder: '填写值' }],
+          }),
+        ),
+        SOURCE,
+      ),
+    ).toThrow('commandTemplate 空位 pattern 与 fields other 不一致')
+    // 合法配置可以解析
+    const parsed = parseChallengeManifest(
+      withStep(
+        baseStep('partial-command', {
+          commandTemplate: 'grep {{pattern}} auth.log',
+          fields: [{ id: 'pattern', label: '模式', placeholder: '填写模式' }],
+        }),
+      ),
+      SOURCE,
+    )
+    expect(parsed.steps[0].commandTemplate).toBe('grep {{pattern}} auth.log')
+  })
+
+  it('manual-command 不得预置命令、模板或字段', () => {
+    expect(() =>
+      parseChallengeManifest(withStep(baseStep('manual-command', { commandTemplate: 'ls {{path}}' })), SOURCE),
+    ).toThrow('manual-command 不能预置命令、模板或字段')
+  })
+
+  it('question 步骤必须提供 question 对象', () => {
+    expect(() => parseChallengeManifest(withStep(baseStep('question')), SOURCE)).toThrow(
+      'question 步骤必须提供 question 对象',
+    )
+  })
+
+  it('概念时序：uses 不得超前、概念不得重复定义、跨关引用合法', () => {
+    // uses 引用未介绍的概念：拒绝
+    const early = manifest(1)
+    early.steps = [{ ...baseStep('explain'), id: 1, uses: ['not-introduced'] }]
+    expect(() => loadChallengeManifests({ '/levels/level-1/challenge.json': early })).toThrow(
+      '概念 not-introduced 在首次解释前被使用',
+    )
+
+    // 同一概念 id 被引入两次：拒绝
+    const duplicated = manifest(1)
+    duplicated.steps = [
+      {
+        ...baseStep('explain'),
+        id: 1,
+        introduces: [{ id: 'same', term: '概念', explanation: '解释' }],
+      },
+      {
+        ...baseStep('explain'),
+        id: 2,
+        introduces: [{ id: 'same', term: '概念', explanation: '解释' }],
+      },
+    ]
+    expect(() => loadChallengeManifests({ '/levels/level-1/challenge.json': duplicated })).toThrow(
+      '概念 id same 重复定义',
+    )
+
+    // 后续关卡 uses 前一关介绍的概念：合法
+    const next = manifest(2)
+    next.steps = [
+      {
+        ...baseStep('explain'),
+        id: 1,
+        uses: ['test-concept-1'],
+        introduces: [{ id: 'level-2-concept', term: '第二关概念', explanation: '解释' }],
+      },
+    ]
+    next.newConcepts = ['第二关概念']
+    const loaded = loadChallengeManifests({
+      '/levels/level-1/challenge.json': manifest(1),
+      '/levels/level-2/challenge.json': next,
+    })
+    expect(loaded.map((level) => level.id)).toEqual([1, 2])
+  })
+
+  it('newConcepts 必须与步骤实际引入的概念一致，单关不超过 3 个', () => {
+    const mismatched = manifest(1)
+    mismatched.newConcepts = ['别的概念']
+    expect(() => loadChallengeManifests({ '/levels/level-1/challenge.json': mismatched })).toThrow(
+      'newConcepts 必须与步骤中实际首次出现的概念一致',
+    )
+
+    const crowded = manifest(1)
+    crowded.steps = [
+      {
+        ...baseStep('explain'),
+        id: 1,
+        introduces: [
+          { id: 'c1', term: '概念一', explanation: '解释' },
+          { id: 'c2', term: '概念二', explanation: '解释' },
+          { id: 'c3', term: '概念三', explanation: '解释' },
+          { id: 'c4', term: '概念四', explanation: '解释' },
+        ],
+      },
+    ]
+    crowded.newConcepts = ['概念一', '概念二', '概念三', '概念四']
+    expect(() => loadChallengeManifests({ '/levels/level-1/challenge.json': crowded })).toThrow(
+      '单关主要新增概念不能超过 3 个',
+    )
+  })
+
+  it('usage 中的每个占位符都必须有解释，token 必须是 <占位符> 形式', () => {
+    const raw = manifest()
+    raw.verification = {
+      usage: 'check <结果> <额外>',
+      instruction: '替换占位符',
+      placeholders: [{ token: '<结果>', meaning: '从输出发现的值' }],
+      feedback: { empty: '未填写', incorrect: '不匹配', success: '完成' },
+    }
+    expect(() => parseChallengeManifest(raw, SOURCE)).toThrow('必须逐一提供解释')
+
+    const badToken = manifest()
+    badToken.verification = {
+      usage: 'check <结果>',
+      instruction: '替换占位符',
+      placeholders: [{ token: '结果', meaning: '从输出发现的值' }],
+      feedback: { empty: '未填写', incorrect: '不匹配', success: '完成' },
+    }
+    expect(() => parseChallengeManifest(badToken, SOURCE)).toThrow('token 必须是 <占位符> 形式')
   })
 })

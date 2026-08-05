@@ -131,3 +131,47 @@ describe('SerialProtocolParser', () => {
     expect(display.length).toBeGreaterThan(0)
   })
 })
+
+describe('SerialProtocolParser 验签字段', () => {
+  const key = 'BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc='
+  const sig = 'a'.repeat(64)
+
+  it('ready 携带合法 base64 会话密钥时保留该字段', () => {
+    const parser = new SerialProtocolParser()
+    const { messages } = parser.feed(`${M}{"type":"ready","version":2,"key":"${key}"}\n`)
+    expect(messages).toEqual([{ type: 'ready', version: 2, key }])
+  })
+
+  it('ready 的密钥形态非法时整条消息被拒绝', () => {
+    const parser = new SerialProtocolParser()
+    const invalid = [
+      `${M}{"type":"ready","key":"short"}\n`,
+      `${M}{"type":"ready","key":"!!!!!!!!!!!!!!!=="}\n`,
+      `${M}{"type":"ready","key":42}\n`,
+    ].join('')
+    expect(parser.feed(invalid).messages).toEqual([])
+  })
+
+  it('level-result 与 level-ready 保留合法的 64 位小写十六进制签名', () => {
+    const parser = new SerialProtocolParser()
+    const input = [
+      `${M}{"type":"level-result","level":1,"status":"passed","sig":"${sig}"}\n`,
+      `${M}{"type":"level-ready","level":2,"sig":"${sig}"}\n`,
+    ].join('')
+    expect(parser.feed(input).messages).toEqual([
+      { type: 'level-result', level: 1, status: 'passed', sig },
+      { type: 'level-ready', level: 2, sig },
+    ])
+  })
+
+  it('签名形态非法（长度/大写/非字符串）时整条消息被拒绝', () => {
+    const parser = new SerialProtocolParser()
+    const invalid = [
+      `${M}{"type":"level-result","level":1,"status":"passed","sig":"${'a'.repeat(63)}"}\n`,
+      `${M}{"type":"level-result","level":1,"status":"passed","sig":"${'A'.repeat(64)}"}\n`,
+      `${M}{"type":"level-result","level":1,"status":"passed","sig":123}\n`,
+      `${M}{"type":"level-ready","level":1,"sig":"xyz"}\n`,
+    ].join('')
+    expect(parser.feed(invalid).messages).toEqual([])
+  })
+})

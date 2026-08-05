@@ -57,24 +57,3 @@ ht_render_motd() {
             { print $0 }
         ' "$1"
 }
-
-ht_render_result() {
-    case "$1" in
-        0) default_color=$HT_GREEN_BOLD ;;
-        2) default_color=$HT_YELLOW ;;
-        *) default_color=$HT_RED_BOLD ;;
-    esac
-    printf '%s\n' "$2" | awk \
-        -v reset="$HT_RESET" \
-        -v default_color="$default_color" \
-        -v green="$HT_GREEN_BOLD" \
-        -v yellow="$HT_YELLOW" \
-        -v red="$HT_RED_BOLD" \
-        '
-            { color = default_color }
-            /^[[:space:]]*✓/ { color = green }
-            /^[[:space:]]*✗/ { color = red }
-            /^[[:space:]]*用法：/ { color = yellow }
-            { printf "%s%s%s\n", color, $0, reset }
-        '
-}

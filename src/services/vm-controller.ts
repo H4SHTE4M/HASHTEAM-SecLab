@@ -47,6 +47,15 @@ let scriptLoadingPromise: Promise<void> | null = null
 let scriptLoadingElement: HTMLScriptElement | null = null
 let rejectScriptLoading: ((reason: Error) => void) | null = null
 const MAX_SERIAL_LOG_LINE_LENGTH = 4096
+const READY_PROTOCOL_PATTERN = /^@@HASHTEAM:.*"type"\s*:\s*"ready"/
+const PROTOCOL_KEY_PATTERN = /("key"\s*:\s*")[^"]*(")/
+
+/** 启动日志可展示原始串口，但 ready 中的会话密钥绝不能进入日志/界面。 */
+export function redactSerialLogLine(line: string): string {
+  return READY_PROTOCOL_PATTERN.test(line)
+    ? line.replace(PROTOCOL_KEY_PATTERN, '$1[redacted]$2')
+    : line
+}
 
 /** 动态加载 libv86.js（全局只加载一次） */
 function loadLibV86(url: string): Promise<void> {
@@ -158,8 +167,8 @@ export class V86Controller implements VirtualMachineController {
         log(
           'serial',
           this.serialLogLineTruncated
-            ? `${line}…（单行超过 ${MAX_SERIAL_LOG_LINE_LENGTH} 字符，日志已截断）`
-            : line,
+            ? `${redactSerialLogLine(line)}…（单行超过 ${MAX_SERIAL_LOG_LINE_LENGTH} 字符，日志已截断）`
+            : redactSerialLogLine(line),
         )
       }
       this.serialLogLineTruncated = false
