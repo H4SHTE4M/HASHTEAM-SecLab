@@ -7,6 +7,9 @@ cd "$HOME"
 PORT=31337
 BD="$HOME/.backdoor"
 
+# 幂等：关卡文件可能已被改成只读，先删后建，保证 reset-level 可重复执行
+rm -f incident.txt "$BD/www/index.html"
+
 cat > incident.txt <<'I_EOF'
 巡检告警（值班系统）
 时间：今天 03:12

@@ -17,6 +17,8 @@ if [ -f "$HOME/.hashteam/level-10-httpd.pid" ]; then
 fi
 
 mkdir -p "$HOME/www" "$HOME/.hashteam"
+# 幂等：关卡文件可能已被改成只读，先删后建，保证 reset-level 可重复执行
+rm -f "$HOME/www/index.html" server.conf service-runbook.txt
 cat > "$HOME/www/index.html" <<'H_EOF'
 <!doctype html>
 <html lang="zh-CN">

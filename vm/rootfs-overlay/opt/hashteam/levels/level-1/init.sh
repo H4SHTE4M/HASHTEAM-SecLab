@@ -3,6 +3,8 @@
 set -eu
 . "${HASHTEAM_LIB_DIR:-/etc/hashteam}/colors.sh"
 cd "$HOME"
+# 幂等：关卡文件可能已被改成只读，先删后建，保证 reset-level 可重复执行
+rm -f README
 cat > README <<'README_EOF'
 你好，新人！
 
