@@ -3,6 +3,8 @@
 set -eu
 . "${HASHTEAM_LIB_DIR:-/etc/hashteam}/colors.sh"
 cd "$HOME"
+# 幂等：关卡文件可能已被改成只读，先删后建，保证 reset-level 可重复执行
+rm -f baseline-report.txt deploy.sh secret.txt
 
 cat > baseline-report.txt <<'R_EOF'
 安全基线扫描报告（自动生成）

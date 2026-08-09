@@ -434,6 +434,81 @@ if OUT=$(run_check "$SB3"); then RC=0; else RC=$?; fi
 expect_eq "相对路径 -h www 启动同样通过" "$RC" "0"
 stop_test_httpd
 
+echo "—— 重置幂等（关卡文件被改成只读）——"
+# 回归：学生把关卡文件改成只读（如 chmod 444）后，init.sh 的 cat >/cp
+# 以 EACCES 失败，set -e 中止导致 reset-level 永久卡死（第 4 关真实事故，
+# 报错位置 line 20 cat > deploy.sh）。所有会重建文件的关卡都必须能从
+# 无写权限状态恢复：删除不依赖文件自身权限位，只依赖目录可写。
+for spec in \
+    "1 README" \
+    "4 baseline-report.txt deploy.sh secret.txt" \
+    "5 auth.log" \
+    "6 auth.log" \
+    "7 message.b64 secret.bin"; do
+    set -- $spec
+    lvl=$1; shift
+    sandbox "$lvl"
+    SB="$SB_DIR"
+    run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-$lvl/init.sh" >/dev/null
+    for f in "$@"; do "$STUB/chmod" 444 "$SB/home/guest/$f"; done
+    if run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-$lvl/init.sh" >/dev/null; then RC=0; else RC=$?; fi
+    expect_eq "第 $lvl 关：文件只读（$*）后重置重建成功" "$RC" "0"
+    if [ "$lvl" = "4" ]; then
+        # 第 4 关还需确认权限位回到「不安全」初始态
+        MODE=$("$STUB/stat" -c %a "$SB/home/guest/deploy.sh")
+        expect_eq "第 4 关：重置后 deploy.sh 恢复 777" "$MODE" "777"
+        MODE=$("$STUB/stat" -c %a "$SB/home/guest/secret.txt")
+        expect_eq "第 4 关：重置后 secret.txt 恢复 644" "$MODE" "644"
+    fi
+done
+
+# 进程关卡：重置同时重建文件并重启服务。
+# 第 10 关沿用上方惯例换新端口：其 init 只启动一次 httpd、无重绑重试，
+# 复用刚跑过 check（有 wget 连接）的端口会撞上残留 socket 状态导致 bind 失败。
+sandbox 8
+SB="$SB_DIR"
+run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-8/init.sh" >/dev/null
+"$STUB/chmod" 444 "$SB/home/guest/incident.txt" "$SB/home/guest/.backdoor/www/index.html"
+if run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-8/init.sh" >/dev/null; then RC=0; else RC=$?; fi
+expect_eq "第 8 关：文件只读后重置重建成功" "$RC" "0"
+sleep 1
+PORTS=$("$STUB/netstat" -tln)
+expect_contains "$PORTS" "第 8 关：重置后 31337 重新监听" ":31337 "
+"$STUB/kill" "$(cat "$SB/home/guest/.backdoor/backdoor.pid")" 2>/dev/null || true
+
+sandbox 9
+SB="$SB_DIR"
+run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-9/init.sh" >/dev/null
+"$STUB/chmod" 444 "$SB/home/guest/www/index.html" "$SB/home/guest/www/robots.txt" \
+    "$SB/home/guest/www/debug" "$SB/home/guest/www/backup.txt"
+# 宿主机的 pidof 被 stub，重置前先按端口停掉上一轮 httpd（VM 内由 init 自行清理）
+stop_test_httpd
+sleep 1
+if run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-9/init.sh" >/dev/null; then RC=0; else RC=$?; fi
+expect_eq "第 9 关：文件只读后重置重建成功" "$RC" "0"
+sleep 1
+TOKEN=$(cd "$SB/home/guest" && PATH="$STUB:$PATH" "$BUSYBOX" wget -q -O - \
+    "http://127.0.0.1:${HASHTEAM_HTTP_PORT}/backup.txt")
+expect_contains "$TOKEN" "第 9 关：重置后调试令牌恢复" "dbg-token-8848"
+stop_test_httpd
+
+HASHTEAM_SECURE_PORT=$((HASHTEAM_SECURE_PORT + 1))
+export HASHTEAM_SECURE_PORT
+sandbox 10
+SB="$SB_DIR"
+run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-10/init.sh" >/dev/null
+"$STUB/chmod" 444 "$SB/home/guest/server.conf" "$SB/home/guest/service-runbook.txt" \
+    "$SB/home/guest/www/index.html"
+# 同第 9 关：pidof 被 stub，先按端口停掉上一轮 httpd（VM 内由 pidof+sleep 覆盖）
+stop_test_httpd
+sleep 1
+if run_level "$SB" "$HASHTEAM_LEVELS_DIR/level-10/init.sh" >/dev/null; then RC=0; else RC=$?; fi
+expect_eq "第 10 关：文件只读后重置重建成功" "$RC" "0"
+MODE=$("$STUB/stat" -c %a "$SB/home/guest/server.conf")
+expect_eq "第 10 关：重置后 server.conf 恢复 664" "$MODE" "664"
+stop_test_httpd
+sleep 1
+
 echo "—— 分层 help ——"
 sandbox 1
 SB="$SB_DIR"

@@ -4,6 +4,8 @@ set -eu
 . "${HASHTEAM_LIB_DIR:-/etc/hashteam}/colors.sh"
 cd "$HOME"
 mkdir -p www
+# 幂等：关卡文件可能已被改成只读，先删后建，保证 reset-level 可重复执行
+rm -f www/index.html www/robots.txt www/debug www/backup.txt
 cat > www/index.html <<'H_EOF'
 <!doctype html>
 <html lang="zh-CN">
