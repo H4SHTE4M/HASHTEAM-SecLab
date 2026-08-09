@@ -1,7 +1,7 @@
 /// <reference types="vitest/config" />
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig, type Plugin } from 'vite'
@@ -17,6 +17,25 @@ const VM_ASSETS = {
 
 const LEGAL_FILES = ['SOURCE_CODE.md', 'THIRD_PARTY_NOTICES.md'] as const
 const EDGEONE_CONFIG_FILE = 'edgeone.json'
+const TALK_ROOT = 'talk'
+
+/**
+ * 递归收集 talk/ 下待发布的相对路径（POSIX 风格，排序确定）。
+ * 跳过 . 开头的目录与文件，避免 .claude、.DS_Store 等工具残留进入生产包。
+ */
+function collectTalkFiles(directory: string, base: string): string[] {
+  const results: string[] = []
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (entry.name.startsWith('.')) continue
+    const absolute = path.join(directory, entry.name)
+    if (entry.isDirectory()) {
+      results.push(...collectTalkFiles(absolute, base))
+    } else if (entry.isFile()) {
+      results.push(path.relative(base, absolute).split(path.sep).join('/'))
+    }
+  }
+  return results.sort()
+}
 const NODE_MAJOR_VERSION = Number.parseInt(process.versions.node, 10)
 const TEST_WORKER_EXEC_ARGV =
   NODE_MAJOR_VERSION >= 25 ? ['--no-experimental-webstorage'] : []
@@ -143,6 +162,20 @@ function vmAssetsPlugin(bundle: VmAssetBundle, sourceId: string): Plugin {
         fileName: EDGEONE_CONFIG_FILE,
         source: edgeOneConfigSource,
       })
+      // talk/ 是免构建的 reveal.js 幻灯片，原样输出到 dist/talk/，使
+      // nginx 与 EdgeOne 两条发布通道从同一份 release 自动携带。
+      const talkRoot = path.resolve(process.cwd(), TALK_ROOT)
+      const talkFiles = collectTalkFiles(talkRoot, talkRoot)
+      if (!talkFiles.includes('index.html')) {
+        throw new Error('talk/ 缺少 index.html，无法发布幻灯片')
+      }
+      for (const relativePath of talkFiles) {
+        this.emitFile({
+          type: 'asset',
+          fileName: `talk/${relativePath}`,
+          source: readFileSync(path.join(talkRoot, relativePath)),
+        })
+      }
       this.emitFile({
         type: 'asset',
         fileName: 'vm-assets.json',

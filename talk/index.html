@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="《电脑的另一层》—— 面向准大一新生的线上技术分享：从文件到服务，四个台阶。">
+  <title>从 SecLab，到命令行基础</title>
+  <link rel="stylesheet" href="assets/fonts/noto-sans-sc/index.css">
+  <link rel="stylesheet" href="vendor/reveal/reveal.css">
+  <link rel="stylesheet" href="talk.css">
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ═══════════════ 1 · 开场 ═══════════════ -->
+<section>
+  <section>
+    <div class="q-slide">
+      <span class="kicker">开场</span>
+      <div class="eyebrow">先在聊天区报个到</div>
+      <div class="big-q">这个暑假，你玩到第几关了？</div>
+      <div class="opening-options">
+        <span><b>1–10</b>　我目前玩到这一关</span>
+        <span><b>0</b>　今天第一次见 / 还没打开玩</span>
+      </div>
+    </div>
+    <aside class="notes">
+      <p>【0:00–1:30】不做自我介绍，直接投票。数字分布只影响措辞：多数玩过就多说「你们都见过」，多数没玩过就多说「等下你会看到」。</p>
+      <p>整场结构：开场+立论 0–4；进门（终端）4–6；台阶①②③ 6–15；台阶④（含铺垫）15–27；回头看+以后 27–33；结束留答疑。自己心里有数即可，不用念。</p>
+      <p>按 ↓ 有标题页和今日路线；主线按 →。</p>
+    </aside>
+  </section>
+
+  <!-- ↓ 标题页（可选） -->
+  <section>
+    <div class="q-slide">
+      <span class="kicker">HASHTEAM CTF 实验室 · 新生线上分享</span>
+      <h1 style="margin:0;">电脑的另一层</h1>
+      <div class="rule"></div>
+      <p class="statement" style="font-size:1.05em;">从 SecLab，到<span class="em">命令行基础</span>。</p>
+      <p class="sub" style="margin-top:2.2em;">主讲人：郑傲宇　｜　分享预计 30 分钟 + 答疑　｜　实验链接长期有效</p>
+    </div>
+    <aside class="notes">
+      <p>【1:00–2:00】自我介绍 30 秒以内，时间紧直接跳过。</p>
+    </aside>
+  </section>
+
+  <!-- ↓ 今日路线（可选） -->
+  <section>
+    <span class="kicker">自我介绍</span>
+    <h2>这个 zay 本科四年干了啥</h2>
+    <p class="intro-meta"><strong>HASHTEAM前主要负责人</strong>，现本院26级硕士研究生，研究方向为 <strong>AI Infra</strong>（人工智能基础设施）。</p>
+    <div class="journey">
+      <div class="journey-step"><span>大一</span><b>CTF</b><small>打了一年逆向？</small></div>
+      <i>→</i>
+      <div class="journey-step"><span>大二</span><b>摸了</b><small>摸了一年鱼？<br><span class="tiny">其实没有，在做各种运维</span></small></div>
+      <i>→</i>
+      <div class="journey-step"><span>大三</span><b>取证</b><small>会玩 Linux，所以打了一年取证</small></div>
+      <i>→</i>
+      <div class="journey-step final"><span>大四</span><b>工作转读研</b><small>目前研究 AI Infra<br><span class="tiny">最后悔的一集 😭</span></small></div>
+    </div>
+    <p class="takeaway center">这哥们干的事情又多又杂啊</p>
+    <aside class="notes">
+      <p>【2:00–2:30】快速过一遍，不用展开。</p>
+    </aside>
+  </section>
+</section>
+
+<!-- ═══════════════ 2 · 立论：另一层 ═══════════════ -->
+<section>
+  <div class="q-slide">
+    <span class="kicker">图形界面？命令界面？</span>
+    <div class="contrast-line"><span>图形界面点按钮</span><i>像吃套餐——配好端上来</i></div>
+    <div class="contrast-line active"><span>命令界面敲命令</span><i>像直接点菜——想吃什么，说</i></div>
+    <div class="hero-phrase">套餐里没有的，也可以单点。</div>
+  </div>
+  <aside class="notes">
+    <p>【1:30–3:00】先说一句「就像下馆子」，再念两行对比。「套餐里没有的，也可以单点」是全场贯穿句，后面台阶①、台阶④、结束页会回收；这里念慢一点，让这句话先立住。</p>
+    <p>「另一层」不是比喻：你们玩 lab 时一直待在里面。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 3 · 进门：终端 ═══════════════ -->
+<section>
+  <span class="kicker">进门</span>
+  <h2>一行命令，一次请求</h2>
+  <div class="cards">
+    <div class="qa-card">
+      <span class="ask">whoami<small>你是谁？</small></span>
+      <span class="arr">→</span>
+      <span class="ans">guest</span>
+    </div>
+    <div class="qa-card">
+      <span class="ask">pwd<small>我在哪？</small></span>
+      <span class="arr">→</span>
+      <span class="ans">/home/guest</span>
+    </div>
+    <div class="qa-card">
+      <span class="ask">ls<small>这里有什么？</small></span>
+      <span class="arr">→</span>
+      <span class="ans">README</span>
+    </div>
+  </div>
+  <div class="explain-line"><b>怎么读</b><span>左边是请求，右边是电脑返回的结果。</span></div>
+  <p class="takeaway">终端就是这样：你请求，它响应。</p>
+  <aside class="notes">
+    <p>关卡对应：SecLab 第 1 关「欢迎来到服务器」；whoami、pwd、ls 和读取 README 都在这一关。</p>
+    <p>【3:00–6:00】三条命令玩过 lab 的都敲过；没玩过的现在看懂就行。</p>
+    <p>「请求/响应」是计算机自己的词，后面讲服务时会直接升级成 HTTP 请求；口头对比一句「就像直接点菜」接上一页。</p>
+    <p>过渡：会「请求」之后，第一件事——点几个套餐里没有的。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 4 · 台阶①：对文件多问一句 ═══════════════ -->
+<section class="stage-slide stage-1">
+  <span class="stage-marker">01 / 04　看见</span>
+  <span class="kicker">问文件</span>
+  <h2>ls 默认不显示以「.」开头的条目</h2>
+  <div class="term">
+    <div class="term-title"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="t">guest@hashteam — 实验环境</span></div>
+    <div class="term-body">
+      <p class="t-cmd">ls</p>
+      <p class="t-out">notes.txt</p>
+      <p class="t-cmd">ls -a</p>
+      <p class="t-out">.　..　<span class="t-hl">.message</span>　.profile　notes.txt</p>
+    </div>
+  </div>
+  <div class="explain-line"><b>为什么</b><span><code>ls</code> 默认省略以「.」开头的条目；<code>-a</code> 要求显示全部。</span></div>
+  <p class="takeaway">参数是对请求的额外要求。</p>
+  <aside class="notes">
+    <p>关卡对应：SecLab 第 2 关「消失的文件」；核心动作是用 ls -a 找到 .message。</p>
+    <p>【6:00–8:30】玩过的同学记得 .message。这句是开场那句话的第一次回收：ls -a 就是「单点」。</p>
+    <p>以「.」开头是 Unix-like 系统的隐藏条目约定；不要类比手机隐藏相册，不是同一种机制。</p>
+    <p>可能被问：.profile 是系统自己的配置文件，和今天无关；. 和 .. 是每个目录都有的特殊条目（lab 第 2 关会专门讲）。</p>
+    <p>过渡：文件能问，那看不懂的内容呢？</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 5 · 台阶②：对内容多问一句 ═══════════════ -->
+<section class="stage-slide stage-2">
+  <span class="stage-marker">02 / 04　读懂</span>
+  <span class="kicker">问内容</span>
+  <h2>Base64 是编码，不是加密</h2>
+  <div class="term" data-autoplay>
+    <div class="term-title"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="t">guest@hashteam — 实验环境</span></div>
+    <div class="term-body">
+      <p class="t-cmd">base64 -d message.b64</p>
+      <p class="t-out">……<br><span class="t-hl">这是第一块碎片：nebula</span><br>另一半碎片藏在一个二进制文件里……</p>
+    </div>
+  </div>
+  <div class="explain-line"><b>发生了什么</b><span><code>-d</code> 表示 decode：把 Base64 表示还原成原始内容。</span></div>
+  <div class="concept-pair"><span>编码</span><i>≠</i><span>加密</span></div>
+  <aside class="notes">
+    <p>关卡对应：SecLab 第 7 关「看不懂的消息」；message.b64、Base64 解码和拼接碎片都在这一关。</p>
+    <p>【8:30–11:00】一条命令，乱码变中文。base64 是可逆编码，不提供保密性；日记倒着写是编码，锁进保险箱才更像加密。这里要讲清楚，不然学生容易把「看不懂」当成「被保护」。</p>
+    <p>过渡：文件能问，内容能问——电脑还记得的事，也能问。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 6 · 台阶③：对记录多问一句 ═══════════════ -->
+<section>
+  <section class="stage-slide stage-3">
+    <span class="stage-marker">03 / 04　追踪</span>
+    <span class="kicker">问记录</span>
+    <h2>登录日志会留下记录</h2>
+    <div class="log-demo">
+      <div class="term" data-autoplay>
+        <div class="term-title"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="t">guest@hashteam — 实验环境</span></div>
+        <div class="term-body">
+          <p class="t-cmd">grep Failed auth.log | wc -l</p>
+          <p class="t-out t-hl">30</p>
+        </div>
+      </div>
+      <div class="metric"><strong>30</strong><span>次登录失败</span></div>
+    </div>
+    <div class="explain-line"><b>这条命令</b><span><code>grep</code> 筛出失败记录，<code>wc -l</code> 数一共有多少行。</span></div>
+    <p class="takeaway small">日志 + 自动分析 → 「异地登录」提醒</p>
+    <aside class="notes">
+      <p>关卡对应：当前筛选并计数失败记录的演示来自 SecLab 第 5 关「读懂日志」；第 6 关「攻击从哪里来」会继续提取来源 IP 并排序。</p>
+      <p>【11:00–15:00】先问谁收过「异地登录」提醒，再揭示：这类提醒通常来自日志和自动分析。演示只展示第 5 关的计数命令，原始日志可在第 5、6 关打开。</p>
+      <p>按 ↓ 有一页讲「|」是什么，可跳过。</p>
+      <p>过渡：前三阶问的都是这台电脑；下一阶，问的对象换一换。</p>
+    </aside>
+  </section>
+
+  <!-- ↓ 「|」是什么（浅解释） -->
+  <section>
+    <span class="kicker">回头看一眼</span>
+    <h2>那个「|」是什么？</h2>
+    <div class="rule"></div>
+    <ul class="steps">
+      <li><span class="no">·</span><span>管道：把上一个命令的回答，交给下一个命令<small>grep 挑出来的行，直接递给 wc -l 去数。</small></span></li>
+      <li><span class="no">·</span><span>命令还能接力，像流水线<small>这是终端真正的威力：小工具组合出大动作。</small></span></li>
+    </ul>
+    <aside class="notes">
+      <p>关卡对应：SecLab 第 5 关「读懂日志」首次讲 grep、管道和 wc -l；第 6 关继续复用并加长管道。</p>
+      <p>【14:00–15:00】60 秒讲完，不用深挖。</p>
+    </aside>
+  </section>
+</section>
+
+<!-- ═══════════════ 7 · 台阶④ 铺垫：问的对象换一换 ═══════════════ -->
+<section class="stage-slide stage-4 bridge-slide">
+  <span class="stage-marker">04 / 04　走出去</span>
+  <span class="kicker">问服务</span>
+  <h2>前三步问本机。下一步，问服务。</h2>
+  <div class="distance-flow">
+    <div class="distance-node done"><small>01–03</small><strong>这台电脑</strong><span>文件 · 内容 · 记录</span></div>
+    <div class="distance-arrow"><span>问题走得更远</span><b>→</b></div>
+    <div class="distance-node active"><small>04</small><strong>一个服务</strong><span>由服务器程序回答</span></div>
+  </div>
+  <div class="explain-line"><b>服务是什么</b><span>一个等待请求、处理问题并返回响应的程序。</span></div>
+  <p class="takeaway small">网页，只是服务回答你的一种方式。</p>
+  <aside class="notes">
+    <p>关卡对应：SecLab 第 8 关「多出来的进程」先认识进程与监听端口；第 9 关「被遗忘的调试接口」再向本地 Web 服务发出请求。</p>
+    <p>【15:00–17:00】只立一个直觉：这里说的「服务」是等待请求并返回响应的程序；运行它的机器常被叫作服务器。物理机、虚拟机、云服务的区别暂不展开。</p>
+    <p>IP、DNS、HTTP 这里也不讲，用到哪个讲哪个。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 8 · 台阶④ 铺垫：问的地址 ═══════════════ -->
+<section class="stage-slide stage-4">
+  <span class="stage-marker">04 / 04　走出去</span>
+  <span class="kicker">找到服务</span>
+  <h2>地址指向机器，端口指向程序</h2>
+  <div class="address-cards">
+    <div><small>地址</small><strong>127.0.0.1</strong><span>这台电脑自己</span></div>
+    <b>:</b>
+    <div><small>端口</small><strong>8080</strong><span>服务所在的程序</span></div>
+  </div>
+  <div class="url-anatomy"><span>http://</span><b>地址</b><i>:</i><b>端口</b><i>/</i><b>路径</b></div>
+  <p class="takeaway small">目标找到了。现在，问它第一句。</p>
+  <aside class="notes">
+    <p>关卡对应：地址与端口的基础来自 SecLab 第 8 关；把 127.0.0.1 和 8080 组成 URL 是第 9 关。</p>
+    <p>【17:00–19:00】「指向」讲清两个维度即可，不讲协议。「问它第一句」说完直接翻页。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 9 · 台阶④：多问一句 ═══════════════ -->
+<section class="stage-slide stage-4">
+  <span class="stage-marker">04 / 04　走出去</span>
+  <span class="kicker">第一次回答</span>
+  <h2>首页只说：建设中</h2>
+  <div class="term">
+    <div class="term-title"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="t">guest@hashteam — 实验环境</span></div>
+    <div class="term-body">
+      <p class="t-cmd">curl http://127.0.0.1:8080/</p>
+      <p class="t-out">&lt;h1&gt;HASHTEAM 内部系统&lt;/h1&gt;<br>&lt;p&gt;建设中，敬请期待。&lt;/p&gt;</p>
+    </div>
+  </div>
+  <div class="explain-line"><b>发生了什么</b><span><code>curl</code> 发出一次 HTTP 请求；服务返回了未经渲染的 HTML。</span></div>
+  <p class="takeaway">首页没有，其他地方呢？</p>
+  <aside class="notes">
+    <p>关卡对应：SecLab 第 9 关「被遗忘的调试接口」；这一页是访问本地 Web 服务首页。</p>
+    <p>【19:00–21:00】这就是第 9 关的那个网站，玩过的同学会认出来；没玩过的当新东西看。这里「单点」是第二处回收：浏览器是套餐，curl 是单点。</p>
+    <p>网络允许就现场真敲，失败就直接讲屏幕上的静态输出；这一页不自动打字，把时间留给 HTTP 请求与响应的解释。</p>
+    <p>过渡：再问一句。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 10 · 台阶④：再问一句 ═══════════════ -->
+<section class="stage-slide stage-4">
+  <span class="stage-marker">04 / 04　走出去</span>
+  <span class="kicker">再问一个公开路径</span>
+  <div class="ethics-banner"><b>边界</b><span>只在自己的系统，或明确授权的环境里尝试。</span></div>
+  <h2>robots.txt 给出两条线索</h2>
+  <div class="term">
+    <div class="term-title"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="t">guest@hashteam — 实验环境</span></div>
+    <div class="term-body">
+      <p class="t-cmd">curl http://127.0.0.1:8080/robots.txt</p>
+      <p class="t-out">User-agent: *<br># 开发调试中，以下路径请勿收录<br><span class="t-hl">Disallow: /debug</span><br><span class="t-hl">Disallow: /backup.txt</span></p>
+    </div>
+  </div>
+  <div class="explain-line compact"><b>关键</b><span><code>robots.txt</code> 是给爬虫的收录规则，不是权限控制；敏感路径不该靠它隐藏。</span></div>
+    <aside class="notes">
+      <p>关卡对应：SecLab 第 9 关「被遗忘的调试接口」；robots.txt 是首页之后的公开路径线索。</p>
+      <p>【21:00–23:00】先读屏幕上的授权边界，再演示。robots.txt 是站点给爬虫的规则文件，不是访问控制，也不应拿来存放敏感路径。</p>
+      <p>嘴上带一句「这页等于在菜单上写着『请勿拍照』，但单点照样能点」——点到为止，这页信息已经满了。</p>
+      <p>这里的文件是实验环境主动设计的线索。真实网站即使某个路径公开可访问，也不代表你获得了继续探测、绕过控制或使用其中信息的授权。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 11 · 台阶④：顺着问下去（峰值） ═══════════════ -->
+<section>
+  <section class="stage-slide stage-4 peak-slide">
+    <span class="stage-marker">04 / 04　发现问题</span>
+    <span class="kicker">顺着线索问下去</span>
+    <h2>一个忘记删除的令牌</h2>
+    <div class="term" data-autoplay>
+      <div class="term-title"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="t">guest@hashteam — 实验环境</span></div>
+      <div class="term-body">
+        <p class="t-cmd">curl http://127.0.0.1:8080/backup.txt</p>
+        <p class="t-out"># 临时备份，上线前务必删除！<br><span class="t-hl">debug_token=dbg-token-8848</span></p>
+      </div>
+    </div>
+    <div class="peak-explain"><b>原因</b><span>备份文件可直接访问，里面又保留了本应删除的令牌。</span></div>
+    <div class="finding"><span>这类问题叫</span><strong>信息泄露</strong></div>
+    <aside class="notes">
+      <p>关卡对应：SecLab 第 9 关「被遗忘的调试接口」；backup.txt 和泄露的 debug_token 是这一关的最终发现。</p>
+      <p>【23:00–27:00】全场核心页，语速放慢。把四个台阶串起来回顾：从 ls -a 到这里，动作没变过——问；只是问的对象越来越远。</p>
+      <p>口头收一句「套餐里没有的，你单点到了」——结束页还会回一次。</p>
+      <p>边界在上一页和本页屏幕上都有，这里再口头重复一次：这套方法只能用在像 lab 这样明确授权的环境。</p>
+      <p>按 ↓ 有一页浅解释。</p>
+    </aside>
+  </section>
+
+  <!-- ↓ 浏览器 vs curl（浅解释） -->
+  <section>
+    <span class="kicker">补一个准确说法</span>
+    <h2>浏览器和 curl，差在哪？</h2>
+    <div class="client-compare">
+      <div><small>浏览器</small><strong>请求 + 渲染页面</strong><span>还会运行脚本、加载更多资源</span></div>
+      <div><small>curl</small><strong>发出请求，显示响应</strong><span>适合看清一次问答发生了什么</span></div>
+    </div>
+    <p class="takeaway small">它们都是客户端，都在使用 HTTP 和服务对话。</p>
+    <aside class="notes">
+      <p>关卡对应：SecLab 第 9 关使用 curl 逐步请求首页、robots.txt 和后续路径。</p>
+      <p>【26:00–27:00】60 秒讲完。HTTP 只给名字，不展开。</p>
+    </aside>
+  </section>
+</section>
+
+<!-- ═══════════════ 12 · 回头看：四个台阶一个动作 ═══════════════ -->
+<section>
+  <span class="kicker">回头看</span>
+  <h2>对象在变，动作没变</h2>
+  <div class="recap-grid">
+    <div><span>01</span><b>文件</b><small>「.」开头<br>ls 默认不显示</small></div>
+    <div class="fragment fade-up"><span>02</span><b>内容</b><small>编码<br>≠ 加密</small></div>
+    <div class="fragment fade-up"><span>03</span><b>记录</b><small>登录失败<br>会被记下来</small></div>
+    <div class="fragment fade-up accent"><span>04</span><b>服务</b><small>首页<br>≠ 全部</small></div>
+  </div>
+  <p class="takeaway center">每多问一句，就<span class="em">多看见一层</span>。</p>
+  <aside class="notes">
+    <p>关卡对应：文件是第 2 关，内容是第 7 关，记录是第 5–6 关，服务是第 8–9 关；本次演示重点落在第 2、5、7、9 关。</p>
+    <p>【27:00–30:00】核心一句：今天看到的不是安全圈的专利，是整个计算机世界的基本功。</p>
+    <p>最后一行才提实验室方向，一句带过：想深入了解会后聊，不展开。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 13 · 以后怎么玩 ═══════════════ -->
+<section>
+  <span class="kicker">以后怎么玩</span>
+  <h2>接下来，只做三件小事</h2>
+  <div class="next-grid">
+    <div><span>01</span><b>去 lab 亲手做</b><small>卡住就去群里问学长学姐</small></div>
+    <div><span>02</span><b>挑一门语言玩</b><small>Python 很适合起步</small></div>
+    <div class="warm"><span>03</span><b>允许自己不会</b><small>门槛没有你想的高</small></div>
+  </div>
+  <aside class="notes">
+    <p>【30:00–33:00】第三条最重要，放慢说。不布置任务，只给方向；暑假不该有作业感。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 14 · 结束 ═══════════════ -->
+<section>
+    <div class="q-slide">
+      <span class="kicker">结束</span>
+      <div class="end-line">套餐里没有的，<br><span class="em">你单点到了。</span></div>
+      <p class="closing-line">今天想让你记住的就一句：<b>多问一句</b>。</p>
+    <div class="qr-row" style="margin-top:1.2em;">
+      <div class="qr-card small"><div class="qr"></div></div>
+      <div>
+        <div class="url-line js-lab-url">lab.lwzheng.tech</div>
+        <div class="url-note">平台长期有效 · 群里随时答疑</div>
+        <div class="url-note" style="margin-top:0.5em;">谢谢。现在，轮到你问。</div>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">
+    <p>【33:00–】开场那句「套餐里没有的，也可以单点」在这里收回来：从吃套餐，到单点到了那一味。</p>
+    <p>克制收尾。答疑安排和招新各一句带过；有人追问就指向群。</p>
+    <p>答疑时如果哪一步说不清，直接打开实验环境演示，比口头解释有效。</p>
+  </aside>
+</section>
+
+</div>
+</div>
+
+<script src="vendor/reveal/reveal.js"></script>
+<script src="vendor/reveal/notes.js"></script>
+<script src="vendor/qrcode/qrcode.js"></script>
+<script src="talk.js"></script>
+</body>
+</html>
