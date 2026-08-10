@@ -58,6 +58,32 @@ const hasNextStep = computed(() => currentStepIndex.value < props.level.steps.le
 const learningPathComplete = computed(() =>
   props.level.steps.every((step) => allCompletedIds.value.has(step.id)),
 )
+
+interface TemplateSegment {
+  kind: 'text' | 'slot'
+  text: string
+}
+
+/** 把命令模板拆成固定文本与待填槽位；槽位展示字段标签，不把 {{field}} 记号暴露给学生。 */
+const templateSegments = computed<TemplateSegment[]>(() => {
+  const step = currentStep.value
+  if (!step.commandTemplate) return []
+  const segments: TemplateSegment[] = []
+  let lastIndex = 0
+  for (const match of step.commandTemplate.matchAll(/\{\{([a-z][a-z0-9-]*)\}\}/g)) {
+    const index = match.index ?? 0
+    if (index > lastIndex) {
+      segments.push({ kind: 'text', text: step.commandTemplate.slice(lastIndex, index) })
+    }
+    const field = step.fields?.find((item) => item.id === match[1])
+    segments.push({ kind: 'slot', text: field?.label ?? match[1] })
+    lastIndex = index + match[0].length
+  }
+  if (lastIndex < step.commandTemplate.length) {
+    segments.push({ kind: 'text', text: step.commandTemplate.slice(lastIndex) })
+  }
+  return segments
+})
 const verificationAvailable = computed(
   () => props.mode === 'challenge' || learningPathComplete.value,
 )
@@ -399,7 +425,8 @@ function stepTypeLabel(type: LearningStep['type']): string {
               class="structured-form"
               @submit.prevent="runStructuredCommand"
             >
-              <code class="command-template">{{ currentStep.commandTemplate }}</code>
+              <code class="command-template"><template v-for="(segment, index) in templateSegments" :key="index"><span v-if="segment.kind === 'slot'" class="template-slot">{{ segment.text }}</span><template v-else>{{ segment.text }}</template></template></code>
+              <p class="template-note">高亮块只是占位，不是命令的一部分；运行时会换成下方填写的内容。</p>
               <label v-for="field in currentStep.fields" :key="field.id">
                 {{ field.label }}
                 <input
@@ -962,6 +989,21 @@ input {
   background: var(--surface-0);
   border: var(--hairline) solid var(--accent-amber-border);
   border-radius: 6px;
+}
+
+.template-slot {
+  padding: 1px 6px;
+  color: var(--accent-cyan);
+  font-weight: 700;
+  background: var(--surface-2);
+  border: 1px dashed var(--accent-cyan-border);
+  border-radius: 4px;
+}
+
+.template-note {
+  margin: -3px 0 0;
+  color: var(--text-faint);
+  font-size: 12px;
 }
 
 .structured-form label,
