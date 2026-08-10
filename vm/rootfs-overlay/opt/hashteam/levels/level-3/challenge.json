@@ -63,7 +63,7 @@
           "placeholder": "填写待办中给出的目录名"
         }
       ],
-      "observation": "pwd 应以目标目录结尾；ls 应显示待分类的四个文件。",
+      "observation": "pwd 输出应以 /inbox 结尾；ls 应显示待分类的四个文件。",
       "commonErrors": ["如果 cd 失败，确认你仍在主目录，并检查目录名。"],
       "reinforcement": "位置确认是文件操作的安全带。裸 cd（不带参数）随时可以回到主目录；~ 也表示主目录。"
     },
@@ -72,7 +72,7 @@
       "type": "partial-command",
       "title": "建立分类目录",
       "objective": "一次补全多个 mkdir 参数",
-      "instruction": "mkdir 后可以跟多个目录参数。按待办填写三个目录名，参数之间各留一个空格。创建成功时通常不会输出文字；提示符重新出现且没有报错后，再用 ls 复查。",
+      "instruction": "mkdir 后可以跟多个目录参数。要建的是待办列出的三个分类目录：logs、scripts、secrets。它们就建在当前目录里，参数只写目录名本身，不要以 / 开头。参数之间各留一个空格。创建成功时通常不会输出文字；提示符重新出现且没有报错后，再用 ls 复查。",
       "completion": "input",
       "allowRun": false,
       "uses": ["command-anatomy", "relative-path"],
@@ -80,12 +80,15 @@
       "fields": [
         {
           "id": "directories",
-          "label": "三个目录名",
+          "label": "三个分类目录名",
           "placeholder": "按空格分隔三个名称"
         }
       ],
-      "observation": "在终端再次运行 ls，确认三个新目录都已出现，原文件仍留在当前目录。",
-      "commonErrors": ["没有输出不等于失败；如果提示符已经重新出现且没有报错，先用 ls 检查结果。"],
+      "observation": "在终端再次运行 ls，确认 logs、scripts、secrets 三个新目录都已出现，原文件仍留在当前目录。",
+      "commonErrors": [
+        "没有输出不等于失败；如果提示符已经重新出现且没有报错，先用 ls 检查结果。",
+        "如果报错提到 /home、/guest 之类路径（File exists 或 Permission denied），说明把 pwd 显示的绝对路径拆成了参数；分类目录都建在当前目录里，参数只写 logs scripts secrets。"
+      ],
       "reinforcement": "一个命令可以接收多个并列参数；修改命令要靠复查确认结果。"
     },
     {
@@ -164,7 +167,7 @@
     {
       "level": 3,
       "kind": "structure",
-      "text": "创建结构是 mkdir 后跟多个目录名；移动结构是 mv 后先写一个或多个源，最后写目标目录。"
+      "text": "创建结构是在 inbox 里一次跟多个目录名：mkdir logs scripts secrets；移动结构是 mv 后先写一个或多个源，最后写目标目录。"
     }
   ],
   "verification": {

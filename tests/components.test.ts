@@ -378,7 +378,9 @@ describe('accessible components', () => {
       props: missionProps({ guideStep: 2, completedSteps: [1, 2] }),
     })
 
-    expect(wrapper.get('.command-template').text()).toContain('cat {{file}}')
+    expect(wrapper.get('.command-template').text()).toContain('cat')
+    expect(wrapper.get('.command-template').text()).not.toContain('{{')
+    expect(wrapper.get('.command-template .template-slot').text()).toBe('文件名')
     expect(wrapper.find('.command-run').exists()).toBe(false)
     await wrapper.get('.structured-form').trigger('submit')
     expect(wrapper.text()).toContain('请先填写“文件名”')
