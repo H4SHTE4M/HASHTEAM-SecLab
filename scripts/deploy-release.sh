@@ -63,12 +63,10 @@ done
 cd "$PROJECT_DIR"
 
 if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-  [[ "${GITHUB_EVENT_NAME:-}" != "pull_request" ]] || {
-    echo "ERROR: 拒绝从 pull_request workflow 使用生产发布脚本" >&2
-    exit 1
-  }
-  [[ "${GITHUB_REF:-}" == "refs/heads/main" ]] || {
-    echo "ERROR: GitHub Actions 只允许从 main 分支发布" >&2
+  # 新拓扑下本脚本只服务 PR staging 部署（生产走 EdgeOne CLI）;
+  # pull_request 的 GITHUB_REF 为 refs/pull/N/merge,防线在 job 级 if。
+  [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]] || {
+    echo "ERROR: GitHub Actions 中本脚本仅用于 PR staging 部署" >&2
     exit 1
   }
 fi
