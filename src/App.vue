@@ -9,9 +9,12 @@ import LoadingScreen from './components/LoadingScreen.vue'
 import CompletionPage from './components/CompletionPage.vue'
 import AboutModal from './components/AboutModal.vue'
 import OnboardingDialog from './components/OnboardingDialog.vue'
+import BugReportDialog from './components/BugReportDialog.vue'
 import { useVirtualMachine } from './composables/useVirtualMachine'
 import { useLabProgress } from './composables/useLabProgress'
 import { useLabPreferences } from './composables/useLabPreferences'
+import { useAnomalyCenter } from './services/anomaly-center'
+import { downloadBugReport } from './services/bug-report'
 import { createSafeStorage } from './services/progress-store'
 import {
   getMissionPanelWidthBounds,
@@ -58,6 +61,8 @@ function loadPanelCollapsed(): boolean {
 const vm = useVirtualMachine()
 const progress = useLabProgress()
 const preferences = useLabPreferences()
+const anomalyCenter = useAnomalyCenter()
+const bugReportDownloaded = ref(false)
 
 const terminalRef = ref<InstanceType<typeof LabTerminal> | null>(null)
 const showAbout = ref(false)
@@ -111,15 +116,22 @@ const currentCompleted = computed(() => progress.state.completedLevels.includes(
 const currentHintsUsed = computed(() => progress.hintsUsedFor(progress.state.currentLevel))
 const isLastLevel = computed(() => progress.state.currentLevel >= TOTAL_LEVELS)
 const currentMode = computed(() => preferences.state.mode ?? 'guided')
+const activeBlockingAnomaly = computed(() => anomalyCenter.pendingPopup.value)
 const showOnboardingDialog = computed(
   () =>
     !showCompletion.value &&
     vm.stage.value === 'ready' &&
     !showBootOverlay.value &&
-    showOnboarding.value,
+    showOnboarding.value &&
+    // 阻断异常弹窗优先：两个焦点陷阱不能同时在场
+    activeBlockingAnomaly.value === null,
 )
 const backgroundInert = computed(
-  () => showBootOverlay.value || showAbout.value || showOnboardingDialog.value,
+  () =>
+    showBootOverlay.value ||
+    showAbout.value ||
+    showOnboardingDialog.value ||
+    activeBlockingAnomaly.value !== null,
 )
 const shortLandscapeSplit = computed(() =>
   shouldSplitShortLandscape(
@@ -453,6 +465,48 @@ function openHelp(trigger: HTMLElement): void {
   showAbout.value = false
   showOnboarding.value = true
 }
+
+// 异常切换时复位下载状态；同会话内同 key 已被 dismiss 的异常不会再到这里
+watch(activeBlockingAnomaly, () => {
+  bugReportDownloaded.value = false
+})
+
+function handleBugReportDismiss(): void {
+  if (activeBlockingAnomaly.value !== null) anomalyCenter.dismiss(activeBlockingAnomaly.value)
+}
+
+function handleBugReportPrimaryAction(): void {
+  const anomaly = activeBlockingAnomaly.value
+  if (anomaly === null) return
+  if (anomaly.kind === 'guide-ahead-of-evidence') {
+    // 重置本关 = 引导进度（resetLevel）+ 终端环境（vm.resetCurrentLevel）一起回到
+    // 本关起点；证据清空后 A 不再成立，先 resolve 关掉弹窗。
+    anomalyCenter.resolve(anomaly)
+    handleResetLevel()
+    return
+  }
+  // E1/E2：先 resolve 再重启；若重启后问题仍在，新的 ready 会重新上报并再次弹窗
+  anomalyCenter.resolve(anomaly)
+  void vm.restart()
+}
+
+function handleBugReportSecondaryAction(): void {
+  const anomaly = activeBlockingAnomaly.value
+  if (anomaly === null || anomaly.kind !== 'guide-ahead-of-evidence') return
+  // 切到挑战模式后 A 不再成立，useLabProgress 的 watch 会 reconcile 撤销 pending
+  handleChangeMode('challenge')
+}
+
+async function handleBugReportDownload(): Promise<void> {
+  const anomaly = activeBlockingAnomaly.value
+  if (anomaly === null) return
+  const ok = await downloadBugReport(anomaly, {
+    currentLevel: progress.state.currentLevel,
+    mode: preferences.state.mode,
+    completedLevels: progress.state.completedLevels,
+  })
+  if (ok) bugReportDownloaded.value = true
+}
 </script>
 
 <template>
@@ -664,6 +718,17 @@ function openHelp(trigger: HTMLElement): void {
         @select-mode="handleChangeMode"
         @run-demo="handleRunDemo"
         @complete="handleCompleteOnboarding"
+      />
+    </Transition>
+    <Transition name="overlay-fade">
+      <BugReportDialog
+        v-if="activeBlockingAnomaly !== null"
+        :anomaly="activeBlockingAnomaly"
+        :downloaded="bugReportDownloaded"
+        @primary-action="handleBugReportPrimaryAction"
+        @secondary-action="handleBugReportSecondaryAction"
+        @download="handleBugReportDownload"
+        @dismiss="handleBugReportDismiss"
       />
     </Transition>
   </div>

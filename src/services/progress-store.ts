@@ -11,6 +11,8 @@ export interface StorageLike {
   getItem(key: string): string | null
   setItem(key: string, value: string): void
   removeItem(key: string): void
+  /** 持久化是否已降级（配额/权限失败回退内存，或本就是内存实现）；问题日志用 */
+  isDegraded?(): boolean
 }
 
 /** 内存兜底存储：localStorage 不可用时使用，保证进度层不抛错、不白屏 */
@@ -24,6 +26,10 @@ class MemoryStorage implements StorageLike {
   }
   removeItem(key: string): void {
     this.store.delete(key)
+  }
+  /** 内存实现本身就是降级形态 */
+  isDegraded(): boolean {
+    return true
   }
 }
 
@@ -70,7 +76,15 @@ class ResilientStorage implements StorageLike {
       // 主存储不可用时，内存副本仍保持正确状态。
     }
   }
+
+  /** 主存储已失败、正在用内存副本支撑本会话 */
+  isDegraded(): boolean {
+    return !this.primaryAvailable
+  }
 }
+
+/** 本模块创建过的全部存储实例（进度档与界面偏好各一个），用于降级观测 */
+const trackedStorages = new Set<StorageLike>()
 
 /**
  * 返回可用的持久化存储：优先 window.localStorage；若访问或写入被浏览器拒绝
@@ -85,10 +99,23 @@ export function createSafeStorage(): StorageLike {
     const probe = '__hashteam_probe__'
     storage.setItem(probe, '1')
     storage.removeItem(probe)
-    return new ResilientStorage(storage)
+    const resilient = new ResilientStorage(storage)
+    trackedStorages.add(resilient)
+    return resilient
   } catch {
-    return new MemoryStorage()
+    // 探针失败即降级形态，纳入跟踪
+    const memory = new MemoryStorage()
+    trackedStorages.add(memory)
+    return memory
   }
+}
+
+/** 任一已创建的存储实例曾发生降级（刷新后进度静默回滚的成因，随问题日志上报） */
+export function isStorageDegraded(): boolean {
+  for (const storage of trackedStorages) {
+    if (storage.isDegraded?.() === true) return true
+  }
+  return false
 }
 
 export function createDefaultProgress(now: number = Date.now()): LabProgress {

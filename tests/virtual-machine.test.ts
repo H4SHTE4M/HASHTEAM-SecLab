@@ -3,6 +3,7 @@ import { createHmac, webcrypto } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createVirtualMachine } from '../src/composables/useVirtualMachine'
 import { useLabProgress } from '../src/composables/useLabProgress'
+import { useAnomalyCenter } from '../src/services/anomaly-center'
 import { getLevel } from '../src/data/levels'
 import type { BootStage, VirtualMachineController } from '../src/types/lab'
 
@@ -460,6 +461,203 @@ describe('评分协议防伪与解锁门控', () => {
     controllers[1].emit(passedLine(1, nextKey))
     await vm.waitForProtocolIdle()
     expect(progress.state.completedLevels).toContain(1)
+    await vm.dispose()
+  })
+})
+
+describe('阻断异常上报（ready 分支）', () => {
+  const center = useAnomalyCenter()
+
+  function createTrackedVm(): { vm: ReturnType<typeof createVirtualMachine>; controllers: FakeController[] } {
+    const controllers: FakeController[] = []
+    const vm = createVirtualMachine({
+      getMode: () => 'challenge',
+      createController: (onStageChange) => {
+        const controller = new FakeController(onStageChange)
+        controllers.push(controller)
+        return controller
+      },
+    })
+    return { vm, controllers }
+  }
+
+  beforeEach(() => {
+    // resolve 幂等且同时清除 dismiss 记录：把单例中枢恢复到干净状态
+    ;[...center.detected.value].forEach((anomaly) => center.resolve(anomaly))
+    center.resolve({ kind: 'missing-session-key', keyPresent: false })
+    center.resolve({ kind: 'missing-session-key', keyPresent: true })
+    center.resolve({ kind: 'crypto-unavailable', isSecureContext: true })
+    center.resolve({ kind: 'crypto-unavailable', isSecureContext: false })
+  })
+
+  it('ready 未携带密钥（subtle 可用）上报 missing-session-key', async () => {
+    const { vm, controllers } = createTrackedVm()
+    await vm.boot()
+    controllers[0].emit(readyLine(null))
+    await vm.waitForProtocolIdle()
+
+    expect(center.detected.value).toContainEqual({ kind: 'missing-session-key', keyPresent: false })
+    await vm.dispose()
+  })
+
+  it('ready 携带无法导入的密钥上报 missing-session-key（keyPresent）', async () => {
+    const { vm, controllers } = createTrackedVm()
+    await vm.boot()
+    // 12 字节密钥：base64 恰好 16 字符能通过解析器（SESSION_KEY_PATTERN 下限），
+    // 但不足 16 字节，importSessionKey 返回 null
+    controllers[0].emit(readyLine(Buffer.alloc(12, 3).toString('base64')))
+    await vm.waitForProtocolIdle()
+
+    expect(center.detected.value).toContainEqual({ kind: 'missing-session-key', keyPresent: true })
+    await vm.dispose()
+  })
+
+  it('crypto.subtle 缺失上报 crypto-unavailable 且不重复上报 missing-session-key', async () => {
+    vi.stubGlobal('crypto', undefined)
+    try {
+      const { vm, controllers } = createTrackedVm()
+      await vm.boot()
+      controllers[0].emit(readyLine())
+      await vm.waitForProtocolIdle()
+
+      expect(center.detected.value).toContainEqual({
+        kind: 'crypto-unavailable',
+        isSecureContext: window.isSecureContext,
+      })
+      expect(
+        center.detected.value.filter((anomaly) => anomaly.kind === 'missing-session-key'),
+      ).toEqual([])
+      await vm.dispose()
+    } finally {
+      vi.stubGlobal('crypto', webcrypto)
+    }
+  })
+
+  it('正常 ready（密钥可用）不上报任何阻断异常', async () => {
+    const { vm, controllers } = createTrackedVm()
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+
+    expect(center.detected.value).toEqual([])
+    await vm.dispose()
+  })
+})
+
+describe('restart 生命周期', () => {
+  const center = useAnomalyCenter()
+
+  function createTrackedVm(): { vm: ReturnType<typeof createVirtualMachine>; controllers: FakeController[] } {
+    const controllers: FakeController[] = []
+    const vm = createVirtualMachine({
+      getMode: () => 'challenge',
+      createController: (onStageChange) => {
+        const controller = new FakeController(onStageChange)
+        controllers.push(controller)
+        return controller
+      },
+    })
+    return { vm, controllers }
+  }
+
+  beforeEach(() => {
+    ;[...center.detected.value].forEach((anomaly) => center.resolve(anomaly))
+    center.resolve({ kind: 'missing-session-key', keyPresent: false })
+    center.resolve({ kind: 'missing-session-key', keyPresent: true })
+    center.resolve({ kind: 'crypto-unavailable', isSecureContext: true })
+    center.resolve({ kind: 'crypto-unavailable', isSecureContext: false })
+  })
+
+  it('E1 修复闭环：无密钥会话 restart 后判题恢复', async () => {
+    const { vm, controllers } = createTrackedVm()
+    const progress = useLabProgress()
+
+    await vm.boot()
+    controllers[0].emit(readyLine(null))
+    await vm.waitForProtocolIdle()
+    expect(vm.stage.value).toBe('ready')
+    expect(center.detected.value).toContainEqual({ kind: 'missing-session-key', keyPresent: false })
+
+    await vm.restart()
+    expect(controllers).toHaveLength(2)
+    expect(controllers[0].stopCount).toBe(1)
+
+    // readySeen/sessionKey 已重置：新 ready 被接受，带密钥的验签恢复
+    controllers[1].emit(readyLine())
+    await vm.waitForProtocolIdle()
+    expect(vm.stage.value).toBe('ready')
+    controllers[1].emit(passedLine(1))
+    await vm.waitForProtocolIdle()
+    expect(progress.state.completedLevels).toContain(1)
+    await vm.dispose()
+  })
+
+  it('restart 期间并发 boot() 收敛为单会话', async () => {
+    const { vm, controllers } = createTrackedVm()
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+
+    const restartPromise = vm.restart()
+    const concurrentBoot = vm.boot()
+    await Promise.all([restartPromise, concurrentBoot])
+
+    // 并发窗口内可能短暂创建两个控制器，但最终只有最后一个存活
+    expect(controllers.length).toBeGreaterThanOrEqual(2)
+    const live = controllers[controllers.length - 1]
+    expect(live.stopCount).toBe(0)
+    expect(controllers.slice(0, -1).every((controller) => controller.stopCount >= 1)).toBe(true)
+
+    live.emit(readyLine())
+    await vm.waitForProtocolIdle()
+    expect(vm.stage.value).toBe('ready')
+    await vm.dispose()
+  })
+
+  it('dispose 中断在途 restart，不复活虚拟机', async () => {
+    const { vm, controllers } = createTrackedVm()
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+
+    const restartPromise = vm.restart()
+    await vm.dispose()
+    await restartPromise
+
+    expect(controllers).toHaveLength(1)
+    expect(vm.stage.value).toBe('idle')
+  })
+
+  it('restart 撞上在途旧 boot（未就绪）也能收敛为新会话', async () => {
+    const controllers: FakeController[] = []
+    const vm = createVirtualMachine({
+      readyTimeoutMs: 50,
+      getMode: () => 'challenge',
+      createController: (onStageChange) => {
+        const controller = new FakeController(onStageChange)
+        if (controllers.length === 0) {
+          // 首个控制器 start 悬挂：模拟 restart 发起时旧 boot 仍在途
+          controller.start = vi.fn(() => new Promise<void>(() => undefined))
+        }
+        controllers.push(controller)
+        return controller
+      },
+    })
+
+    const staleBoot = vm.boot()
+    const restartPromise = vm.restart()
+    await restartPromise
+
+    expect(controllers).toHaveLength(2)
+    controllers[1].emit(readyLine())
+    await vm.waitForProtocolIdle()
+    expect(vm.stage.value).toBe('ready')
+
+    // 旧 boot 超时代际失效后静默收尾，不污染新会话
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await staleBoot
+    expect(vm.stage.value).toBe('ready')
+    expect(controllers[0].stopCount).toBe(1)
     await vm.dispose()
   })
 })
