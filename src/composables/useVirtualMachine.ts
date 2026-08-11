@@ -11,6 +11,7 @@ import { useSerialProtocol } from './useSerialProtocol'
 import type { SerialProtocol } from './useSerialProtocol'
 import { useLabProgress } from './useLabProgress'
 import { useLabPreferences } from './useLabPreferences'
+import { useAnomalyCenter } from '../services/anomaly-center'
 import { getLevel, TOTAL_LEVELS } from '../data/levels'
 import { log, clear as clearBootLog } from '../services/boot-logger'
 
@@ -40,6 +41,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
   const errorMessage = ref<string | null>(null)
   const displayCallbacks = new Set<(data: string) => void>()
   const progress = useLabProgress()
+  const anomalyCenter = useAnomalyCenter()
   const getMode =
     options.getMode ??
     (() => useLabPreferences().state.mode ?? 'guided')
@@ -58,6 +60,9 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
   let sessionKey: CryptoKey | null = null
   /** 首个 ready 一到即钉住（即使密钥缺失/非法，后续 ready 也不得补换密钥） */
   let readySeen = false
+  /** dispose 代际：dispose 不禁止显式重 boot（注释承诺过），但能让在途的
+   *  boot/restart continuation 发现代际已变、放弃复活虚拟机。 */
+  let disposeGeneration = 0
   /** 协议消息按到达顺序串行处理（验签是异步的） */
   let messageChain: Promise<void> = Promise.resolve()
 
@@ -125,14 +130,32 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
           break
         }
         readySeen = true
+        // 阻断类异常上报：先按 crypto.subtle 可用性分流——
+        // 不可用时验签在原理上就不可能（E2），重启环境也救不了；
+        // 可用但密钥缺失/导入失败才是可通过重启修复的 E1。
+        // 注意必须走 globalThis：可选链护不住未声明的 crypto 标识符（如 jsdom）。
+        const subtleUnavailable = globalThis.crypto?.subtle === undefined
+        if (subtleUnavailable) {
+          anomalyCenter.report({
+            kind: 'crypto-unavailable',
+            isSecureContext: window.isSecureContext,
+          })
+        }
         if (message.key === undefined) {
           log('protocol', 'ready 未携带会话密钥，本次启动的评分结果将被拒绝', 'warn')
+          if (!subtleUnavailable) {
+            anomalyCenter.report({ kind: 'missing-session-key', keyPresent: false })
+          }
         } else {
           const importedKey = await importSessionKey(message.key)
           if (messageGeneration !== generation) return
           sessionKey = importedKey
           if (importedKey === null) {
             log('protocol', '会话密钥导入失败，本次启动的评分结果将被拒绝', 'warn')
+            // subtle 缺失导致的导入失败已按 crypto-unavailable 上报，不重复
+            if (!subtleUnavailable) {
+              anomalyCenter.report({ kind: 'missing-session-key', keyPresent: true })
+            }
           }
         }
         clearReadyTimer()
@@ -220,7 +243,10 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
   }
 
   async function bootInternal(): Promise<void> {
+    const seenDisposeGeneration = disposeGeneration
     if (controller !== null) await releaseCurrentVm()
+    // 释放期间页面被 dispose：放弃本次启动，不重建控制器
+    if (disposeGeneration !== seenDisposeGeneration) return
 
     errorMessage.value = null
     clearBootLog()
@@ -342,6 +368,22 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     sendSerial(`${command}\n`)
   }
 
+  /**
+   * 无条件重启当前会话（阻断异常弹窗的修复动作）。
+   * boot() 在 ready 等非 error 状态下幂等返回，修不了「判题密钥缺失」；
+   * 这里先释放当前会话（重置 sessionKey/readySeen、代际失效），再走 boot()
+   * 的幂等协调入口——restart 期间的并发 boot() 共享同一个 Promise。
+   */
+  async function restart(): Promise<void> {
+    const seenDisposeGeneration = disposeGeneration
+    await releaseCurrentVm()
+    // 使在途旧 boot 的延迟 settle 不阻塞新代际；旧 finally 有 bootPromise===task
+    // 身份检查，不会误清这里即将触发的新 Promise。
+    bootPromise = null
+    if (disposeGeneration !== seenDisposeGeneration) return
+    await boot()
+  }
+
   /** 等待当前会话已接收的协议消息处理完毕；用于生命周期收口与确定性测试。 */
   async function waitForProtocolIdle(): Promise<void> {
     await messageChain
@@ -349,6 +391,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
 
   /** 页面卸载或显式销毁时停止 VM，并解除全部外部监听。 */
   async function dispose(): Promise<void> {
+    disposeGeneration += 1
     // 丢弃进行中的 boot 任务引用：dispose 之后必须能重新 boot（原实现在此泄漏 bootPromise）
     bootPromise = null
     await releaseCurrentVm()
@@ -361,6 +404,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     stage,
     errorMessage,
     boot,
+    restart,
     dispose,
     onDisplay,
     sendSerial,

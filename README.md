@@ -242,14 +242,15 @@ bash scripts/verify-build.sh
 生产 artifact 不再携带 `sources/`。许可证和源码获取说明见
 [第三方声明](THIRD_PARTY_NOTICES.md) 与 [对应源码说明](SOURCE_CODE.md)。
 
-推送到受保护的 `main` 后，GitHub Actions 会在无生产凭据的 `verify` job
-完成全部门禁与发布包 SHA-256 固化；同一个约 8 MiB 的确定性 artifact 随后并行
-进入 `production` Environment 的 Nginx 原子发布和 EdgeOne Makers Production
-发布。Nginx 主站使用无 sudo 的专用 SSH 账号、独立 release、共享内容寻址 VM 资源、
-原子软链接切换和失败自动回滚，验收地址是
-`https://labtest.lwzheng.tech`；EO 固定部署到 `seclabtest`
-（`makers-iehfqellwnxf`），并通过 `https://lab.lwzheng.tech` 验收。
-PR（包括 fork PR）不会运行部署 job，也不会获得生产 Secret。
+GitHub Actions 的 `verify` job 在无凭据环境完成全部门禁与发布包 SHA-256 固化，
+产物是约 8 MiB 的确定性 artifact。部署分两个环境：同仓库 PR 通过 verify 后，
+`staging` Environment 把该 artifact 原子发布到腾讯云 Nginx
+`https://labtest.lwzheng.tech`（实验性部署，供合并前验收；无 sudo 专用 SSH
+账号、独立 release、共享内容寻址 VM 资源、原子软链接切换、失败自动回滚）；
+合并进受保护的 `main` 后，`production` Environment 只把 artifact 发布到
+EdgeOne Makers `seclabtest`（`makers-iehfqellwnxf`）生产环境，并通过
+`https://lab.lwzheng.tech` 验收。fork PR 不会运行部署 job，也不会获得任何
+部署 Secret。
 
 受版本控制的日常原子发布逻辑位于 `scripts/deploy-release.sh`；服务器账号初始化、
 GitHub Environment、密钥轮换和故障恢复见
@@ -310,6 +311,18 @@ GitHub Environment、密钥轮换和故障恢复见
    安全开发小练习（修复一个有 bug 的脚本）。
 5. **资源优化**：Brotli 预压缩静态资源、Service Worker 离线缓存。
 6. **无障碍与移动端**：终端缩放、虚拟键盘适配。
+
+## 15. 问题反馈
+
+页面检测到**阻断类异常**（进度档自相矛盾、判题会话密钥缺失、浏览器不支持验签）时
+会弹出引导窗，按提示操作即可：
+
+1. 优先点主修复按钮（切换模式 / 重启实验环境），多数情况一次就好。
+2. 仍有问题：点「下载问题日志」得到一个 `.json` 现场文件（构建版本、页面环境、
+   进度档原文、启动日志；不自动上报任何内容），把它发到 **SDUCTF 新手村 QQ 群**，
+   并附一张终端最后几行的截图，开发者会跟进分析。
+
+注意：启动日志里可能包含你的终端回显内容，日志文件请只发给开发者，不要公开粘贴。
 
 ---
 

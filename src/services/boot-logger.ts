@@ -70,10 +70,15 @@ export function subscribe(listener: Listener): () => void {
   }
 }
 
+/** 当前缓冲的一次性快照（问题日志导出用，不影响订阅者） */
+export function snapshot(): BootLogEntry[] {
+  return entries.slice()
+}
+
 /** 清空日志（重试时调用） */
 export function clear(): void {
   entries.length = 0
   emit()
 }
 
-export const bootLogger = { log, subscribe, clear }
+export const bootLogger = { log, subscribe, clear, snapshot }
