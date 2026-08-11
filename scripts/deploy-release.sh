@@ -251,14 +251,16 @@ echo "==> [3/6] 同步共享 VM 资产组 ${VM_HASH}"
 # Shared content-addressed files may have been created by an earlier manual
 # deployment account. Copy content and structure without attempting to set
 # arbitrary historical mtimes, which Linux reserves for the file owner.
-rsync -rlz --checksum \
+echo "    资产体积 $(du -sh ./dist/vm-assets | cut -f1)；--checksum 去重后只传差异"
+rsync -rlzh --checksum --info=progress2,name \
   ./dist/vm-assets/ \
   "${HOST}:${REMOTE_PATH}/vm-assets/"
 assert_deploy_lock_heartbeat
 
 echo "==> [4/6] 上传 release ${RELEASE_ID}"
 ssh "$HOST" mkdir -p "${REMOTE_PATH}/releases/${RELEASE_ID}.upload"
-rsync -az --delete \
+echo "    发布包体积 $(du -sh --exclude=vm-assets ./dist | cut -f1)；慢链路可能需数十分钟，以下为整体进度"
+rsync -azh --delete --info=progress2,name \
   --exclude='vm-assets/' \
   --exclude='.DS_Store' \
   --exclude='*.log' \
