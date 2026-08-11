@@ -1,3 +1,5 @@
+# 名称保持「CI and production deploy」：GitHub 分支保护的 required status check
+# 以「workflow 名 / job 名」登记，改名会导致保护规则失配、阻塞合并。
 name: CI and production deploy
 
 on:
@@ -14,7 +16,8 @@ permissions:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  # PR 验证可以被新提交取代；main 的生产发布不得在中途被取消。
+  # PR 验证（含腾讯云实验性部署）可以被新提交取代；main 的 EdgeOne 生产发布
+  # 不得在中途被取消。
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -48,13 +51,18 @@ jobs:
       - name: Run complete release verification
         run: bash scripts/verify-build.sh
 
-      - name: Package verified production release
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+      # 生产发布（main push / dispatch）与同仓库 PR 的实验性部署共用同一只
+      # 打包/校验路径；fork PR 不打包、不部署（也拿不到任何 Secret）。
+      - name: Package verified release
+        if: >-
+          (github.event_name != 'pull_request' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'pull_request' &&
+           github.event.pull_request.head.repo.full_name == github.repository)
         id: package_release
         shell: bash
         run: |
           set -euo pipefail
-          release_archive="$RUNNER_TEMP/hashteam-production-release.tar"
+          release_archive="$RUNNER_TEMP/hashteam-release.tar"
           tar \
             --sort=name \
             --mtime='@0' \
@@ -69,19 +77,27 @@ jobs:
           [[ "$release_sha256" =~ ^[a-f0-9]{64}$ ]]
           printf 'release_sha256=%s\n' "$release_sha256" >> "$GITHUB_OUTPUT"
 
-      - name: Upload verified production release
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+      - name: Upload verified release
+        if: >-
+          (github.event_name != 'pull_request' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'pull_request' &&
+           github.event.pull_request.head.repo.full_name == github.repository)
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: production-release-${{ github.sha }}
-          path: ${{ runner.temp }}/hashteam-production-release.tar
+          name: verified-release-${{ github.sha }}
+          path: ${{ runner.temp }}/hashteam-release.tar
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
           include-hidden-files: false
 
-  deploy:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+  # 实验性部署：腾讯云 Nginx（labtest.lwzheng.tech）。
+  # 只在「同仓库 PR 且 verify 通过」时运行；fork PR 永不进入本 job，
+  # 也就接触不到 staging Environment 里的 SSH 凭据。
+  deploy_staging:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     needs:
       - verify
     runs-on: ubuntu-latest
@@ -89,10 +105,10 @@ jobs:
     permissions:
       contents: read
     environment:
-      name: production
+      name: staging
       url: ${{ vars.DEPLOY_URL }}
     concurrency:
-      group: hashteam-production
+      group: hashteam-staging
       cancel-in-progress: false
 
     steps:
@@ -101,19 +117,19 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Download verified production release
+      - name: Download verified release
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: production-release-${{ github.sha }}
-          path: ${{ runner.temp }}/production-release
+          name: verified-release-${{ github.sha }}
+          path: ${{ runner.temp }}/verified-release
 
-      - name: Verify and extract production release
+      - name: Verify and extract release
         shell: bash
         env:
           EXPECTED_RELEASE_SHA256: ${{ needs.verify.outputs.release_sha256 }}
         run: |
           set -euo pipefail
-          release_archive="$RUNNER_TEMP/production-release/hashteam-production-release.tar"
+          release_archive="$RUNNER_TEMP/verified-release/hashteam-release.tar"
           bash scripts/verify-release-archive.sh \
             "$release_archive" \
             "$EXPECTED_RELEASE_SHA256" \
@@ -126,7 +142,7 @@ jobs:
 
       # 此步骤之后不再运行任何第三方 Action。私钥只存在于本步骤环境和
       # runner 临时文件中，并在步骤退出时由 trap 删除。
-      - name: Deploy atomically and verify production
+      - name: Deploy atomically and verify staging
         shell: bash
         env:
           DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
@@ -140,7 +156,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          : "${DEPLOY_SSH_PRIVATE_KEY:?missing production SSH private key}"
+          : "${DEPLOY_SSH_PRIVATE_KEY:?missing staging SSH private key}"
           : "${DEPLOY_SSH_KNOWN_HOSTS:?missing pinned SSH host key}"
           : "${DEPLOY_KEY_FINGERPRINT:?missing deployment key fingerprint}"
           : "${DEPLOY_HOSTNAME:?missing deployment hostname}"
@@ -157,8 +173,8 @@ jobs:
           [[ "$DEPLOY_KEY_FINGERPRINT" =~ ^SHA256:[A-Za-z0-9+/]+$ ]]
 
           ssh_dir="$HOME/.ssh"
-          private_key_file="$ssh_dir/hashteam-production"
-          known_hosts_file="$ssh_dir/hashteam-production-known-hosts"
+          private_key_file="$ssh_dir/hashteam-staging"
+          known_hosts_file="$ssh_dir/hashteam-staging-known-hosts"
           ssh_config_file="$ssh_dir/config"
 
           cleanup_deploy_credentials() {
@@ -190,7 +206,7 @@ jobs:
             >/dev/null
 
           cat > "$ssh_config_file" <<SSH_CONFIG
-          Host hashteam-production
+          Host hashteam-staging
               HostName $DEPLOY_HOSTNAME
               Port $DEPLOY_PORT
               User $DEPLOY_USER
@@ -208,13 +224,14 @@ jobs:
 
           unset DEPLOY_SSH_PRIVATE_KEY DEPLOY_SSH_KNOWN_HOSTS
 
-          DEPLOY_HOST=hashteam-production \
+          DEPLOY_HOST=hashteam-staging \
           DEPLOY_EXPECTED_USER="$DEPLOY_USER" \
           DEPLOY_PATH="$DEPLOY_PATH" \
           DEPLOY_URL="$DEPLOY_URL" \
             timeout --signal=TERM --kill-after=90s 42m \
               bash scripts/deploy-release.sh
 
+  # 生产部署：EdgeOne（lab.lwzheng.tech）。只在 main push / dispatch 运行。
   deploy_edgeone:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs:
@@ -248,19 +265,19 @@ jobs:
       - name: Install locked deployment CLI
         run: pnpm install --frozen-lockfile
 
-      - name: Download verified production release
+      - name: Download verified release
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: production-release-${{ github.sha }}
-          path: ${{ runner.temp }}/production-release
+          name: verified-release-${{ github.sha }}
+          path: ${{ runner.temp }}/verified-release
 
-      - name: Verify and extract production release
+      - name: Verify and extract release
         shell: bash
         env:
           EXPECTED_RELEASE_SHA256: ${{ needs.verify.outputs.release_sha256 }}
         run: |
           set -euo pipefail
-          release_archive="$RUNNER_TEMP/production-release/hashteam-production-release.tar"
+          release_archive="$RUNNER_TEMP/verified-release/hashteam-release.tar"
           bash scripts/verify-release-archive.sh \
             "$release_archive" \
             "$EXPECTED_RELEASE_SHA256" \
@@ -286,7 +303,7 @@ jobs:
             unset EDGEONE_API_TOKEN EDGEONE_PAGES_API_TOKEN
             if [[ "$status" -ne 0 && "$edgeone_phase" == "deploy" ]]; then
               echo "ERROR: EdgeOne Production 发布失败。" >&2
-              echo "恢复：在 Makers 控制台手工重部署 seclabtest 的上一成功 Production 版本；Nginx 主站未受影响。" >&2
+              echo "恢复：在 Makers 控制台手工重部署 seclabtest 的上一成功 Production 版本。" >&2
             fi
             exit "$status"
           }

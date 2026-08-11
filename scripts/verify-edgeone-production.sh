@@ -36,7 +36,7 @@ cleanup_and_report() {
   if [[ "$status" -ne 0 ]]; then
     echo "ERROR: EdgeOne Production 发布或验收失败。" >&2
     echo "恢复：打开 EdgeOne Makers 控制台，在 seclabtest 项目的 Production 部署记录中手工重部署上一成功版本。" >&2
-    echo "现有 Nginx 主站未由此 job 修改，可继续作为过渡期入口。" >&2
+    echo "已成功的上一 EdgeOne Production 版本不受影响，生产站点继续由它承载。" >&2
   fi
   exit "$status"
 }
