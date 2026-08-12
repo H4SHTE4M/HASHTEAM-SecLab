@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HASHTEAM SecLab 遥测看板</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./dashboard.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <span class="brand">HASHTEAM SecLab <span class="brand-sub">遥测看板</span></span>
+      <nav class="tabs">
+        <a class="tab active" href="./index.html">数据看板</a>
+        <a class="tab" href="./admin.html">管理</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="status-banner" class="banner hidden"></div>
+
+    <section class="cards" id="overview-cards"></section>
+
+    <section class="panel">
+      <h2>命令排行榜</h2>
+      <div id="command-leaderboard"></div>
+    </section>
+
+    <section class="panel">
+      <h2>关卡通关榜</h2>
+      <div id="level-leaderboard"></div>
+    </section>
+
+    <div class="grid-2">
+      <section class="panel">
+        <h2>提示使用榜</h2>
+        <div id="hint-leaderboard"></div>
+      </section>
+      <section class="panel">
+        <h2>重置榜</h2>
+        <div id="reset-leaderboard"></div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <span id="updated-at">数据加载中…</span>
+    <span>每 30 秒自动刷新</span>
+  </footer>
+</body>
+</html>

@@ -177,6 +177,50 @@ find() { command find "$@"; local rc=$?; _ht_telemetry_emit find; return $rc; }
 - 请求超时 4 秒后放弃
 - telemetry exception 不传播到业务逻辑（所有 `track*` 方法无返回值、不抛错）
 
+## Dashboard 看板（公开数据页与管理页）
+
+后端内置两个浏览器直连页面（零依赖静态文件，由 `backend/server.js` 以白名单路由提供，目录 `backend/public/`）：
+
+| 页面 | URL（经 nginx 反代） | 认证 |
+|------|----------------------|------|
+| 数据看板 | `/telemetry-backend/dashboard/` | 无（公开） |
+| 管理页 | `/telemetry-backend/dashboard/admin.html` | 密码登录 |
+
+### 数据看板（公开）
+
+- 命令排行榜（各命令执行次数与占比）、总览卡片、关卡通关榜（含 guided/mixed/challenge 细分）、提示与重置榜
+- 数据源：`GET /api/public/stats`（与 EdgeOne stats 相同的聚合数据，无需 HMAC）
+- 公开接口已聚合、不含任何 session 级数据；限流 30 次/分钟/IP
+
+### 管理页（需登录）
+
+详细数据（`GET /api/admin/overview`，需管理 cookie）：
+
+- 服务状态：运行时长、启动时间、Node 版本、数据库大小
+- 完整聚合表、关卡 × 通关路径矩阵、提示/重置明细
+- 最近 50 个匿名 session（仅 SHA-256 哈希前 8 位、创建/过期时间、事件数、seq）
+- 通关记录总数与独立通关会话数
+
+### 管理认证设计
+
+- 单管理员密码，服务端只存 scrypt 哈希（`scrypt:N:r:p:salt:hash`，N=16384）
+- `deploy.sh` 首次部署生成 20 位随机密码并**只在部署会话打印一次**；轮换用 `sudo bash /opt/hashteam-telemetry/set-admin-password.sh [新密码]`
+- 登录（`POST /api/admin/login`）成功后下发 32 字节随机 token 的 cookie：`HttpOnly; Secure; SameSite=Strict; Path=/telemetry-backend/api/admin`，12 小时固定过期（不滑动）
+- 后端只存 token 的 SHA-256 哈希（`admin_sessions` 表），与匿名 session 同一清理周期
+- 登录限流：5 次/5 分钟/IP + 30 次/5 分钟全局；overview 60 次/分钟/IP
+- 会话固定 12h 过期 + SameSite=Strict + 仅 JSON API（无表单提交，CSP `form-action 'none'`），CSRF 面最小
+
+### Dashboard 环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `TELEMETRY_ADMIN_PASSWORD_HASH` | （空） | 管理密码 scrypt 哈希；为空时登录返回 503，公开页不受影响 |
+| `TELEMETRY_PUBLIC_PREFIX` | `/telemetry-backend` | nginx 反代前缀，用于 `/dashboard` 尾斜杠 302 的 Location |
+| `TELEMETRY_COOKIE_PATH` | `/telemetry-backend/api/admin` | 管理 cookie 的 Path；前缀变更时同步调整 |
+| `TELEMETRY_DASHBOARD_DIR` | `<backend>/public` | 静态资源目录（启动时加载进内存） |
+
+修改 nginx 反代前缀时，以上三个变量需同步修改并重启服务。
+
 ## EdgeOne 配置
 
 ### 环境变量（在 EdgeOne Makers 控制台配置）
@@ -273,6 +317,9 @@ ssh cn-tencent sudo cat /etc/hashteam-telemetry/env
 | 刷量                  | session 事件预算（500）+ batch 上限（50）+ 队列上限（200）+ EdgeOne rate limit |
 | 绕过 Edge Function    | 后端验证 HMAC 签名（共享密钥），无签名请求被拒绝 |
 | session 劫持          | token 只存 SHA-256 hash，30 分钟过期           |
+| 管理密码爆破          | scrypt + 登录限流（5 次/5 分钟/IP + 全局限流） |
+| 管理 cookie 窃取/滥用 | HttpOnly + Secure + SameSite=Strict + Path 限定，12 小时过期，服务端只存哈希 |
+| 公开看板刷量          | `/api/public/stats` 限流 30 次/分钟/IP，且只读聚合数据 |
 | 用户画像 / 追踪       | 不收集 IP（不持久化）、账号、Cookie、指纹       |
 
 ### 仍然存在的攻击边界
