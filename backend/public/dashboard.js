@@ -16,6 +16,7 @@ const els = {
   hints: document.getElementById('hint-leaderboard'),
   resets: document.getElementById('reset-leaderboard'),
   updatedAt: document.getElementById('updated-at'),
+  timeseriesChart: document.getElementById('timeseries-chart'),
 }
 
 function fmtNum(n) {
@@ -151,6 +152,82 @@ function renderCards(modules) {
     card.append(labelEl, valueEl, subEl)
     els.cards.appendChild(card)
   }
+
+/**
+ * 渲染近 30 天活动趋势堆叠柱状图。
+ * data.timeseries: [{ day, session_create, command, level_complete, hint, reset }]
+ */
+function renderTimeseries(timeseries) {
+  const container = els.timeseriesChart
+  if (!container) return
+  container.textContent = ''
+
+  if (!Array.isArray(timeseries) || timeseries.length === 0) {
+    container.textContent = '暂无趋势数据'
+    return
+  }
+
+  const maxTotal = Math.max(1, ...timeseries.map((d) =>
+    d.session_create + d.command + d.level_complete + d.hint + d.reset))
+
+  // 图例
+  const legend = document.createElement('div')
+  legend.className = 'ts-legend'
+  const legendItems = [
+    ['session', '会话'],
+    ['command', '命令'],
+    ['complete', '通关'],
+    ['hint', '提示'],
+    ['reset', '重置'],
+  ]
+  for (const [cls, label] of legendItems) {
+    const item = document.createElement('div')
+    item.className = 'ts-legend-item'
+    const dot = document.createElement('span')
+    dot.className = `ts-legend-dot ts-seg-${cls}`
+    item.append(dot, document.createTextNode(label))
+    legend.appendChild(item)
+  }
+  container.appendChild(legend)
+
+  // 柱状图区域
+  const barsArea = document.createElement('div')
+  barsArea.style.cssText = 'display:flex;align-items:flex-end;gap:2px;height:140px;'
+  container.appendChild(barsArea)
+
+  // 每隔约 7 天显示一个日期标签
+  const labelInterval = Math.ceil(timeseries.length / 5)
+  for (let i = 0; i < timeseries.length; i++) {
+    const d = timeseries[i]
+    const total = d.session_create + d.command + d.level_complete + d.hint + d.reset
+    const col = document.createElement('div')
+    col.className = 'ts-col'
+    col.title = `${new Date(d.day).toLocaleDateString('zh-CN')} 会话${d.session_create} 命令${d.command} 通关${d.level_complete} 提示${d.hint} 重置${d.reset}`
+
+    const segs = [
+      ['session', d.session_create],
+      ['command', d.command],
+      ['complete', d.level_complete],
+      ['hint', d.hint],
+      ['reset', d.reset],
+    ]
+    for (const [cls, val] of segs) {
+      if (val === 0) continue
+      const seg = document.createElement('div')
+      seg.className = `ts-seg ts-seg-${cls}`
+      seg.style.minHeight = `${(val / maxTotal) * 100}%`
+      col.appendChild(seg)
+    }
+
+    if (i % labelInterval === 0 || i === timeseries.length - 1) {
+      const lbl = document.createElement('span')
+      lbl.className = 'ts-col-label'
+      lbl.textContent = new Date(d.day).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
+      col.appendChild(lbl)
+    }
+
+    barsArea.appendChild(col)
+  }
 }
 
 function render(data) {
@@ -158,6 +235,8 @@ function render(data) {
   const seclab = modules.seclab || {}
 
   renderCards(modules)
+
+  renderTimeseries(data.timeseries)
 
   renderBars(els.commands, sortedEntries(seclab.command), null)
 

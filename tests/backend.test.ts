@@ -351,6 +351,65 @@ describe('Telemetry Backend', () => {
       expect(modules['seclab']['complete']['level-2']).toBe(1)
     })
 
+    it('GET /api/public/stats 返回 timeseries 数组且含当天事件计数', async () => {
+      const token = randomToken()
+      await createSession(token)
+      await sendEvents(token, 1, [
+        { type: 'command', command: 'find' },
+        { type: 'command', command: 'grep' },
+        { type: 'level_complete', level: 1, path: 'guided' },
+        { type: 'hint', level: 1 },
+        { type: 'reset', level: 1 },
+      ])
+
+      const result = await httpFetch('/api/public/stats')
+      const body = requireBody(result)
+      const ts = body['timeseries'] as Array<Record<string, number>>
+      expect(Array.isArray(ts)).toBe(true)
+      expect(ts).toHaveLength(30)
+      // 所有元素都应有 day 字段和五个事件类型字段
+      for (const entry of ts) {
+        expect(typeof entry['day']).toBe('number')
+        expect(typeof entry['session_create']).toBe('number')
+        expect(typeof entry['command']).toBe('number')
+        expect(typeof entry['level_complete']).toBe('number')
+        expect(typeof entry['hint']).toBe('number')
+        expect(typeof entry['reset']).toBe('number')
+      }
+      // 最后一天（今天）应包含本次测试产生的所有事件
+      const today = ts[ts.length - 1]
+      expect(today['session_create']).toBe(1)
+      expect(today['command']).toBe(2)
+      expect(today['level_complete']).toBe(1)
+      expect(today['hint']).toBe(1)
+      expect(today['reset']).toBe(1)
+      // 前一天应为全零（测试刚创建，无历史数据）
+      const yesterday = ts[ts.length - 2]
+      expect(yesterday['session_create']).toBe(0)
+      expect(yesterday['command']).toBe(0)
+    })
+
+    it('管理页 overview 返回 timeseries 数组', async () => {
+      const token = randomToken()
+      await createSession(token)
+      await sendEvents(token, 1, [{ type: 'command', command: 'ls' }])
+
+      const login = await httpFetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: ADMIN_PASSWORD }),
+      })
+      const cookiePair = (login.headers.get('set-cookie') || '').split(';')[0]
+      const overview = await httpFetch('/api/admin/overview', { headers: { Cookie: cookiePair } })
+      const body = requireBody(overview)
+      const ts = body['timeseries'] as Array<Record<string, number>>
+      expect(Array.isArray(ts)).toBe(true)
+      expect(ts).toHaveLength(30)
+      const today = ts[ts.length - 1]
+      expect(today['session_create']).toBe(1)
+      expect(today['command']).toBe(1)
+    })
+
     it('GET /api/public/stats?module= 非法 module 返回 400', async () => {
       expect((await httpFetch('/api/public/stats?module=evil-lab')).status).toBe(400)
     })

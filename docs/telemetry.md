@@ -91,6 +91,32 @@ seclab | hint          | level-3              | 67
 seclab | reset         | level-2              | 23
 ```
 
+### 事件明细表（时间序列）
+
+除了聚合 counter，后端还维护一张事件明细表用于按时间统计：
+
+```sql
+event_log(id, module, event_type, dimension, ts)
+```
+
+- `module`：事件所属 module（session 创建事件为空串）
+- `event_type`：`session_create` / `command` / `level_complete` / `hint` / `reset`
+- `dimension`：事件维度（如命令名 `find`、关卡 `level-3`）；session 创建为空串
+- `ts`：事件到达后端的时间戳（ms epoch）
+
+明细表不含 token_hash、IP 或任何身份信息，与聚合表同属匿名统计。保留 90 天，过期后定期删除。
+
+`GET /api/public/stats` 和 `GET /api/admin/overview` 的响应中新增 `timeseries` 字段，返回最近 30 天的按天聚合数据：
+
+```json
+[
+  { "day": 1723334400000, "session_create": 3, "command": 15, "level_complete": 2, "hint": 1, "reset": 0 },
+  ...
+]
+```
+
+每天的结构补零：没有事件的天也会出现，方便前端直接画趋势图。Dashboard 和管理页均渲染"近 30 天活动趋势"堆叠柱状图。
+
 ### 命令 allowlist
 
 VM wrapper 只上报预定义命令（`src/telemetry/schema.ts` 的 `SECLAB_COMMAND_ALLOWLIST`）：
@@ -116,6 +142,7 @@ find grep chmod ls cat cd pwd whoami check help su
 - 每关成功完成次数（含通关路径 guided/mixed/challenge）
 - 提示使用次数
 - 关卡重置次数
+- 事件时间序列（按天聚合的 session 创建数 + 各事件类型计数，保留 90 天明细）
 
 ### 不收集
 
@@ -125,7 +152,6 @@ find grep chmod ls cat cd pwd whoami check help su
 - 账号 / Cookie / 设备指纹
 - 用户轨迹 / 行为回放
 - IP 地址（不持久化）
-- raw event log（只保留聚合 counter）
 
 ## 匿名 session
 
@@ -188,15 +214,16 @@ find() { command find "$@"; local rc=$?; _ht_telemetry_emit find; return $rc; }
 
 ### 数据看板（公开）
 
+- 近 30 天活动趋势堆叠柱状图（会话创建 / 命令 / 通关 / 提示 / 重置，按天）
 - 命令排行榜（各命令执行次数与占比）、总览卡片、关卡通关榜（含 guided/mixed/challenge 细分）、提示与重置榜
-- 数据源：`GET /api/public/stats`（与 EdgeOne stats 相同的聚合数据，无需 HMAC）
+- 数据源：`GET /api/public/stats`（返回聚合数据 + `timeseries` 时间序列，无需 HMAC）
 - 公开接口已聚合、不含任何 session 级数据；限流 30 次/分钟/IP
 
 ### 管理页（需登录）
 
 详细数据（`GET /api/admin/overview`，需管理 cookie）：
 
-- 服务状态：运行时长、启动时间、Node 版本、数据库大小
+- 近 30 天活动趋势堆叠柱状图（会话创建 / 命令 / 通关 / 提示 / 重置，按天）
 - 完整聚合表、关卡 × 通关路径矩阵、提示/重置明细
 - 最近 50 个匿名 session（仅 SHA-256 哈希前 8 位、创建/过期时间、事件数、seq）
 - 通关记录总数与独立通关会话数

@@ -67,6 +67,8 @@ if (!ADMIN_PASSWORD_HASH) {
 const SESSION_TTL_MS = 30 * 60 * 1000
 const MAX_EVENTS_PER_SESSION = 500
 const PROTOCOL_VERSION = 1
+/** 事件明细保留天数（超出后定期删除）。 */
+const EVENT_LOG_RETENTION_DAYS = 90
 
 const MODULES = {
   seclab: {
@@ -119,6 +121,16 @@ db.exec(`
     PRIMARY KEY (module, metric, dimension)
   );
 
+  CREATE TABLE IF NOT EXISTS event_log (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    module     TEXT NOT NULL DEFAULT '',
+    event_type TEXT NOT NULL,
+    dimension  TEXT NOT NULL DEFAULT '',
+    ts         INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_event_log_ts ON event_log(ts);
+  CREATE INDEX IF NOT EXISTS idx_event_log_type ON event_log(event_type);
+
   CREATE TABLE IF NOT EXISTS admin_sessions (
     token_hash TEXT PRIMARY KEY,
     created_at INTEGER NOT NULL,
@@ -161,6 +173,25 @@ const stmtGetAllAggregates = db.prepare(
   'SELECT module, metric, dimension, count FROM aggregates ORDER BY module, metric, dimension',
 )
 
+// ---- 事件明细（时间序列）----
+
+const stmtInsertEventLog = db.prepare(
+  'INSERT INTO event_log (module, event_type, dimension, ts) VALUES (?, ?, ?, ?)',
+)
+// 按天聚合最近 N 天的事件明细：session 创建、命令执行、通关等
+// 返回 day_bucket(epoch ms, 当天 0 点) -> { event_type -> count }
+const stmtTimeseriesDaily = db.prepare(`
+  SELECT
+    (ts - (ts % 86400000)) AS day_bucket,
+    event_type,
+    COUNT(*) AS count
+  FROM event_log
+  WHERE ts >= ?
+  GROUP BY day_bucket, event_type
+  ORDER BY day_bucket ASC, event_type ASC
+`)
+const stmtDeleteOldEventLog = db.prepare('DELETE FROM event_log WHERE ts < ?')
+
 // ---- Dashboard / 管理页查询 ----
 
 const stmtInsertAdminSession = db.prepare(
@@ -201,6 +232,8 @@ function createSession(token) {
   const tokenHash = sha256Hex(token)
   const now = Date.now()
   stmtInsertSession.run(tokenHash, now, now + SESSION_TTL_MS)
+  // 记录 session 创建事件到时间序列（不含 module，全局指标）
+  stmtInsertEventLog.run('', 'session_create', '', now)
   return { session: token, expiresAt: now + SESSION_TTL_MS }
 }
 
@@ -220,6 +253,12 @@ function cleanupExpiredSessions() {
     console.log(
       `[telemetry] 清理 ${result.changes} 个过期 session, ${adminResult.changes} 个过期管理会话`,
     )
+  }
+  // 清理超过保留期的事件明细
+  const eventCutoff = now - EVENT_LOG_RETENTION_DAYS * 86400000
+  const eventResult = stmtDeleteOldEventLog.run(eventCutoff)
+  if (eventResult.changes > 0) {
+    console.log(`[telemetry] 清理 ${eventResult.changes} 条过期事件明细`)
   }
   for (const limiter of Object.values(rateLimiters)) limiter.sweep()
 }
@@ -262,9 +301,11 @@ function validateEvent(mod, event) {
 }
 
 function processEvent(mod, event, tokenHash) {
+  const now = Date.now()
   switch (event.type) {
     case 'command':
       stmtUpsertAggregate.run(mod, 'command', event.command, 1)
+      stmtInsertEventLog.run(mod, 'command', event.command, now)
       return true
     case 'level_complete': {
       // 每 session 每 module 每 level 最多统计一次完成
@@ -273,13 +314,16 @@ function processEvent(mod, event, tokenHash) {
       stmtInsertCompletion.run(tokenHash, mod, event.level)
       stmtUpsertAggregate.run(mod, 'complete', `level-${event.level}`, 1)
       stmtUpsertAggregate.run(mod, 'complete_path', `level-${event.level}:${event.path}`, 1)
+      stmtInsertEventLog.run(mod, 'level_complete', `level-${event.level}`, now)
       return true
     }
     case 'hint':
       stmtUpsertAggregate.run(mod, 'hint', `level-${event.level}`, 1)
+      stmtInsertEventLog.run(mod, 'hint', `level-${event.level}`, now)
       return true
     case 'reset':
       stmtUpsertAggregate.run(mod, 'reset', `level-${event.level}`, 1)
+      stmtInsertEventLog.run(mod, 'reset', `level-${event.level}`, now)
       return true
     default:
       return false
@@ -347,6 +391,44 @@ function getStats(mod) {
     result[m][row.metric][row.dimension || '_total'] = row.count
   }
   return { status: 200, body: result }
+}
+
+/**
+ * 返回最近 N 天的按天时间序列（session 创建数 + 各事件类型计数）。
+ * 补零：没有事件的天也会出现，方便前端直接画趋势图。
+ * 返回格式：[{ day, session_create, command, level_complete, hint, reset }]
+ */
+function getTimeseries(days = 30) {
+  const now = Date.now()
+  const dayMs = 86400000
+  const startOfDay = now - (now % dayMs)
+  const cutoff = startOfDay - (days - 1) * dayMs
+
+  const rows = stmtTimeseriesDaily.all(cutoff)
+
+  // 初始化每天的结构，补零
+  const buckets = new Map()
+  for (let d = 0; d < days; d++) {
+    const day = cutoff + d * dayMs
+    buckets.set(day, {
+      day,
+      session_create: 0,
+      command: 0,
+      level_complete: 0,
+      hint: 0,
+      reset: 0,
+    })
+  }
+
+  // 填入实际数据
+  for (const row of rows) {
+    const entry = buckets.get(row.day_bucket)
+    if (entry && row.event_type in entry) {
+      entry[row.event_type] = row.count
+    }
+  }
+
+  return [...buckets.values()]
 }
 
 // ---- 速率限制（内存滑动窗口，单进程） ----
@@ -474,6 +556,7 @@ function buildAdminOverview() {
       total: stmtCountCompletions.get().n,
       uniqueTokens: stmtCountUniqueCompleters.get().n,
     },
+    timeseries: getTimeseries(30),
   }
 }
 
@@ -629,7 +712,7 @@ const server = http.createServer(async (req, res) => {
       const mod = url.searchParams.get('module') || undefined
       const result = getStats(mod)
       if (result.status !== 200) return sendJson(res, result.status, { error: 'invalid module' }, API_HEADERS)
-      return sendJson(res, 200, { ok: true, generatedAt: Date.now(), modules: result.body }, API_HEADERS)
+      return sendJson(res, 200, { ok: true, generatedAt: Date.now(), modules: result.body, timeseries: getTimeseries(30) }, API_HEADERS)
     }
 
     // POST /api/admin/login — scrypt 密码校验，下发 HttpOnly 管理 cookie
