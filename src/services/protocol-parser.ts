@@ -35,10 +35,21 @@ export class SerialProtocolParser {
       const rawLine = this.buffer.slice(0, newlineIndex)
       this.buffer = this.buffer.slice(newlineIndex + 1)
       const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine
-      if (line.startsWith(PROTOCOL_MARKER)) {
+      const markerIndex = line.indexOf(PROTOCOL_MARKER)
+      if (markerIndex === 0) {
         const message = this.parseMessage(line.slice(PROTOCOL_MARKER.length))
         if (message !== null) messages.push(message)
-        // 协议行不写入终端
+        // 行首协议不写入终端
+      } else if (markerIndex > 0) {
+        const message = this.parseMessage(line.slice(markerIndex + PROTOCOL_MARKER.length))
+        if (message?.type === 'telemetry-command') {
+          messages.push(message)
+          // /dev/tty 遥测可能紧跟在无换行命令输出后；保留普通前缀，
+          // 吞掉协议后缀及协议换行，避免 marker 泄到终端。
+          display += rawLine.slice(0, markerIndex)
+        } else {
+          display += `${rawLine}\n`
+        }
       } else {
         display += `${rawLine}\n`
       }
@@ -101,6 +112,10 @@ export class SerialProtocolParser {
                 status: value.status,
                 ...(value.sig === undefined ? {} : { sig: value.sig }),
               }
+            : null
+        case 'telemetry-command':
+          return typeof value.command === 'string' && value.command.length > 0
+            ? { type: 'telemetry-command', command: value.command }
             : null
         case 'hint-request':
           return isPositiveInteger(value.level) ? { type: 'hint-request', level: value.level } : null

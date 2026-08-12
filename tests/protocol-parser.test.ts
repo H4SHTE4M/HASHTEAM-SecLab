@@ -175,3 +175,54 @@ describe('SerialProtocolParser 验签字段', () => {
     expect(parser.feed(invalid).messages).toEqual([])
   })
 })
+
+describe('SerialProtocolParser telemetry-command', () => {
+  it('解析合法的 telemetry-command 消息', () => {
+    const parser = new SerialProtocolParser()
+    const { messages, display } = parser.feed(
+      `${M}{"type":"telemetry-command","command":"find"}\n`,
+    )
+    expect(messages).toEqual([{ type: 'telemetry-command', command: 'find' }])
+    expect(display).toBe('')
+  })
+
+  it('telemetry-command 不在终端显示', () => {
+    const parser = new SerialProtocolParser()
+    const { display } = parser.feed(
+      `${M}{"type":"telemetry-command","command":"grep"}\n`,
+    )
+    expect(display).toBe('')
+  })
+
+  it('command 字段缺失或非字符串时拒绝消息', () => {
+    const parser = new SerialProtocolParser()
+    const invalid = [
+      `${M}{"type":"telemetry-command"}\n`,
+      `${M}{"type":"telemetry-command","command":""}\n`,
+      `${M}{"type":"telemetry-command","command":42}\n`,
+      `${M}{"type":"telemetry-command","command":null}\n`,
+    ].join('')
+    expect(parser.feed(invalid).messages).toEqual([])
+  })
+
+  it('telemetry-command 与普通输出混排时各自正确处理', () => {
+    const parser = new SerialProtocolParser()
+    const input = [
+      '$ find .\n',
+      `${M}{"type":"telemetry-command","command":"find"}\n`,
+      './README\n',
+    ].join('')
+    const { messages, display } = parser.feed(input)
+    expect(messages).toEqual([{ type: 'telemetry-command', command: 'find' }])
+    expect(display).toBe('$ find .\n./README\n')
+  })
+
+  it('无换行命令输出与 telemetry-command 粘连时保留输出并过滤协议', () => {
+    const parser = new SerialProtocolParser()
+    const { messages, display } = parser.feed(
+      `preserved${M}{"type":"telemetry-command","command":"cat"}\n`,
+    )
+    expect(messages).toEqual([{ type: 'telemetry-command', command: 'cat' }])
+    expect(display).toBe('preserved')
+  })
+})

@@ -355,6 +355,31 @@ for (const legacyPath of ['vm/rootfs.cpio.gz', 'vm/bzImage', 'v86/v86.wasm']) {
   if (legacy !== null) fail(`生产包仍包含固定文件名 VM 资源：dist/${legacyPath}`)
 }
 
+// 验证 EdgeOne Makers Edge Functions 已输出到 dist/ 且与受版本控制源码一致
+const edgeFunctionsRoot = path.join(root, 'edge-functions')
+const trackedEdgeFunctions = []
+async function collectEdgeFunctions(dir, base) {
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    if (entry.name.startsWith('.')) continue
+    const absolute = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      await collectEdgeFunctions(absolute, base)
+    } else if (entry.isFile()) {
+      trackedEdgeFunctions.push(path.relative(base, absolute).split(path.sep).join('/'))
+    }
+  }
+}
+await collectEdgeFunctions(edgeFunctionsRoot, edgeFunctionsRoot)
+if (trackedEdgeFunctions.length === 0) {
+  fail('edge-functions/ 目录为空，缺少 Edge Function 源码')
+}
+for (const relativePath of trackedEdgeFunctions) {
+  const distSource = await requireFile(`edge-functions/${relativePath}`)
+  const trackedSource = await readFile(path.join(edgeFunctionsRoot, relativePath))
+  if (!distSource.equals(trackedSource)) {
+    fail(`dist/edge-functions/${relativePath} 与受版本控制源码不一致`)
+  }
+}
 console.log(
   `✓ 生产产物：${distFileCount} 个常规文件，VM 资源组 ${manifest.hash} 内容寻址完整`,
 )

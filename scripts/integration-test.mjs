@@ -109,7 +109,9 @@ async function main() {
 
   await step('基本命令可用：whoami / pwd / ls / cat', async () => {
     send('whoami && pwd')
-    await waitFor(/guest\r?\n\/home\/guest/)
+    await waitFor(
+      /guest\r?\n@@HASHTEAM:\{"type":"telemetry-command","command":"whoami"\}\r?\n\/home\/guest/,
+    )
     send('cat README')
     await waitFor(/first-light/)
   })
@@ -118,7 +120,9 @@ async function main() {
     send("rm -f touch-probe && touch touch-probe && test -f touch-probe && printf '\\nTOUCH_CREATE_OK\\n'")
     await waitFor(/\r?\nTOUCH_CREATE_OK\r?\n/)
     send("printf 'preserved' > touch-probe && touch touch-probe && cat touch-probe && printf '\\nTOUCH_PRESERVE_OK\\n'")
-    await waitFor(/preserved\r?\nTOUCH_PRESERVE_OK\r?\n/)
+    await waitFor(
+      /preserved@@HASHTEAM:\{"type":"telemetry-command","command":"cat"\}\r?\n\r?\nTOUCH_PRESERVE_OK\r?\n/,
+    )
   })
 
   await step('VM 内核运行版本与发布锁定值一致（Linux 6.12.98）', async () => {
