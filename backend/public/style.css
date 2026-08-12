@@ -441,3 +441,68 @@ table.data tbody tr:hover {
   gap: 12px;
   flex-wrap: wrap;
 }
+
+/* ---- 时间序列趋势图 ---- */
+
+.ts-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 160px;
+  padding: 12px 0 28px;
+  overflow-x: auto;
+  position: relative;
+}
+
+.ts-col {
+  flex: 1 0 0;
+  min-width: 8px;
+  display: flex;
+  flex-direction: column-reverse;
+  height: 100%;
+  position: relative;
+  border-radius: 2px 2px 0 0;
+}
+
+.ts-seg {
+  width: 100%;
+  min-height: 0;
+  transition: min-height 0.3s ease;
+}
+
+.ts-seg-session { background: var(--blue); }
+.ts-seg-command { background: var(--green); }
+.ts-seg-complete { background: var(--amber); }
+.ts-seg-hint { background: var(--muted); opacity: 0.7; }
+.ts-seg-reset { background: #e74c3c; opacity: 0.7; }
+
+.ts-col-label {
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.ts-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ts-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ts-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
