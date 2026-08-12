@@ -190,6 +190,17 @@ const stmtTimeseriesDaily = db.prepare(`
   GROUP BY day_bucket, event_type
   ORDER BY day_bucket ASC, event_type ASC
 `)
+// 按小时聚合最近 N 小时的事件明细（仅 session_create 和 command）
+const stmtTimeseriesHourly = db.prepare(`
+  SELECT
+    (ts - (ts % 3600000)) AS hour_bucket,
+    event_type,
+    COUNT(*) AS count
+  FROM event_log
+  WHERE ts >= ? AND event_type IN ('session_create', 'command')
+  GROUP BY hour_bucket, event_type
+  ORDER BY hour_bucket ASC, event_type ASC
+`)
 const stmtDeleteOldEventLog = db.prepare('DELETE FROM event_log WHERE ts < ?')
 
 // ---- Dashboard / 管理页查询 ----
@@ -431,6 +442,37 @@ function getTimeseries(days = 30) {
   return [...buckets.values()]
 }
 
+/**
+ * 返回最近 24 小时的按小时时间序列（session 创建数 + 命令执行数）。
+ * 补零：没有事件的小时也会出现，方便前端直接画折线图。
+ * 返回格式：[{ hour, session_create, command }]
+ */
+function getHourlyTimeseries(hours = 24) {
+  const now = Date.now()
+  const hourMs = 3600000
+  const startOfHour = now - (now % hourMs)
+  const cutoff = startOfHour - (hours - 1) * hourMs
+
+  const rows = stmtTimeseriesHourly.all(cutoff)
+
+  // 初始化每小时的结构，补零
+  const buckets = new Map()
+  for (let h = 0; h < hours; h++) {
+    const hour = cutoff + h * hourMs
+    buckets.set(hour, { hour, session_create: 0, command: 0 })
+  }
+
+  // 填入实际数据
+  for (const row of rows) {
+    const entry = buckets.get(row.hour_bucket)
+    if (entry && row.event_type in entry) {
+      entry[row.event_type] = row.count
+    }
+  }
+
+  return [...buckets.values()]
+}
+
 // ---- 速率限制（内存滑动窗口，单进程） ----
 
 function createRateLimiter(windowMs, max) {
@@ -557,6 +599,7 @@ function buildAdminOverview() {
       uniqueTokens: stmtCountUniqueCompleters.get().n,
     },
     timeseries: getTimeseries(30),
+    hourly: getHourlyTimeseries(24),
   }
 }
 
@@ -712,7 +755,7 @@ const server = http.createServer(async (req, res) => {
       const mod = url.searchParams.get('module') || undefined
       const result = getStats(mod)
       if (result.status !== 200) return sendJson(res, result.status, { error: 'invalid module' }, API_HEADERS)
-      return sendJson(res, 200, { ok: true, generatedAt: Date.now(), modules: result.body, timeseries: getTimeseries(30) }, API_HEADERS)
+      return sendJson(res, 200, { ok: true, generatedAt: Date.now(), modules: result.body, timeseries: getTimeseries(30), hourly: getHourlyTimeseries(24) }, API_HEADERS)
     }
 
     // POST /api/admin/login — scrypt 密码校验，下发 HttpOnly 管理 cookie
