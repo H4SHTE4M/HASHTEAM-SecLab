@@ -18,6 +18,7 @@ const VM_ASSETS = {
 const LEGAL_FILES = ['SOURCE_CODE.md', 'THIRD_PARTY_NOTICES.md'] as const
 const EDGEONE_CONFIG_FILE = 'edgeone.json'
 const TALK_ROOT = 'talk'
+const EDGE_FUNCTIONS_ROOT = 'edge-functions'
 
 /**
  * 递归收集 talk/ 下待发布的相对路径（POSIX 风格，排序确定）。
@@ -176,6 +177,16 @@ function vmAssetsPlugin(bundle: VmAssetBundle, sourceId: string): Plugin {
           source: readFileSync(path.join(talkRoot, relativePath)),
         })
       }
+      // edge-functions/ 是 EdgeOne Makers Edge Function 源码，原样输出到
+      // dist/edge-functions/，Direct Upload 部署时自动注册路由。
+      const efRoot = path.resolve(process.cwd(), EDGE_FUNCTIONS_ROOT)
+      for (const relativePath of collectTalkFiles(efRoot, efRoot)) {
+        this.emitFile({
+          type: 'asset',
+          fileName: `edge-functions/${relativePath}`,
+          source: readFileSync(path.join(efRoot, relativePath)),
+        })
+      }
       this.emitFile({
         type: 'asset',
         fileName: 'vm-assets.json',
@@ -218,6 +229,7 @@ export default defineConfig(({ command }) => {
     },
     test: {
       include: ['tests/**/*.test.ts'],
+      exclude: ['tests/backend.test.ts', '**/node_modules/**', '**/dist/**'],
       environment: 'node',
       poolOptions: {
         forks: { execArgv: TEST_WORKER_EXEC_ARGV },

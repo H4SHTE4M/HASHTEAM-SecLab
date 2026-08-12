@@ -6,9 +6,9 @@ else
     export PS1='\u@hashteam:\w\$ '
 fi
 umask 022
-# 主 BusyBox 的 ash 会优先执行内建 applet，显式路由到最小 SUID helper。
-alias su='/bin/su'
-# 内建 netstat 会输出已禁用 IPv6 对应的 tcp6 缺失警告，路由到过滤包装器。
+# 遥测命令 wrapper：为 allowlist 中的命令注入 /dev/tty 协议上报。
+# wrapper 透传 argv/stdin/stdout/stderr/exit code，不影响实验行为。
+. /etc/hashteam/telemetry.sh
+# alias su/netstat 已由 telemetry.sh 中的 su() 函数覆盖；
+# netstat 仍是独立过滤包装器（非遥测目标）。
 alias netstat='/usr/local/bin/netstat'
-# busybox ash 自带 help 内建命令会遮蔽 PATH，用别名指向可按命令查询的实验帮助。
-alias help='/usr/local/bin/help'

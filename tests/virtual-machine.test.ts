@@ -1,6 +1,16 @@
 // @vitest-environment jsdom
 import { createHmac, webcrypto } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('../src/telemetry', () => ({
+  useTelemetry: () => ({
+    trackCommand: vi.fn(),
+    trackLevelComplete: vi.fn(),
+    trackHint: vi.fn(),
+    trackReset: vi.fn(),
+    flush: vi.fn(async () => undefined),
+    dispose: vi.fn(async () => undefined),
+  }),
+}))
 import { createVirtualMachine } from '../src/composables/useVirtualMachine'
 import { useLabProgress } from '../src/composables/useLabProgress'
 import { useAnomalyCenter } from '../src/services/anomaly-center'

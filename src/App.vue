@@ -11,6 +11,7 @@ import AboutModal from './components/AboutModal.vue'
 import OnboardingDialog from './components/OnboardingDialog.vue'
 import BugReportDialog from './components/BugReportDialog.vue'
 import { useVirtualMachine } from './composables/useVirtualMachine'
+import { useTelemetry } from './telemetry'
 import { useLabProgress } from './composables/useLabProgress'
 import { useLabPreferences } from './composables/useLabPreferences'
 import { useAnomalyCenter } from './services/anomaly-center'
@@ -234,27 +235,34 @@ watch(
   },
   { immediate: true },
 )
-
 onMounted(() => {
   if (showCompletion.value) return
-  // 显示文本 → 终端；终端输入 → 虚拟机串口
+  // 显示文本 -> 终端；终端输入 -> 虚拟机串口
   unsubscribeDisplay = vm.onDisplay((data) => {
     terminalRef.value?.write(data)
   })
   window.addEventListener('resize', handleViewportResize)
   window.visualViewport?.addEventListener('resize', handleViewportResize)
+  // 页面刷新/关闭时尽量冲刷残余遥测事件（fetch 可能来不及完成，这是可接受的）
+  window.addEventListener('beforeunload', handleTelemetryFlush)
   void vm.boot()
 })
+/** 页面卸载/组件销毁时冲刷残余遥测事件，避免队列中事件丢失 */
+function handleTelemetryFlush(): void {
+  void useTelemetry().flush()
+}
 
 onBeforeUnmount(() => {
   unsubscribeDisplay?.()
   unsubscribeDisplay = null
   window.removeEventListener('resize', handleViewportResize)
   window.visualViewport?.removeEventListener('resize', handleViewportResize)
+  window.removeEventListener('beforeunload', handleTelemetryFlush)
   stopPanelResize()
   clearBootOverlayTimer()
   if (themeTransitionTimer !== null) window.clearTimeout(themeTransitionTimer)
   document.documentElement.classList.remove('theme-changing')
+  void handleTelemetryFlush()
   void vm.dispose()
 })
 

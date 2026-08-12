@@ -12,6 +12,7 @@ import type { SerialProtocol } from './useSerialProtocol'
 import { useLabProgress } from './useLabProgress'
 import { useLabPreferences } from './useLabPreferences'
 import { useAnomalyCenter } from '../services/anomaly-center'
+import { useTelemetry } from '../telemetry'
 import { getLevel, TOTAL_LEVELS } from '../data/levels'
 import { log, clear as clearBootLog } from '../services/boot-logger'
 
@@ -42,6 +43,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
   const displayCallbacks = new Set<(data: string) => void>()
   const progress = useLabProgress()
   const anomalyCenter = useAnomalyCenter()
+  const telemetry = useTelemetry()
   const getMode =
     options.getMode ??
     (() => useLabPreferences().state.mode ?? 'guided')
@@ -212,15 +214,18 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
           mode === 'challenge' ||
           requiredSteps.every((stepId) => completedSteps.has(stepId))
         ) {
-          progress.complete(message.level, {
-            path:
-              mode === 'guided'
-                ? 'guided'
-                : progress.hasGuidedAssistance(message.level)
-                  ? 'mixed'
-                  : 'challenge',
+          const path =
+            mode === 'guided'
+              ? 'guided'
+              : progress.hasGuidedAssistance(message.level)
+                ? 'mixed'
+                : 'challenge'
+          const wasNewCompletion = progress.complete(message.level, {
+            path,
             hintsUsed: progress.hintsUsedFor(message.level),
           })
+          // 只有首次完成才产生遥测事件：重复 check、协议重放、页面刷新均不重复统计
+          if (wasNewCompletion) telemetry.trackLevelComplete(message.level, path)
         } else {
           const notice =
             '\r\n\x1b[33m环境结果已经正确，但还需要完成右侧当前教学步骤，' +
@@ -229,8 +234,15 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
         }
         break
       }
+      case 'telemetry-command':
+        // VM wrapper 上报命令执行；allowlist 由 telemetry 层校验，非白名单静默忽略
+        telemetry.trackCommand(message.command)
+        break
       case 'hint-request':
-        if (message.level === progress.state.currentLevel) progress.useHint(message.level)
+        if (message.level === progress.state.currentLevel) {
+          progress.useHint(message.level)
+          telemetry.trackHint(message.level)
+        }
         break
       case 'progress':
         // 预留：细粒度进度消息
@@ -361,6 +373,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     // 与切关保持一致：reset-level 的 init 是子进程，改不了交互 shell 的 cwd，
     // 重建环境后补一行 cd 把学生 shell 带回 HOME。
     sendSerial('reset-level\ncd "$HOME"\n')
+    telemetry.trackReset(progress.state.currentLevel)
   }
 
   function runCommand(command: string): void {

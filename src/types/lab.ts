@@ -180,6 +180,7 @@ export type ProtocolMessage =
   | { type: 'level-result'; level: number; status: 'passed' | 'failed'; sig?: string }
   | { type: 'hint-request'; level: number }
   | { type: 'progress'; level: number; value: number }
+  | { type: 'telemetry-command'; command: string }
   | { type: 'error'; message: string }
 
 /** 前端持久化的关卡进度 */

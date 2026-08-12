@@ -1,0 +1,20 @@
+{
+  "name": "hashteam-telemetry-backend",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.34.5",
+  "description": "HASHTEAM SecLab 匿名聚合遥测后端（EdgeOne Edge Function -> Node + SQLite WAL）",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3"
+    ]
+  }
+}
