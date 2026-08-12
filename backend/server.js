@@ -8,6 +8,13 @@
  * - POST /events   : 接收批量事件，做 seq 重放保护、allowlist 校验、聚合写入
  * - GET  /stats    : 返回只读聚合计数（支持 ?module= 过滤）
  *
+ * Dashboard（浏览器直连，无 HMAC，由 nginx 以 /telemetry-backend/ 前缀反代）：
+ * - GET  /dashboard/*        : 公开数据看板与管理页静态资源（白名单路由）
+ * - GET  /api/public/stats   : 公开聚合统计（限流，无需签名）
+ * - POST /api/admin/login    : 管理员登录（scrypt 校验 -> HttpOnly cookie，限流）
+ * - POST /api/admin/logout   : 注销管理会话
+ * - GET  /api/admin/overview : 管理页详细数据（需管理 cookie）
+ *
  * 安全：
  * - 所有请求必须携带 Edge Function 的 HMAC 签名（X-Telemetry-Sig）
  * - session token 只存 hash，不存明文
@@ -27,15 +34,32 @@
 import http from 'node:http'
 import crypto from 'node:crypto'
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const PORT = parseInt(process.env.TELEMETRY_PORT || '7841', 10)
 const EDGE_SECRET = process.env.TELEMETRY_EDGE_SECRET || ''
 const DB_PATH = process.env.TELEMETRY_DB_PATH || '/var/lib/hashteam-telemetry/telemetry.db'
 
+// ---- Dashboard（浏览器直连，不经 Edge Function） ----
+// scrypt 密码哈希，格式 scrypt:N:r:p:<salt_hex>:<hash_hex>；未设置时管理登录禁用
+const ADMIN_PASSWORD_HASH = process.env.TELEMETRY_ADMIN_PASSWORD_HASH || ''
+// nginx 反代的公开前缀（用于尾斜杠重定向 Location）；本地直连测试时设为空串
+const PUBLIC_PREFIX = (process.env.TELEMETRY_PUBLIC_PREFIX ?? '/telemetry-backend').replace(/\/+$/, '')
+// 管理 cookie 的 Path（浏览器可见路径）；仅发向管理 API
+const ADMIN_COOKIE_PATH = process.env.TELEMETRY_COOKIE_PATH || '/telemetry-backend/api/admin'
+const DASHBOARD_DIR = process.env.TELEMETRY_DASHBOARD_DIR || path.join(__dirname, 'public')
+
 if (!EDGE_SECRET) {
   console.error('FATAL: TELEMETRY_EDGE_SECRET 未设置')
   process.exit(1)
+}
+if (!ADMIN_PASSWORD_HASH) {
+  console.warn('[telemetry] TELEMETRY_ADMIN_PASSWORD_HASH 未设置，管理页登录已禁用')
 }
 
 // ---- 常量（与 src/telemetry/schema.ts 保持一致） ----
@@ -57,6 +81,13 @@ const COMMAND_ALLOWLIST = new Set([
 
 const COMPLETION_PATHS = new Set(['guided', 'mixed', 'challenge'])
 const SESSION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/
+
+// ---- 管理认证常量 ----
+
+const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000 // 12 小时，固定不滑动
+const ADMIN_COOKIE_NAME = 'ht_admin'
+const ADMIN_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/ // 32 字节随机数的 base64url
+const SCRYPT_KEYLEN = 32
 
 // ---- 数据库初始化 ----
 
@@ -86,6 +117,12 @@ db.exec(`
     dimension TEXT NOT NULL DEFAULT '',
     count     INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (module, metric, dimension)
+  );
+
+  CREATE TABLE IF NOT EXISTS admin_sessions (
+    token_hash TEXT PRIMARY KEY,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
   );
 
   CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
@@ -124,6 +161,23 @@ const stmtGetAllAggregates = db.prepare(
   'SELECT module, metric, dimension, count FROM aggregates ORDER BY module, metric, dimension',
 )
 
+// ---- Dashboard / 管理页查询 ----
+
+const stmtInsertAdminSession = db.prepare(
+  'INSERT INTO admin_sessions (token_hash, created_at, expires_at) VALUES (?, ?, ?)',
+)
+const stmtGetAdminSession = db.prepare('SELECT * FROM admin_sessions WHERE token_hash = ?')
+const stmtDeleteAdminSession = db.prepare('DELETE FROM admin_sessions WHERE token_hash = ?')
+const stmtDeleteExpiredAdminSessions = db.prepare('DELETE FROM admin_sessions WHERE expires_at < ?')
+
+const stmtCountSessions = db.prepare('SELECT COUNT(*) AS n FROM sessions')
+const stmtCountActiveSessions = db.prepare('SELECT COUNT(*) AS n FROM sessions WHERE expires_at > ?')
+const stmtRecentSessions = db.prepare(
+  'SELECT token_hash, created_at, expires_at, last_seq, event_count FROM sessions ORDER BY created_at DESC LIMIT 50',
+)
+const stmtCountCompletions = db.prepare('SELECT COUNT(*) AS n FROM completions')
+const stmtCountUniqueCompleters = db.prepare('SELECT COUNT(DISTINCT token_hash) AS n FROM completions')
+
 // ---- HMAC 鉴权 ----
 
 function verifyEdgeSignature(signature, message) {
@@ -161,9 +215,13 @@ function getSession(token) {
 function cleanupExpiredSessions() {
   const now = Date.now()
   const result = stmtDeleteExpiredSessions.run(now)
-  if (result.changes > 0) {
-    console.log(`[telemetry] 清理 ${result.changes} 个过期 session`)
+  const adminResult = stmtDeleteExpiredAdminSessions.run(now)
+  if (result.changes > 0 || adminResult.changes > 0) {
+    console.log(
+      `[telemetry] 清理 ${result.changes} 个过期 session, ${adminResult.changes} 个过期管理会话`,
+    )
   }
+  for (const limiter of Object.values(rateLimiters)) limiter.sweep()
 }
 
 // 定期清理过期 session（每 5 分钟）
@@ -291,6 +349,190 @@ function getStats(mod) {
   return { status: 200, body: result }
 }
 
+// ---- 速率限制（内存滑动窗口，单进程） ----
+
+function createRateLimiter(windowMs, max) {
+  const hits = new Map() // key -> { count, resetAt }
+  return {
+    allow(key) {
+      const now = Date.now()
+      let rec = hits.get(key)
+      if (!rec || rec.resetAt <= now) {
+        rec = { count: 0, resetAt: now + windowMs }
+        hits.set(key, rec)
+      }
+      rec.count += 1
+      return rec.count <= max
+    },
+    sweep() {
+      const now = Date.now()
+      for (const [key, rec] of hits) {
+        if (rec.resetAt <= now) hits.delete(key)
+      }
+    },
+  }
+}
+
+const rateLimiters = {
+  publicStats: createRateLimiter(60 * 1000, 30),
+  adminLoginIp: createRateLimiter(5 * 60 * 1000, 5),
+  adminLoginGlobal: createRateLimiter(5 * 60 * 1000, 30),
+  adminApi: createRateLimiter(60 * 1000, 60),
+  dashboardStatic: createRateLimiter(60 * 1000, 120),
+}
+
+// backend 只监听 127.0.0.1，X-Real-IP 由本机 nginx 设置，可信
+function clientIp(req) {
+  return req.headers['x-real-ip'] || req.socket.remoteAddress || 'unknown'
+}
+
+// ---- 管理认证 ----
+
+function verifyAdminPassword(password) {
+  if (!ADMIN_PASSWORD_HASH) return false
+  const parts = ADMIN_PASSWORD_HASH.split(':')
+  if (parts.length !== 6 || parts[0] !== 'scrypt') return false
+  const N = parseInt(parts[1], 10)
+  const r = parseInt(parts[2], 10)
+  const p = parseInt(parts[3], 10)
+  let expected
+  try {
+    expected = Buffer.from(parts[5], 'hex')
+    if (expected.length === 0 || !/^[0-9a-f]+$/i.test(parts[4])) return false
+    const derived = crypto.scryptSync(password, Buffer.from(parts[4], 'hex'), expected.length, { N, r, p })
+    return timingSafeEqual(derived, expected)
+  } catch {
+    return false
+  }
+}
+
+function parseCookies(req) {
+  const cookies = new Map()
+  const header = req.headers.cookie
+  if (!header) return cookies
+  for (const part of header.split(';')) {
+    const idx = part.indexOf('=')
+    if (idx > 0) cookies.set(part.slice(0, idx).trim(), part.slice(idx + 1).trim())
+  }
+  return cookies
+}
+
+function buildAdminCookie(value, maxAgeSec) {
+  return [
+    `${ADMIN_COOKIE_NAME}=${value}`,
+    'HttpOnly',
+    'Secure',
+    'SameSite=Strict',
+    `Path=${ADMIN_COOKIE_PATH}`,
+    `Max-Age=${maxAgeSec}`,
+  ].join('; ')
+}
+
+function getAdminSession(req) {
+  const token = parseCookies(req).get(ADMIN_COOKIE_NAME)
+  if (!token || !ADMIN_TOKEN_PATTERN.test(token)) return null
+  const row = stmtGetAdminSession.get(sha256Hex(token))
+  if (!row || row.expires_at < Date.now()) return null
+  return row
+}
+
+// ---- 管理页详细数据 ----
+
+const STARTED_AT = Date.now()
+
+function buildAdminOverview() {
+  const now = Date.now()
+  let dbSizeBytes = 0
+  try {
+    dbSizeBytes = fs.statSync(DB_PATH).size
+  } catch {
+    // 数据库文件不可读时仅省略该字段值
+  }
+  return {
+    generatedAt: now,
+    service: {
+      startedAt: STARTED_AT,
+      uptimeSec: Math.floor((now - STARTED_AT) / 1000),
+      nodeVersion: process.version,
+      dbSizeBytes,
+      modules: Object.keys(MODULES),
+    },
+    modules: getStats(undefined).body,
+    sessions: {
+      active: stmtCountActiveSessions.get(now).n,
+      total: stmtCountSessions.get().n,
+      recent: stmtRecentSessions.all().map((row) => ({
+        tokenPrefix: row.token_hash.slice(0, 8),
+        createdAt: row.created_at,
+        expiresAt: row.expires_at,
+        lastSeq: row.last_seq,
+        eventCount: row.event_count,
+        expired: row.expires_at < now,
+      })),
+    },
+    completions: {
+      total: stmtCountCompletions.get().n,
+      uniqueTokens: stmtCountUniqueCompleters.get().n,
+    },
+  }
+}
+
+// ---- Dashboard 静态资源（启动时加载进内存，白名单路由） ----
+
+const DASHBOARD_CSP =
+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+  "img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+
+const API_HEADERS = {
+  'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+  'Cache-Control': 'no-store',
+}
+
+const DASHBOARD_HEADERS = {
+  'Content-Security-Policy': DASHBOARD_CSP,
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+  'Cache-Control': 'no-store',
+}
+
+// 路由路径 -> [文件名, MIME]。白名单之外的任何路径都 404，杜绝目录穿越。
+const DASHBOARD_FILES = {
+  '/dashboard/': ['index.html', 'text/html; charset=utf-8'],
+  '/dashboard/index.html': ['index.html', 'text/html; charset=utf-8'],
+  '/dashboard/admin.html': ['admin.html', 'text/html; charset=utf-8'],
+  '/dashboard/dashboard.js': ['dashboard.js', 'text/javascript; charset=utf-8'],
+  '/dashboard/admin.js': ['admin.js', 'text/javascript; charset=utf-8'],
+  '/dashboard/style.css': ['style.css', 'text/css; charset=utf-8'],
+}
+
+const dashboardAssets = new Map()
+for (const [route, [file, mime]] of Object.entries(DASHBOARD_FILES)) {
+  try {
+    dashboardAssets.set(route, {
+      content: fs.readFileSync(path.join(DASHBOARD_DIR, file)),
+      mime,
+    })
+  } catch {
+    console.warn(`[telemetry] dashboard 资源缺失: ${path.join(DASHBOARD_DIR, file)}`)
+  }
+}
+
+function serveDashboardAsset(res, route) {
+  const asset = dashboardAssets.get(route)
+  if (!asset) {
+    sendJson(res, 404, { error: 'not found' }, API_HEADERS)
+    return
+  }
+  res.writeHead(200, {
+    'Content-Type': asset.mime,
+    'Content-Length': asset.content.length,
+    ...DASHBOARD_HEADERS,
+  })
+  res.end(asset.content)
+}
+
 // ---- HTTP 服务器 ----
 
 function readBody(req) {
@@ -308,11 +550,12 @@ function readBody(req) {
   })
 }
 
-function sendJson(res, status, body) {
+function sendJson(res, status, body, headers = {}) {
   const json = JSON.stringify(body)
   res.writeHead(status, {
     'Content-Type': 'application/json',
     'Content-Length': Buffer.byteLength(json),
+    ...headers,
   })
   res.end(json)
 }
@@ -362,6 +605,89 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, result.status, result.body)
     }
 
+    // ---- 以下为浏览器直连路由（不经 Edge Function，无 HMAC） ----
+
+    // GET /dashboard -> 302 到尾斜杠（页面内相对资源路径依赖尾斜杠）
+    if (path === '/dashboard' && req.method === 'GET') {
+      res.writeHead(302, { Location: `${PUBLIC_PREFIX}/dashboard/`, ...API_HEADERS })
+      return res.end()
+    }
+
+    // GET /dashboard/* 静态资源（白名单）
+    if (path.startsWith('/dashboard/') && req.method === 'GET') {
+      if (!rateLimiters.dashboardStatic.allow(clientIp(req))) {
+        return sendJson(res, 429, { error: 'rate limited' }, API_HEADERS)
+      }
+      return serveDashboardAsset(res, path)
+    }
+
+    // GET /api/public/stats[?module=seclab] — 公开聚合数据，无需签名
+    if (path === '/api/public/stats' && req.method === 'GET') {
+      if (!rateLimiters.publicStats.allow(clientIp(req))) {
+        return sendJson(res, 429, { error: 'rate limited' }, API_HEADERS)
+      }
+      const mod = url.searchParams.get('module') || undefined
+      const result = getStats(mod)
+      if (result.status !== 200) return sendJson(res, result.status, { error: 'invalid module' }, API_HEADERS)
+      return sendJson(res, 200, { ok: true, generatedAt: Date.now(), modules: result.body }, API_HEADERS)
+    }
+
+    // POST /api/admin/login — scrypt 密码校验，下发 HttpOnly 管理 cookie
+    if (path === '/api/admin/login' && req.method === 'POST') {
+      const ip = clientIp(req)
+      if (!rateLimiters.adminLoginIp.allow(ip) || !rateLimiters.adminLoginGlobal.allow('global')) {
+        return sendJson(res, 429, { error: 'rate limited' }, API_HEADERS)
+      }
+      if (!ADMIN_PASSWORD_HASH) {
+        return sendJson(res, 503, { error: 'admin not configured' }, API_HEADERS)
+      }
+      const body = await readBody(req)
+      let payload
+      try { payload = JSON.parse(body) } catch {
+        return sendJson(res, 400, { error: 'invalid json' }, API_HEADERS)
+      }
+      if (!hasOnlyKeys(payload, ['password']) ||
+          typeof payload.password !== 'string' ||
+          payload.password.length === 0 ||
+          payload.password.length > 256) {
+        return sendJson(res, 400, { error: 'invalid request' }, API_HEADERS)
+      }
+      if (!verifyAdminPassword(payload.password)) {
+        console.warn(`[telemetry] 管理登录失败 (ip=${ip})`)
+        return sendJson(res, 401, { error: 'invalid credentials' }, API_HEADERS)
+      }
+      const token = crypto.randomBytes(32).toString('base64url')
+      const now = Date.now()
+      stmtInsertAdminSession.run(sha256Hex(token), now, now + ADMIN_SESSION_TTL_MS)
+      return sendJson(res, 200, { ok: true, expiresAt: now + ADMIN_SESSION_TTL_MS }, {
+        ...API_HEADERS,
+        'Set-Cookie': buildAdminCookie(token, Math.floor(ADMIN_SESSION_TTL_MS / 1000)),
+      })
+    }
+
+    // POST /api/admin/logout — 销毁服务端会话并清除 cookie
+    if (path === '/api/admin/logout' && req.method === 'POST') {
+      const token = parseCookies(req).get(ADMIN_COOKIE_NAME)
+      if (token && ADMIN_TOKEN_PATTERN.test(token)) {
+        stmtDeleteAdminSession.run(sha256Hex(token))
+      }
+      return sendJson(res, 200, { ok: true }, {
+        ...API_HEADERS,
+        'Set-Cookie': buildAdminCookie('deleted', 0),
+      })
+    }
+
+    // GET /api/admin/overview — 管理页详细数据（需认证）
+    if (path === '/api/admin/overview' && req.method === 'GET') {
+      if (!rateLimiters.adminApi.allow(clientIp(req))) {
+        return sendJson(res, 429, { error: 'rate limited' }, API_HEADERS)
+      }
+      if (!getAdminSession(req)) {
+        return sendJson(res, 401, { error: 'unauthorized' }, API_HEADERS)
+      }
+      return sendJson(res, 200, buildAdminOverview(), API_HEADERS)
+    }
+
     // 未知路由
     sendJson(res, 404, { error: 'not found' })
   } catch (err) {
@@ -373,6 +699,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`[telemetry] 后端服务监听 127.0.0.1:${PORT}`)
   console.log(`[telemetry] 数据库: ${DB_PATH}`)
+  console.log(`[telemetry] dashboard 资源目录: ${DASHBOARD_DIR} (${dashboardAssets.size}/${Object.keys(DASHBOARD_FILES).length} 已加载)`)
   // 启动时清理一次过期 session
   cleanupExpiredSessions()
 })

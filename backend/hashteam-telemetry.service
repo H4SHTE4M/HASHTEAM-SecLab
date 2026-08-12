@@ -15,6 +15,9 @@ RestartSec=5
 # TELEMETRY_PORT=7841
 # TELEMETRY_DB_PATH=/var/lib/hashteam-telemetry/telemetry.db
 # TELEMETRY_EDGE_SECRET=<共享密钥>
+# TELEMETRY_ADMIN_PASSWORD_HASH=<管理页 scrypt 密码哈希，由 deploy.sh 生成>
+# TELEMETRY_PUBLIC_PREFIX=/telemetry-backend（可选，默认即此值）
+# TELEMETRY_COOKIE_PATH=/telemetry-backend/api/admin（可选，默认即此值）
 EnvironmentFile=/etc/hashteam-telemetry/env
 
 # 安全加固

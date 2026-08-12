@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HASHTEAM SecLab 遥测管理</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./admin.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <span class="brand">HASHTEAM SecLab <span class="brand-sub">遥测管理</span></span>
+      <nav class="tabs">
+        <a class="tab" href="./index.html">数据看板</a>
+        <a class="tab active" href="./admin.html">管理</a>
+        <button id="logout-btn" class="btn btn-danger hidden" type="button">退出登录</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- 登录视图 -->
+    <div id="login-view" class="login-wrap hidden">
+      <div class="login-card">
+        <h1>管理登录</h1>
+        <p>输入管理员密码以查看详细遥测数据。会话 12 小时后自动过期。</p>
+        <input type="password" id="password-input" placeholder="密码" autocomplete="current-password">
+        <button id="login-btn" class="btn" type="button">登录</button>
+        <div id="login-error" class="error hidden"></div>
+      </div>
+    </div>
+
+    <!-- 管理仪表盘 -->
+    <div id="admin-view" class="hidden">
+      <section class="cards" id="service-cards"></section>
+
+      <section class="panel">
+        <h2>命令统计</h2>
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr><th>命令</th><th class="num">次数</th><th class="num">占比</th></tr>
+            </thead>
+            <tbody id="command-table"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>关卡完成矩阵</h2>
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>关卡</th>
+                <th class="num">guided</th>
+                <th class="num">mixed</th>
+                <th class="num">challenge</th>
+                <th class="num">合计</th>
+              </tr>
+            </thead>
+            <tbody id="matrix-table"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>提示与重置</h2>
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr><th>关卡</th><th class="num">提示次数</th><th class="num">重置次数</th></tr>
+            </thead>
+            <tbody id="hint-reset-table"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>最近会话(匿名,仅显示哈希前缀)</h2>
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>会话标识</th>
+                <th>创建时间</th>
+                <th>过期时间</th>
+                <th class="num">最后 Seq</th>
+                <th class="num">事件数</th>
+                <th>状态</th>
+              </tr>
+            </thead>
+            <tbody id="sessions-table"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <span id="updated-at"></span>
+    <span id="refresh-hint" class="hidden">每 60 秒自动刷新</span>
+  </footer>
+</body>
+</html>
