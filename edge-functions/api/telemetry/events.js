@@ -67,15 +67,14 @@ export async function onRequestPost(context) {
     const bodyStr = JSON.stringify(batch)
     const sig = await hmacSha256Hex(secret, bodyStr)
 
-    const response = await fetch(`${backendUrl}/events`, {
+    const response = await fetchWithTimeout(`${backendUrl}/events`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Telemetry-Sig': sig,
       },
       body: bodyStr,
-      signal: AbortSignal.timeout(4000),
-    })
+    }, 4000)
 
     // 后端拒绝（重放、超出预算等）：透传状态码，但不暴露细节
     if (!response.ok) {
@@ -94,6 +93,16 @@ export async function onRequestPost(context) {
       status: 502,
       headers: { 'Content-Type': 'application/json', ...API_HEADERS },
     })
+  }
+}
+
+async function fetchWithTimeout(url, init, timeoutMs) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timeout)
   }
 }
 

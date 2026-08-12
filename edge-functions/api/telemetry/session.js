@@ -42,15 +42,14 @@ export async function onRequestPost(context) {
     const secret = env.TELEMETRY_EDGE_SECRET || ''
     const sig = await hmacSha256Hex(secret, `session-bootstrap:${session}`)
 
-    const response = await fetch(`${backendUrl}/session`, {
+    const response = await fetchWithTimeout(`${backendUrl}/session`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Telemetry-Sig': sig,
       },
       body: JSON.stringify({ session }),
-      signal: AbortSignal.timeout(4000),
-    })
+    }, 4000)
 
     if (!response.ok) {
       return new Response(JSON.stringify({ error: 'backend error' }), {
@@ -82,6 +81,16 @@ function base64UrlEncode(bytes) {
   let binary = ''
   for (const byte of bytes) binary += String.fromCharCode(byte)
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+async function fetchWithTimeout(url, init, timeoutMs) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 async function hmacSha256Hex(key, message) {

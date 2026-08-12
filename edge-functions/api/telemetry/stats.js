@@ -51,11 +51,10 @@ export async function onRequestGet(context) {
     const secret = env.TELEMETRY_EDGE_SECRET || ''
     const sig = await hmacSha256Hex(secret, `stats:${query}`)
 
-    const response = await fetch(`${backendUrl}/stats${query}`, {
+    const response = await fetchWithTimeout(`${backendUrl}/stats${query}`, {
       method: 'GET',
       headers: { 'X-Telemetry-Sig': sig },
-      signal: AbortSignal.timeout(4000),
-    })
+    }, 4000)
 
     if (!response.ok) {
       return new Response(JSON.stringify({ error: 'backend error' }), {
@@ -78,6 +77,16 @@ export async function onRequestGet(context) {
       status: 502,
       headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
     })
+  }
+}
+
+async function fetchWithTimeout(url, init, timeoutMs) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timeout)
   }
 }
 
