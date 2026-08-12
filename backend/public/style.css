@@ -506,3 +506,59 @@ table.data tbody tr:hover {
   height: 10px;
   border-radius: 2px;
 }
+
+/* ---- 24h 折线图 ---- */
+
+.ts-line-chart-wrap {
+  width: 100%;
+  min-height: 200px;
+}
+
+
+.ts-line-chart-wrap svg {
+  width: 100%;
+  height: 200px;
+  display: block;
+  overflow: visible;
+}
+
+.ts-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.ts-line-session { stroke: var(--blue); }
+.ts-line-command { stroke: var(--green); }
+
+.ts-line-area {
+  opacity: 0.12;
+}
+
+.ts-line-area-session { fill: var(--blue); }
+.ts-line-area-command { fill: var(--green); }
+
+.ts-line-dot {
+  r: 2.5;
+}
+
+.ts-line-dot-session { fill: var(--blue); }
+.ts-line-dot-command { fill: var(--green); }
+
+.ts-axis-line {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.ts-axis-label {
+  fill: var(--muted);
+  font-size: 10px;
+  font-family: var(--mono);
+}
+
+.ts-grid-line {
+  stroke: var(--border);
+  stroke-width: 0.5;
+  opacity: 0.4;
+}

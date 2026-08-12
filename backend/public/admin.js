@@ -22,6 +22,7 @@ const els = {
   sessionsTable: document.getElementById('sessions-table'),
   updatedAt: document.getElementById('updated-at'),
   timeseriesChart: document.getElementById('timeseries-chart'),
+  hourlyChart: document.getElementById('hourly-chart'),
   refreshHint: document.getElementById('refresh-hint'),
 }
 
@@ -299,6 +300,121 @@ function renderTimeseries(timeseries) {
   }
 }
 
+/**
+ * 渲染近 24 小时活动趋势折线图（会话数 + 命令数）。
+ * hourly: [{ hour, session_create, command }]
+ * 使用纯 SVG 绘制，零依赖。
+ */
+function renderHourly(hourly) {
+  const container = els.hourlyChart
+  if (!container) return
+  container.textContent = ''
+
+  if (!Array.isArray(hourly) || hourly.length === 0) {
+    container.textContent = '暂无趋势数据'
+    return
+  }
+
+  const W = 800
+  const H = 200
+  const padL = 40
+  const padR = 16
+  const padT = 12
+  const padB = 28
+  const plotW = W - padL - padR
+  const plotH = H - padT - padB
+
+  const maxVal = Math.max(1, ...hourly.flatMap((d) => [d.session_create, d.command]))
+  const n = hourly.length
+  const xStep = n > 1 ? plotW / (n - 1) : 0
+
+  const xOf = (i) => padL + i * xStep
+  const yOf = (v) => padT + plotH - (v / maxVal) * plotH
+
+  const pts = (key) => hourly.map((d, i) => `${xOf(i)},${yOf(d[key])}`).join(' ')
+  const area = (key) => {
+    const top = hourly.map((d, i) => `${xOf(i)},${yOf(d[key])}`).join(' L ')
+    return `M ${xOf(0)},${padT + plotH} L ${top} L ${xOf(n - 1)},${padT + plotH} Z`
+  }
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`)
+  svg.setAttribute('preserveAspectRatio', 'none')
+
+  for (let g = 0; g <= 4; g++) {
+    const y = padT + (g / 4) * plotH
+    const val = Math.round(maxVal - (g / 4) * maxVal)
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line')
+    line.setAttribute('class', 'ts-grid-line')
+    line.setAttribute('x1', padL)
+    line.setAttribute('x2', W - padR)
+    line.setAttribute('y1', y)
+    line.setAttribute('y2', y)
+    svg.appendChild(line)
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+    label.setAttribute('class', 'ts-axis-label')
+    label.setAttribute('x', padL - 6)
+    label.setAttribute('y', y + 3)
+    label.setAttribute('text-anchor', 'end')
+    label.textContent = val
+    svg.appendChild(label)
+  }
+
+  const labelInterval = Math.ceil(n / 5)
+  for (let i = 0; i < n; i += labelInterval) {
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+    label.setAttribute('class', 'ts-axis-label')
+    label.setAttribute('x', xOf(i))
+    label.setAttribute('y', H - 8)
+    label.setAttribute('text-anchor', 'middle')
+    label.textContent = new Date(hourly[i].hour).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
+    svg.appendChild(label)
+  }
+
+  const sessionArea = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  sessionArea.setAttribute('class', 'ts-line-area ts-line-area-session')
+  sessionArea.setAttribute('d', area('session_create'))
+  svg.appendChild(sessionArea)
+  const sessionLine = document.createElementNS('http://www.w3.org/2000/svg', 'polyline')
+  sessionLine.setAttribute('class', 'ts-line ts-line-session')
+  sessionLine.setAttribute('points', pts('session_create'))
+  svg.appendChild(sessionLine)
+
+  const commandArea = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  commandArea.setAttribute('class', 'ts-line-area ts-line-area-command')
+  commandArea.setAttribute('d', area('command'))
+  svg.appendChild(commandArea)
+  const commandLine = document.createElementNS('http://www.w3.org/2000/svg', 'polyline')
+  commandLine.setAttribute('class', 'ts-line ts-line-command')
+  commandLine.setAttribute('points', pts('command'))
+  svg.appendChild(commandLine)
+
+  for (let i = 0; i < n; i++) {
+    for (const [key, cls] of [['session_create', 'ts-line-dot-session'], ['command', 'ts-line-dot-command']]) {
+      const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+      dot.setAttribute('class', `ts-line-dot ${cls}`)
+      dot.setAttribute('cx', xOf(i))
+      dot.setAttribute('cy', yOf(hourly[i][key]))
+      svg.appendChild(dot)
+    }
+  }
+
+  container.appendChild(svg)
+
+  const legend = document.createElement('div')
+  legend.className = 'ts-legend'
+  for (const [cls, label] of [['ts-line-session', '会话'], ['ts-line-command', '命令']]) {
+    const item = document.createElement('div')
+    item.className = 'ts-legend-item'
+    const dot = document.createElement('span')
+    dot.className = 'ts-legend-dot'
+    dot.style.background = cls === 'ts-line-session' ? 'var(--blue)' : 'var(--green)'
+    item.append(dot, document.createTextNode(label))
+    legend.appendChild(item)
+  }
+  container.appendChild(legend)
+}
+
 function render(data) {
   const modules = (data && typeof data.modules === 'object' && data.modules) || {}
   const seclab = modules.seclab || {}
@@ -308,6 +424,7 @@ function render(data) {
   renderHintResetTable(seclab.hint, seclab.reset)
   renderSessionsTable(data.sessions && data.sessions.recent)
   renderTimeseries(data.timeseries)
+  renderHourly(data.hourly)
   els.updatedAt.textContent = `数据更新时间:${fmtTime(data.generatedAt || Date.now())}`
 }
 
