@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-#
 # HASHTEAM Security Lab 原子发布：
 #   验证已构建的 dist -> 检查远端最小权限 -> 上传共享内容寻址 VM 资产
-#   -> 上传独立 release -> 原子切换 -> 线上健康检查；
-#   失败时自动回滚 current 软链接。
+#   -> 分片并行上传 release 差量至持久传输缓存（单流失败自动重试）
+#   -> 服务器本地组装 release -> 校验文件集 -> GC 缓存 -> 原子切换
+#   -> 线上健康检查；失败时自动回滚 current 软链接。
+# 持久缓存使同一内容只跨链路传输一次；N 条独立 SSH 连接规避跨境按流限速
+# （实测单流 ~12 kB/s，8 流聚合 ~86 kB/s；严禁 ControlMaster 复用连接）。
 #
 # 用法：bash scripts/deploy-release.sh
 set -euo pipefail
@@ -55,6 +57,24 @@ done
 (( LOCK_STALE_SECONDS >= LOCK_HEARTBEAT_SECONDS * 3 && LOCK_STALE_SECONDS <= 3600 ))
 (( LOCK_WAIT_SECONDS >= LOCK_STALE_SECONDS && LOCK_WAIT_SECONDS <= 900 ))
 (( LOCK_RETRY_SECONDS >= 5 && LOCK_RETRY_SECONDS <= LOCK_HEARTBEAT_SECONDS ))
+
+DEPLOY_PARALLELISM="${DEPLOY_PARALLELISM:-8}"
+DEPLOY_UPLOAD_RETRIES="${DEPLOY_UPLOAD_RETRIES:-3}"
+DEPLOY_UPLOAD_RETRY_WAIT="${DEPLOY_UPLOAD_RETRY_WAIT:-10}"
+[[ "$DEPLOY_PARALLELISM" =~ ^[1-9][0-9]?$ ]] &&
+  (( DEPLOY_PARALLELISM <= 16 )) || {
+    echo "ERROR: DEPLOY_PARALLELISM 必须是 1-16 的整数"
+    exit 2
+  }
+[[ "$DEPLOY_UPLOAD_RETRIES" =~ ^[1-5]$ ]] || {
+  echo "ERROR: DEPLOY_UPLOAD_RETRIES 必须是 1-5 的整数"
+  exit 2
+}
+[[ "$DEPLOY_UPLOAD_RETRY_WAIT" =~ ^[0-9]+$ ]] &&
+  (( DEPLOY_UPLOAD_RETRY_WAIT >= 1 && DEPLOY_UPLOAD_RETRY_WAIT <= 60 )) || {
+    echo "ERROR: DEPLOY_UPLOAD_RETRY_WAIT 必须是 1-60 的整数"
+    exit 2
+  }
 [[ -r "$LOCK_HELPER" ]] || {
   echo "ERROR: 缺少远端发布锁助手：$LOCK_HELPER" >&2
   exit 1
@@ -257,29 +277,130 @@ rsync -rlzh --checksum --info=progress2,name \
   "${HOST}:${REMOTE_PATH}/vm-assets/"
 assert_deploy_lock_heartbeat
 
-echo "==> [4/6] 上传 release ${RELEASE_ID}"
-ssh "$HOST" mkdir -p "${REMOTE_PATH}/releases/${RELEASE_ID}.upload"
-echo "    发布包体积 $(du -sh --exclude=vm-assets ./dist | cut -f1)；慢链路可能需数十分钟，以下为整体进度"
-rsync -azh --delete --info=progress2,name \
-  --exclude='vm-assets/' \
-  --exclude='.DS_Store' \
-  --exclude='*.log' \
-  ./dist/ \
-  "${HOST}:${REMOTE_PATH}/releases/${RELEASE_ID}.upload/"
-assert_deploy_lock_heartbeat
+echo "==> [4/6] 分片并行上传 release ${RELEASE_ID} 至持久传输缓存"
+# 持久缓存 + 分片并行：同一文件内容只在首次上传时跨链路传输一次，
+# 之后每次发布只传差异（--checksum 去重）。N 条独立 SSH 连接规避跨境
+# 按流限速；严禁 ControlMaster 复用连接，否则并行收益归零。
+# 缓存里残留的 rsync 临时文件与过期内容由 [5/6] 的 GC 定期回收。
+work_dir="$(mktemp -d)"
+manifest_file="$work_dir/manifest"
+chunk_dir="$work_dir/chunks"
+mkdir -p "$chunk_dir"
 
-echo "==> [5/6] 校验远端文件并原子切换 current"
+find ./dist -type f \
+  ! -path './dist/vm-assets/*' \
+  ! -name '.DS_Store' \
+  ! -name '*.log' \
+  -printf '%P\n' |
+  LC_ALL=C sort -u > "$manifest_file"
+total_files="$(wc -l < "$manifest_file")"
+[[ "$total_files" -ge 1 ]] || { echo "ERROR: release 文件清单为空"; exit 1; }
+
+chunk_count="$DEPLOY_PARALLELISM"
+(( chunk_count = chunk_count > total_files ? total_files : chunk_count ))
+
+# 按体积贪心分片，让各流负载接近
+find ./dist -type f \
+  ! -path './dist/vm-assets/*' \
+  ! -name '.DS_Store' \
+  ! -name '*.log' \
+  -printf '%s\t%P\n' |
+  LC_ALL=C sort -k1,1nr |
+  awk -v n="$chunk_count" -v prefix="$chunk_dir/chunk." '
+    BEGIN { for (i = 1; i <= n; i++) total[i] = 0 }
+    {
+      size = $1 + 0
+      path = $0
+      sub(/^[0-9]+\t/, "", path)
+      best = 1
+      for (i = 2; i <= n; i++) if (total[i] < total[best]) best = i
+      total[best] += size
+      print path >> (prefix best)
+    }'
+
+cache_dir="$REMOTE_PATH/.transfer-cache"
+ssh "$HOST" mkdir -p "$cache_dir"
+scp "$manifest_file" "$HOST:$cache_dir/.manifest-$RELEASE_ID"
+
+echo "    release 共 ${total_files} 个文件、$(du -sh --exclude=vm-assets ./dist | cut -f1)；"
+echo "    ${chunk_count} 条并行流；单流最多重试 ${DEPLOY_UPLOAD_RETRIES} 次、间隔 ${DEPLOY_UPLOAD_RETRY_WAIT}s"
+
+upload_chunk() {
+  local chunk_file="$1"
+  local attempt
+  for ((attempt = 1; attempt <= DEPLOY_UPLOAD_RETRIES; attempt++)); do
+    if rsync -azh --checksum --timeout=300 \
+      --files-from="$chunk_file" \
+      --info=progress2,name \
+      ./dist/ \
+      "${HOST}:${cache_dir}/"; then
+      return 0
+    fi
+    if (( attempt < DEPLOY_UPLOAD_RETRIES )); then
+      echo "WARNING: 分片 ${chunk_file##*/} 第 ${attempt} 次上传失败，${DEPLOY_UPLOAD_RETRY_WAIT}s 后重试" >&2
+      sleep "$DEPLOY_UPLOAD_RETRY_WAIT"
+    fi
+  done
+  echo "ERROR: 分片 ${chunk_file##*/} 重试 ${DEPLOY_UPLOAD_RETRIES} 次仍失败" >&2
+  return 1
+}
+
+pids=()
+for i in $(seq 1 "$chunk_count"); do
+  upload_chunk "$chunk_dir/chunk.$i" &
+  pids+=("$!")
+done
+upload_rc=0
+for pid in "${pids[@]}"; do
+  wait "$pid" || upload_rc=1
+done
+[[ "$upload_rc" -eq 0 ]] || { echo "ERROR: 并行上传存在失败分片" >&2; exit 1; }
+assert_deploy_lock_heartbeat
+rm -rf "$work_dir"
+
+echo "==> [5/6] 组装 release、校验文件集、GC 缓存并原子切换 current"
 ssh "$HOST" bash -s -- \
-  "$REMOTE_PATH" "$RELEASE_ID" "$VM_HASH" "$DEPLOY_TOKEN" <<'REMOTE'
+  "$REMOTE_PATH" "$RELEASE_ID" "$VM_HASH" "$DEPLOY_TOKEN" \
+  "$cache_dir/.manifest-$RELEASE_ID" <<'REMOTE'
 set -euo pipefail
 root="$1"
 release="$2"
 vm_hash="$3"
 token="$4"
+manifest="$5"
 upload="$root/releases/$release.upload"
 final="$root/releases/$release"
+cache="$root/.transfer-cache"
 
 test "$(cat "$root/.deploy-lock/owner")" = "$token"
+test -s "$manifest"
+
+mkdir -p "$upload"
+
+# 服务器本地组装（不跨链路），只取 manifest 列出的文件
+rsync -a --files-from="$manifest" "$cache/" "$upload/"
+
+# 组装结果必须与 manifest 完全一致：防缓存文件缺失或多余
+assembled="$(find "$upload" -type f -printf '%P\n' | LC_ALL=C sort)"
+expected="$(LC_ALL=C sort -u "$manifest")"
+if [[ "$assembled" != "$expected" ]]; then
+  echo "ERROR: 组装后的 release 文件集与 manifest 不一致" >&2
+  exit 1
+fi
+
+# 缓存 GC：删除超过 7 天且不属于当前 manifest 的文件，随后清空目录。
+# 旧 release 是完整副本（非硬链接），缓存只是传输缓存，可安全回收。
+find "$cache" -type f -mtime +7 -printf '%P\n' |
+  LC_ALL=C sort -u |
+  LC_ALL=C comm -23 - <(LC_ALL=C sort -u "$manifest") |
+  while IFS= read -r stale; do
+    case "$stale" in
+      *[!A-Za-z0-9._/-]*|''|/*|../*|*/../*) continue ;;
+    esac
+    rm -f -- "$cache/$stale"
+  done
+find "$cache" -mindepth 1 -type d -empty -delete 2>/dev/null || true
+
 test -s "$upload/index.html"
 test -s "$upload/vm-assets.json"
 test -s "$root/vm-assets/$vm_hash/v86/v86.wasm"
@@ -294,6 +415,7 @@ test ! -L "$next_link"
 ln -s "releases/$release" "$next_link"
 mv -Tf "$next_link" "$root/current"
 REMOTE
+
 
 rollback() {
   if [[ -z "$PREVIOUS_TARGET" ]]; then

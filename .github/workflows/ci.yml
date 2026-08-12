@@ -91,15 +91,76 @@ jobs:
           compression-level: 0
           include-hidden-files: false
 
+  # 变更范围判定：只改 backend/（遥测后端走独立手工部署，不经过站点发布）
+  # 时跳过两个部署 job；verify 仍运行。判定失败时 job 失败，部署 job 因
+  # needs 依赖同样不会运行（fail-closed）。
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      skip_deploy: ${{ steps.detect.outputs.skip_deploy }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Detect deploy-relevant changes
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$GITHUB_EVENT_NAME" in
+            push)
+              base="${{ github.event.before }}"
+              head="$GITHUB_SHA"
+              ;;
+            pull_request)
+              base="${{ github.event.pull_request.base.sha }}"
+              head="${{ github.event.pull_request.head.sha }}"
+              ;;
+            *)
+              # workflow_dispatch：视为有意发布，不跳过部署
+              echo "skip_deploy=false" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
+          [[ "$base" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "skip_deploy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+          git cat-file -e "$base^{commit}" 2>/dev/null ||
+            git fetch --quiet origin "$base"
+          git cat-file -e "$head^{commit}" 2>/dev/null ||
+            git fetch --quiet origin "$head"
+          changed="$(git diff --name-only "$base" "$head")"
+          relevant="$(printf '%s\n' "$changed" |
+            grep -v '^backend/' |
+            grep -v '^[[:space:]]*$' || true)"
+          if [[ -z "$relevant" ]]; then
+            skip_deploy=true
+          else
+            skip_deploy=false
+          fi
+          echo "skip_deploy=$skip_deploy" >> "$GITHUB_OUTPUT"
+          printf 'deploy-relevant changed files: %s\n' \
+            "$(printf '%s\n' "$relevant" | wc -l)"
+
   # 实验性部署：腾讯云 Nginx（labtest.lwzheng.tech）。
   # 只在「同仓库 PR 且 verify 通过」时运行；fork PR 永不进入本 job，
-  # 也就接触不到 staging Environment 里的 SSH 凭据。
+  # 也就接触不到 staging Environment 里的 SSH 凭据。只改 backend/ 的
+  # PR 由 changes 判定跳过部署（遥测后端独立手工部署）。
   deploy_staging:
     if: >-
       github.event_name == 'pull_request' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      needs.changes.outputs.skip_deploy != 'true'
     needs:
       - verify
+      - changes
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -231,11 +292,16 @@ jobs:
             timeout --signal=TERM --kill-after=90s 42m \
               bash scripts/deploy-release.sh
 
-  # 生产部署：EdgeOne（lab.lwzheng.tech）。只在 main push / dispatch 运行。
+  # 生产部署：EdgeOne（lab.lwzheng.tech）。只在 main push / dispatch 运行；
+  # 只改 backend/ 的 main push 由 changes 判定跳过部署。
   deploy_edgeone:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: >-
+      github.event_name != 'pull_request' &&
+      github.ref == 'refs/heads/main' &&
+      needs.changes.outputs.skip_deploy != 'true'
     needs:
       - verify
+      - changes
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

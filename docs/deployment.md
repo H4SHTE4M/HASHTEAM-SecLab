@@ -36,8 +36,12 @@ lab.lwzheng.tech（生产）
 ```
 
 - workflow 的 `GITHUB_TOKEN` 只有 `contents: read`，所有 Action 固定到完整 commit。
-- 两个部署 job 都只依赖 `verify`，各自设置独立 concurrency，
+- 两个部署 job 都依赖 `verify` 与 `changes`，各自设置独立 concurrency，
   `cancel-in-progress: false`。
+- `changes` job 用 `git diff` 判定变更范围：除 `backend/` 外的文件均未变化时
+  输出 `skip_deploy=true`，两个部署 job 被跳过（verify 仍运行）。遥测后端走
+  `docs/telemetry.md` 的独立手工部署，不经过站点发布链路；判定 job 自身失败
+  时部署 job 因 `needs` 依赖同样不会运行（fail-closed）。
 - fork PR 的 `deploy_staging` 被 job 级 `if` 跳过，引用不到任何 Environment
   Secret；GitHub 默认也不向 fork PR 注入 Secret，形成双保险。
 - Nginx SSH 私钥只在 `staging` Environment,EO Token 只在 `production`
@@ -104,10 +108,18 @@ Environment 必须在 GitHub 仓库设置中配置 deployment branch rule，只�
 3. workflow 直接把 `dist/` 打成确定性 tar，计算 SHA-256，上传保留一天的
    verified artifact（main 发布与同仓库 PR 实验性部署共用同一名称与格式）。
 4. 部署 job 下载同名 artifact，并调用同一只读校验脚本。
-5. Nginx staging job（仅同仓库 PR）校验专用 SSH 账号最小权限，上传共享内容寻址
-   VM 资产和独立 release，原子切换 `current`，逐字节验收；失败自动切回上一
-   release。多个 PR 连续触发时后到的发布覆盖先前的实验环境，这是预期行为：
-   staging 永远承载「最近一次通过 verify 的 PR 内容」。
+5. Nginx staging job（仅同仓库 PR）校验专用 SSH 账号最小权限，按体积贪心分片为
+   `DEPLOY_PARALLELISM`（默认 8）条独立 SSH 连接并行 rsync 到服务器持久传输缓存
+   `/var/www/hashteam/.transfer-cache/`。每条流失败自动重试
+   `DEPLOY_UPLOAD_RETRIES`（默认 3）次、间隔 `DEPLOY_UPLOAD_RETRY_WAIT`（默认
+   10）秒，且带 300 秒 I/O 超时。缓存按 `--checksum` 去重：同一内容只在首次
+   发布时跨链路传输一次，之后只传差异。随后服务器本地组装新 release、比对文件
+   集与 manifest 完全一致，原子切换 `current`，逐字节验收；失败自动切回上一
+   release。缓存由每次发布自动 GC（超过 7 天且不属于当前 manifest 的文件与
+   空目录被回收；旧 release 是完整副本，不引用缓存，回收安全）。注意严禁为
+   并行 rsync 配置 SSH ControlMaster 复用连接——那会把多条流并回一条被跨境
+   限速的连接，抵消全部并行收益。多个 PR 连续触发时后到的发布覆盖先前的实验
+   环境，这是预期行为：staging 永远承载「最近一次通过 verify 的 PR 内容」。
 6. EO job（仅 main）先通过 China Makers API 精确查询项目，名称、ID 或
    Direct Upload 类型任一不符即 fail closed。CLI 进程还加载
    `scripts/guard-edgeone-project.mjs`，禁止 `CreatePagesProject` 和 Global API
