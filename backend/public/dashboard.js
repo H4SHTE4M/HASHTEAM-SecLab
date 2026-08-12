@@ -152,6 +152,7 @@ function renderCards(modules) {
     card.append(labelEl, valueEl, subEl)
     els.cards.appendChild(card)
   }
+}
 
 /**
  * 渲染近 30 天活动趋势堆叠柱状图。
