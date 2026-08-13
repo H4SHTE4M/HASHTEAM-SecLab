@@ -4,6 +4,7 @@ set -eu
 
 STATE_DIR="$HOME/.hashteam"
 LEVELS_DIR="${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}"
+LABS_DIR="${PWNHUB_LABS_DIR:-/opt/pwnhub/labs}"
 . "${HASHTEAM_LIB_DIR:-/etc/hashteam}/colors.sh"
 
 current_level() {
@@ -13,6 +14,25 @@ current_level() {
 # 已完成的最高关卡号（关卡顺序解锁，故只记一个最大值即可）
 max_completed() {
     cat "$STATE_DIR/max-completed" 2>/dev/null || echo 0
+}
+
+current_lab() {
+    cat "$STATE_DIR/lab" 2>/dev/null || true
+}
+
+valid_lab_id() {
+    [ "${#1}" -le 96 ] || return 1
+    case "$1" in
+        [a-z]* ) ;;
+        * ) return 1 ;;
+    esac
+    case "$1" in
+        *[!a-z0-9-]*|*- ) return 1 ;;
+    esac
+}
+
+lab_completed() {
+    [ -f "$STATE_DIR/completed-labs" ] && grep -Fqx -- "$1" "$STATE_DIR/completed-labs"
 }
 
 # 经 SUID 签名检查器签发 level-ready（前端验签+解锁门控双重防伪）；
@@ -25,8 +45,73 @@ emit_level_ready() {
     fi
 }
 
+emit_lab_ready() {
+    if [ -x "${HASHTEAM_HTCHECK:-/usr/local/bin/htcheck}" ]; then
+        "${HASHTEAM_HTCHECK:-/usr/local/bin/htcheck}" lab-ready "$1"
+    else
+        printf '@@HASHTEAM:{"type":"lab-ready","labId":"%s"}\n' "$1"
+    fi
+}
+
 run_init() {
     sh "$LEVELS_DIR/level-$1/init.sh"
+}
+
+clear_workspace() {
+    for entry in "$HOME"/* "$HOME"/.[!.]* "$HOME"/..?*; do
+        [ -e "$entry" ] || [ -L "$entry" ] || continue
+        case "$entry" in
+            "$STATE_DIR"|"$HOME/.profile"|"$HOME/.ash_history") continue ;;
+        esac
+        rm -rf -- "$entry"
+    done
+}
+
+install_lab_home_files() {
+    lab_dir="$LABS_DIR/$1"
+    list="$lab_dir/home-files"
+    [ -f "$list" ] || return 0
+
+    while IFS= read -r filename || [ -n "$filename" ]; do
+        case "$filename" in
+            ''|'#'*) continue ;;
+            *[!A-Za-z0-9._-]*|.|..) ht_error "实验 HOME 文件配置无效"; return 2 ;;
+        esac
+        [ -f "$lab_dir/$filename" ] || {
+            ht_error "实验缺少 HOME 文件: $filename"
+            return 2
+        }
+        cp -- "$lab_dir/$filename" "$HOME/$filename"
+    done < "$list"
+}
+
+run_lab_init() {
+    install_lab_home_files "$1"
+    sh "$LABS_DIR/$1/init.sh"
+}
+
+assert_lab_unlocked() {
+    lab_dir=$1
+    if [ -f "$lab_dir/unlock-level" ]; then
+        required_level=$(cat "$lab_dir/unlock-level")
+        case "$required_level" in
+            ''|*[!0-9]*) ht_error "实验解锁配置无效"; return 2 ;;
+        esac
+        if [ "$(max_completed)" -lt "$required_level" ]; then
+            ht_warning "这个实验尚未解锁，请先完成基础章节。"
+            return 3
+        fi
+    fi
+    if [ -f "$lab_dir/unlock-labs" ]; then
+        while IFS= read -r required_lab || [ -n "$required_lab" ]; do
+            [ -z "$required_lab" ] && continue
+            valid_lab_id "$required_lab" || { ht_error "实验解锁配置无效"; return 2; }
+            lab_completed "$required_lab" || {
+                ht_warning "这个实验尚未解锁，请先完成前置实验。"
+                return 3
+            }
+        done < "$lab_dir/unlock-labs"
+    fi
 }
 
 cmd=${1:-}
@@ -50,9 +135,28 @@ case "$cmd" in
         fi
         mkdir -p "$STATE_DIR"
         rm -f "$STATE_DIR"/hint-count-*
+        rm -f "$STATE_DIR/lab"
         echo "$level" > "$STATE_DIR/level"
+        clear_workspace
         run_init "$level"
         emit_level_ready "$level"
+        echo "卡住时输入 help 或 hint。"
+        ;;
+    goto-lab)
+        lab_id=${2:-}
+        valid_lab_id "$lab_id" || { ht_error "无效的实验 ID: $lab_id"; exit 2; }
+        lab_dir="$LABS_DIR/$lab_id"
+        if [ ! -f "$lab_dir/init.sh" ] || [ ! -f "$lab_dir/check.sh" ]; then
+            ht_error "实验 $lab_id 不存在"
+            exit 2
+        fi
+        assert_lab_unlocked "$lab_dir"
+        mkdir -p "$STATE_DIR"
+        rm -f "$STATE_DIR"/hint-count-* "$STATE_DIR/level"
+        echo "$lab_id" > "$STATE_DIR/lab"
+        clear_workspace
+        run_lab_init "$lab_id"
+        emit_lab_ready "$lab_id"
         echo "卡住时输入 help 或 hint。"
         ;;
     mark-completed)
@@ -67,26 +171,47 @@ case "$cmd" in
             echo "$level" > "$STATE_DIR/max-completed"
         fi
         ;;
+    mark-lab-completed)
+        lab_id=${2:-}
+        valid_lab_id "$lab_id" || { ht_error "无效的实验 ID: $lab_id"; exit 2; }
+        [ -d "$LABS_DIR/$lab_id" ] || { ht_error "实验 $lab_id 不存在"; exit 2; }
+        mkdir -p "$STATE_DIR"
+        if ! lab_completed "$lab_id"; then
+            printf '%s\n' "$lab_id" >> "$STATE_DIR/completed-labs"
+        fi
+        ;;
     reset-level)
-        level=$(current_level)
-        ht_notice "正在重置第 $level 关的实验环境..."
         rm -f "$STATE_DIR"/hint-count-*
-        run_init "$level"
-        emit_level_ready "$level"
+        lab_id=$(current_lab)
+        if [ -n "$lab_id" ]; then
+            valid_lab_id "$lab_id" || { ht_error "当前实验状态无效"; exit 2; }
+            ht_notice "正在重置实验 $lab_id..."
+            clear_workspace
+            run_lab_init "$lab_id"
+            emit_lab_ready "$lab_id"
+        else
+            level=$(current_level)
+            ht_notice "正在重置第 $level 关的实验环境..."
+            clear_workspace
+            run_init "$level"
+            emit_level_ready "$level"
+        fi
         echo "卡住时输入 help 或 hint。"
         ;;
     factory-reset)
         rm -rf "$STATE_DIR"
         mkdir -p "$STATE_DIR"
         echo 1 > "$STATE_DIR/level"
+        clear_workspace
         run_init 1
         emit_level_ready 1
         ;;
     current)
-        current_level
+        lab_id=$(current_lab)
+        [ -n "$lab_id" ] && printf '%s\n' "$lab_id" || current_level
         ;;
     *)
-        ht_error "用法：hashteamctl <goto N | reset-level | factory-reset | mark-completed N | current>"
+        ht_error "用法：hashteamctl <goto N | goto-lab ID | reset-level | factory-reset | mark-completed N | mark-lab-completed ID | current>"
         exit 2
         ;;
 esac

@@ -113,7 +113,7 @@ describe('responsive layout contract', () => {
   })
 
   it('stacks narrow landscape screens and only splits when both panes fit', () => {
-    const app = source('src/App.vue')
+    const app = source('src/views/SecLabWorkspace.vue')
     const panel = source('src/components/MissionPanel.vue')
     const rail = source('src/components/LevelRail.vue')
     const topbar = source('src/components/TopBar.vue')
@@ -150,7 +150,7 @@ describe('responsive layout contract', () => {
   })
 
   it('uses one scroll container for the stacked mobile workspace', () => {
-    const app = source('src/App.vue')
+    const app = source('src/views/SecLabWorkspace.vue')
 
     expect(app).toMatch(/grid-template-rows:\s*64px minmax\(300px, 42vh\) max-content/)
     expect(app).toContain('overflow-y: auto')
@@ -168,7 +168,7 @@ describe('responsive layout contract', () => {
   })
 
   it('offers persisted, bounded terminal font controls', () => {
-    const app = source('src/App.vue')
+    const app = source('src/views/SecLabWorkspace.vue')
     const terminal = source('src/components/LabTerminal.vue')
     const preferences = source('src/services/ui-preferences-store.ts')
 
@@ -185,7 +185,7 @@ describe('responsive layout contract', () => {
 
   it('keeps compact interactive targets usable by touch', () => {
     const about = source('src/components/AboutModal.vue')
-    const app = source('src/App.vue')
+    const app = source('src/views/SecLabWorkspace.vue')
     const panel = source('src/components/MissionPanel.vue')
     const rail = source('src/components/LevelRail.vue')
     const topbar = source('src/components/TopBar.vue')
@@ -244,7 +244,7 @@ describe('responsive layout contract', () => {
   })
 
   it('retains the upstream v2 learning flow instead of restoring the removed completion dialog', () => {
-    const app = source('src/App.vue')
+    const app = source('src/views/SecLabWorkspace.vue')
     const panel = source('src/components/MissionPanel.vue')
 
     expect(app).toContain(':completed-steps="currentCompletedSteps"')
@@ -277,7 +277,7 @@ describe('responsive layout contract', () => {
   })
 
   it('supports accessible tooltips and a resizable mission panel', () => {
-    const app = source('src/App.vue')
+    const app = source('src/views/SecLabWorkspace.vue')
     const globalCss = source('src/styles/global.css')
     const topbar = source('src/components/TopBar.vue')
 
@@ -296,7 +296,7 @@ describe('responsive layout contract', () => {
   })
 
   it('aligns desktop controls with the terminal and mission panel boundaries', () => {
-    const app = source('src/App.vue')
+    const app = source('src/views/SecLabWorkspace.vue')
     const topbar = source('src/components/TopBar.vue')
 
     expect(app).toContain('class="app-content"\n      :style="workspaceStyle"')
@@ -366,7 +366,7 @@ describe('responsive layout contract', () => {
   })
 
   it('keeps the completed boot state visible before opening onboarding', () => {
-    const app = source('src/App.vue')
+    const app = source('src/views/SecLabWorkspace.vue')
 
     expect(app).toContain('BOOT_OVERLAY_MIN_VISIBLE_MS = 900')
     expect(app).toContain('BOOT_READY_HOLD_MS = 180')

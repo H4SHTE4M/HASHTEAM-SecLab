@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+[ "$#" -ge 1 ] && [ "$#" -le 2 ] || { echo '用法：cyclic-find <四字节文本或0x整数> [搜索长度]' >&2; exit 2; }
+needle=$1
+length=${2:-65536}
+case "$length" in ''|*[!0-9]*) echo '搜索长度必须是十进制整数。' >&2; exit 2 ;; esac
+[ "$length" -le 65536 ] || { echo '搜索长度不能超过 65536 字节。' >&2; exit 2; }
+
+case "$needle" in
+    0x[0-9a-fA-F]*)
+        hex=${needle#0x}
+        [ -n "$hex" ] && [ "${#hex}" -le 8 ] || { echo '整数必须在 0 到 0xffffffff 之间。' >&2; exit 2; }
+        hex="$(printf '%08s' "$hex" | tr ' ' 0)"
+        needle_hex=$(printf '%s' "$hex" | sed 's/^\(..\)\(..\)\(..\)\(..\)$/\4\3\2\1/')
+        ;;
+    *) needle_hex=$(printf '%s' "$needle" | xxd -p -c 65536) ;;
+esac
+[ "${#needle_hex}" -ge 8 ] || { echo 'cyclic-find 至少需要四个字节。' >&2; exit 2; }
+
+offset=$(cyclic "$length" | xxd -p -c 65536 | awk -v needle="$needle_hex" '{ at = index($0, needle); if (at > 0) print int((at - 1) / 2) }')
+[ -n "$offset" ] || { echo '当前搜索范围内未找到。' >&2; exit 1; }
+printf '%s\n' "$offset"

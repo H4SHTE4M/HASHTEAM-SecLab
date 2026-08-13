@@ -2,6 +2,13 @@
  * HASHTEAM Security Lab 核心类型定义
  */
 
+import type {
+  BinaryWorkbenchSnapshot,
+  BinaryWorkbenchTab,
+  PayloadWorkbenchPreset,
+} from './binary'
+import type { ExternalCompanionDefinition } from './companion'
+
 /** 一条首次出现、必须在操作前读到的概念。 */
 export interface Concept {
   /** 跨步骤、跨关卡引用的稳定标识。 */
@@ -20,6 +27,17 @@ export type LearningStepType =
   | 'question'
   | 'checkpoint'
   | 'reflection'
+
+/** manifest v3 的扩展步骤；旧 v2 类型仍然是合法子集。 */
+export type CourseStepType =
+  | LearningStepType
+  | 'concept'
+  | 'terminal'
+  | 'prediction'
+  | 'visual-trace'
+  | 'external-tool'
+  | 'worksheet'
+  | 'payload-builder'
 
 export type StepCompletion = 'acknowledge' | 'run' | 'input' | 'answer' | 'confirm'
 
@@ -63,6 +81,8 @@ export interface LearningStep {
   completion: StepCompletion
   /** 是否允许把 command 一键送入终端。 */
   allowRun: boolean
+  /** 进入实验时由 VM 初始化脚本自动运行样本；引导模式只需核对输出。 */
+  autoRun?: boolean
   /** 本步首次讲授的概念；UI 会在操作区之前展示。 */
   introduces?: Concept[]
   /** 本步使用的概念 id；内容校验器会检查它们已经出现。 */
@@ -112,6 +132,138 @@ export interface CompletionSummary {
   solved: string
   mastered: string[]
   next: string
+}
+
+interface CourseStepBase extends Omit<LearningStep, 'type'> {
+  evidence?: 'observation' | 'prediction' | 'answer' | 'external-observation' | 'payload-replay'
+  tool?: 'gdb' | 'pwndbg' | 'ida' | 'ghidra' | 'elf' | 'shell'
+}
+
+export interface VisualTraceCourseStep extends CourseStepBase {
+  type: 'visual-trace'
+  workbench: BinaryWorkbenchSnapshot
+  initialTab?: Exclude<BinaryWorkbenchTab, 'payload'>
+}
+
+export interface PayloadBuilderCourseStep extends CourseStepBase {
+  type: 'payload-builder'
+  evidence: 'payload-replay'
+  payload: PayloadWorkbenchPreset
+}
+
+export interface ExternalToolCourseStep extends CourseStepBase {
+  type: 'external-tool'
+  evidence: 'external-observation'
+  companion: ExternalCompanionDefinition
+}
+
+export interface GeneralCourseStep extends CourseStepBase {
+  type: Exclude<CourseStepType, LearningStepType | 'visual-trace' | 'payload-builder' | 'external-tool'>
+}
+
+/** v3 扩展步骤按 type 携带专属数据；旧 v2 LearningStep 仍是合法分支。 */
+export type CourseStep =
+  | LearningStep
+  | GeneralCourseStep
+  | VisualTraceCourseStep
+  | PayloadBuilderCourseStep
+  | ExternalToolCourseStep
+
+/**
+ * 课程领域模型（manifest v3）。数字关卡仍作为迁移期兼容层，长期身份使用
+ * chapterId/labId；显示序号由课程清单派生，不参与进度寻址。
+ */
+export type LabKind =
+  | 'terminal'
+  | 'visual'
+  | 'elf'
+  | 'gdb'
+  | 'external-tool'
+  | 'pwn'
+
+export type EnvironmentProfile = 'base' | 'binary'
+
+export type VerificationType =
+  | 'terminal-state'
+  | 'answer'
+  | 'payload-replay'
+  | 'external-observation'
+
+export interface LabArtifact {
+  path: string
+  architecture: 'i386' | 'x86_64' | 'any'
+  sha256: string
+  purpose: string
+  downloadable: boolean
+}
+
+export interface LabVerification {
+  type: VerificationType
+  usage: string
+  instruction: string
+  placeholders: VerificationPlaceholder[]
+  feedback: VerificationFeedback
+}
+
+export interface ChapterDef {
+  chapterId: string
+  title: string
+  summary: string
+  goals: string[]
+  prerequisites: string[]
+  estimatedMinutes: { min: number; max: number }
+  labIds: string[]
+  unlockAfter: string[]
+  /** 本章可标记完成前必须形成的能力证据。 */
+  completionDefinition: string[]
+  status: 'available' | 'planned'
+}
+
+export interface CourseLabDef extends Omit<LevelDef, 'steps'> {
+  labId: string
+  chapterId: string
+  title: string
+  summary: string
+  kind: LabKind
+  environmentProfile: EnvironmentProfile
+  estimatedMinutes: { min: number; max: number }
+  unlockAfter: string[]
+  artifacts: LabArtifact[]
+  concepts: Concept[]
+  verificationType: VerificationType
+  steps: CourseStep[]
+  /** 旧 v2 数字关卡的兼容身份；新实验不再分配数字运行时编号。 */
+  legacyLevel?: number
+}
+
+export interface CourseDef {
+  courseId: string
+  title: string
+  summary: string
+  chapters: ChapterDef[]
+  labs: CourseLabDef[]
+}
+
+export interface CourseLabManifest {
+  $schema: '../course.schema.json'
+  schemaVersion: 3
+  courseId: string
+  chapterId: string
+  labId: string
+  title: string
+  summary: string
+  goals: string[]
+  prerequisites: string[]
+  kind: LabKind
+  environmentProfile: EnvironmentProfile
+  estimatedMinutes: { min: number; max: number }
+  unlockAfter: string[]
+  artifacts: LabArtifact[]
+  concepts: Concept[]
+  steps: CourseStep[]
+  hints: HintLayer[]
+  verification: LabVerification
+  completionSummary: CompletionSummary
 }
 
 /** 学习路径；不影响关卡环境与 VM 最终状态判题。 */
@@ -178,15 +330,29 @@ export type ProtocolMessage =
   | { type: 'ready'; version?: number; key?: string }
   | { type: 'level-ready'; level: number; sig?: string }
   | { type: 'level-result'; level: number; status: 'passed' | 'failed'; sig?: string }
-  | { type: 'hint-request'; level: number }
+  | { type: 'lab-ready'; labId: string; sig?: string }
+  | { type: 'lab-result'; labId: string; status: 'passed' | 'failed'; sig?: string }
+  | { type: 'hint-request'; level?: number; labId?: string }
   | { type: 'progress'; level: number; value: number }
   | { type: 'telemetry-command'; command: string }
   | { type: 'error'; message: string }
 
 /** 前端持久化的关卡进度 */
 export interface LabProgress {
+  /** 当前进度格式；v6 开始让非旧版实验的所有证据都以 labId 寻址。 */
+  schemaVersion: 6
   currentLevel: number
+  currentLabId: string
   completedLevels: number[]
+  completedLabIds: string[]
+  /** chapterId -> 已完成 labId 列表，便于章节导航和能力解锁。 */
+  chapterProgress: Record<string, string[]>
+  /** 以下稳定字段是 v3 课程的主存储；数字字段继续服务旧版 UI 与存档兼容。 */
+  labHintsUsed: Record<string, number>
+  labGuideSteps: Record<string, number>
+  labCompletedSteps: Record<string, number[]>
+  guidedAssistanceLabIds: string[]
+  labCompletionRecords: Record<string, LevelCompletionRecord>
   hintsUsed: Record<number, number>
   /** 每关当前已揭示到的教学步骤索引（从 0 开始）。 */
   guideSteps: Record<number, number>
@@ -212,6 +378,9 @@ export interface LabUiPreferences {
   customAccent: CustomAccent
 }
 
+/** 保留从核心类型入口导入伴侣消息的兼容路径。 */
+export type { CompanionMessage } from './companion'
+
 /** 虚拟机启动阶段（用于加载界面展示真实阶段，不伪造百分比） */
 export type BootStage =
   | 'idle'
@@ -227,6 +396,9 @@ export interface VirtualMachineController {
   stop(): Promise<void>
   reset(): Promise<void>
   restoreLevel(level: number): Promise<void>
+  restoreLab(labId: string): Promise<void>
+  /** 运行面板提供的命令；旧控制器实现可省略，调用方会回退到 sendSerial。 */
+  runCommand?(command: string): void
   sendSerial(input: string): void
   onSerialOutput(callback: (data: string) => void): () => void
 }

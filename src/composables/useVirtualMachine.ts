@@ -1,8 +1,16 @@
 import { ref } from 'vue'
-import type { BootStage, LabMode, ProtocolMessage, VirtualMachineController } from '../types/lab'
+import type {
+  BootStage,
+  CourseLabDef,
+  LabMode,
+  ProtocolMessage,
+  VirtualMachineController,
+} from '../types/lab'
 import { V86Controller } from '../services/vm-controller'
 import {
   importSessionKey,
+  labReadyMessage,
+  labResultMessage,
   levelReadyMessage,
   levelResultMessage,
   verifySignature,
@@ -13,8 +21,19 @@ import { useLabProgress } from './useLabProgress'
 import { useLabPreferences } from './useLabPreferences'
 import { useAnomalyCenter } from '../services/anomaly-center'
 import { useTelemetry } from '../telemetry'
+import type { ModuleId, VmBootDuration, VmBootOutcome } from '../telemetry'
 import { getLevel, TOTAL_LEVELS } from '../data/levels'
+import { COURSE, getCourseLab } from '../modules/pwnhub/course'
+import { isLabUnlocked, legacyLabId } from '../services/course-progress'
 import { log, clear as clearBootLog } from '../services/boot-logger'
+
+function vmBootDuration(elapsedMs: number): VmBootDuration {
+  if (elapsedMs < 3_000) return '<3s'
+  if (elapsedMs < 5_000) return '3-5s'
+  if (elapsedMs < 10_000) return '5-10s'
+  if (elapsedMs < 20_000) return '10-20s'
+  return '>=20s'
+}
 
 const DEFAULT_READY_TIMEOUT_MS = 60_000
 
@@ -25,10 +44,16 @@ export interface VirtualMachineOptions {
   readyTimeoutMs?: number
   /** 当前学习模式读取器；测试可注入以覆盖判题分流。 */
   getMode?: () => LabMode
+  /** 当前工作台所属 module；单例可在路由切换后通过 setModule 更新。 */
+  module?: ModuleId
 }
 
 function isKnownLevel(level: number): boolean {
   return Number.isInteger(level) && level >= 1 && level <= TOTAL_LEVELS
+}
+
+function isKnownLab(labId: string): boolean {
+  return getCourseLab(labId) !== undefined
 }
 
 /**
@@ -43,7 +68,8 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
   const displayCallbacks = new Set<(data: string) => void>()
   const progress = useLabProgress()
   const anomalyCenter = useAnomalyCenter()
-  const telemetry = useTelemetry()
+  let activeModule: ModuleId = options.module ?? 'seclab'
+  const getTelemetry = () => useTelemetry(activeModule)
   const getMode =
     options.getMode ??
     (() => useLabPreferences().state.mode ?? 'guided')
@@ -67,6 +93,28 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
   let disposeGeneration = 0
   /** 协议消息按到达顺序串行处理（验签是异步的） */
   let messageChain: Promise<void> = Promise.resolve()
+  /** 当前页面会话临时放行的实验；不进入进度存储，也不参与完成判定。 */
+  const temporarilyUnlockedLabIds = new Set<string>()
+  let bootStartedAt = 0
+
+  function isTemporarilyUnlocked(labId: string): boolean {
+    return temporarilyUnlockedLabIds.has(labId)
+  }
+
+  function canNavigateToLab(lab: CourseLabDef): boolean {
+    return (
+      isTemporarilyUnlocked(lab.labId) ||
+      isLabUnlocked(lab, progress.state.completedLabIds, progress.state.completedLevels)
+    )
+  }
+
+  function canNavigateToLevel(level: number): boolean {
+    return (
+      isTemporarilyUnlocked(legacyLabId(level)) ||
+      level === 1 ||
+      progress.state.completedLevels.includes(level - 1)
+    )
+  }
 
   function clearReadyTimer(): void {
     if (readyTimer === null) return
@@ -111,6 +159,14 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
   async function failCurrentBoot(message: string, failedGeneration: number): Promise<void> {
     if (failedGeneration !== generation) return
     log('boot', `启动失败：${message}`, 'error')
+    if (activeModule === 'pwnhub') {
+      const outcome: VmBootOutcome = message.includes('启动超过')
+        ? 'timeout'
+        : stage.value === 'loading-assets'
+          ? 'asset_error'
+          : 'linux_error'
+      getTelemetry().trackVmBoot(outcome, vmBootDuration(Date.now() - bootStartedAt), 'unknown')
+    }
     await releaseCurrentVm()
     stage.value = 'error'
     errorMessage.value = message
@@ -161,12 +217,26 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
           }
         }
         clearReadyTimer()
-        log('stage', `ready 到达，进入关卡 ${progress.state.currentLevel}`)
+        log('stage', `ready 到达，进入实验 ${progress.state.currentLabId}`)
+        if (activeModule === 'pwnhub') {
+          getTelemetry().trackVmBoot(
+            'ready',
+            vmBootDuration(Date.now() - bootStartedAt),
+            'unknown',
+          )
+        }
         stage.value = 'ready'
-        // VM 是内存环境，每次启动都是全新状态。把前端持久化的完成进度
-        // 同步过去，否则刷新后恢复到后续关卡会被 VM 的顺序解锁校验拒绝。
-        syncCompletionToVm(progress.state.completedLevels)
-        void controller?.restoreLevel(progress.state.currentLevel)
+        syncCompletionToVm(progress.state.completedLevels, progress.state.completedLabIds)
+        const currentLab = getCourseLab(progress.state.currentLabId)
+        if (currentLab?.legacyLevel !== undefined) {
+          syncTemporaryUnlockToVm(currentLab)
+          void controller?.restoreLevel(currentLab.legacyLevel)
+        } else if (currentLab !== undefined) {
+          syncTemporaryUnlockToVm(currentLab)
+          void controller?.restoreLab(currentLab.labId)
+        } else {
+          void controller?.restoreLevel(progress.state.currentLevel)
+        }
         break
       }
       case 'level-ready': {
@@ -182,8 +252,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
         }
         // 解锁门控：只接受顺序解锁范围内的关卡切换。
         // VM 内关卡状态文件可被学生篡改，前端进度不得盲目跟随。
-        const unlocked =
-          message.level === 1 || progress.state.completedLevels.includes(message.level - 1)
+        const unlocked = canNavigateToLevel(message.level)
         if (!unlocked) {
           log('protocol', `忽略未解锁关卡的 level-ready（第 ${message.level} 关）`, 'warn')
           break
@@ -208,7 +277,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
           break
         }
         // 每次验证通过的 check 都计入正确率（与首次通关统计独立，不去重）
-        telemetry.trackCheckResult(message.level, true)
+        getTelemetry().trackCheckResult(message.level, true)
         const mode = getMode()
         const requiredSteps = getLevel(message.level)?.steps.map((step) => step.id) ?? []
         const completedSteps = new Set(progress.completedStepsFor(message.level))
@@ -227,7 +296,66 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
             hintsUsed: progress.hintsUsedFor(message.level),
           })
           // 只有首次完成才产生遥测事件：重复 check、协议重放、页面刷新均不重复统计
-          if (wasNewCompletion) telemetry.trackLevelComplete(message.level, path)
+          if (wasNewCompletion) getTelemetry().trackLevelComplete(message.level, path)
+        } else {
+          const notice =
+            '\r\n\x1b[33m环境结果已经正确，但还需要完成右侧当前教学步骤，' +
+            '确认你观察过关键输出后再运行一次 check。\x1b[0m\r\n'
+          displayCallbacks.forEach((callback) => callback(notice))
+        }
+        break
+      }
+      case 'lab-ready': {
+        const lab = getCourseLab(message.labId)
+        if (lab === undefined || lab.legacyLevel !== undefined) break
+        const readyVerified =
+          sessionKey !== null &&
+          message.sig !== undefined &&
+          (await verifySignature(sessionKey, labReadyMessage(message.labId), message.sig))
+        if (messageGeneration !== generation) return
+        if (!readyVerified) {
+          log('protocol', `忽略未通过验签的 lab-ready（${message.labId}）`, 'warn')
+          break
+        }
+        if (!canNavigateToLab(lab)) {
+          log('protocol', `忽略未解锁实验的 lab-ready（${message.labId}）`, 'warn')
+          break
+        }
+        progress.setLab(message.labId)
+        break
+      }
+      case 'lab-result': {
+        if (message.status !== 'passed' || message.labId !== progress.state.currentLabId) break
+        const lab = getCourseLab(message.labId)
+        if (lab === undefined || lab.legacyLevel !== undefined) break
+        const resultVerified =
+          sessionKey !== null &&
+          message.sig !== undefined &&
+          (await verifySignature(
+            sessionKey,
+            labResultMessage(message.labId, 'passed'),
+            message.sig,
+          ))
+        if (messageGeneration !== generation) return
+        if (!resultVerified) {
+          log('protocol', `忽略未通过验签的 lab-result（${message.labId}）`, 'warn')
+          break
+        }
+        getTelemetry().trackActivityCheck(message.labId, true)
+        const mode = getMode()
+        const completedSteps = new Set(progress.completedLabStepsFor(message.labId))
+        if (mode === 'challenge' || lab.steps.every((step) => completedSteps.has(step.id))) {
+          const path =
+            mode === 'guided'
+              ? 'guided'
+              : progress.hasLabGuidedAssistance(message.labId)
+                ? 'mixed'
+                : 'challenge'
+          const wasNewCompletion = progress.completeByLabId(message.labId, lab.chapterId, {
+            path,
+            hintsUsed: progress.labHintsUsedFor(message.labId),
+          })
+          if (wasNewCompletion) getTelemetry().trackActivityComplete(message.labId, path)
         } else {
           const notice =
             '\r\n\x1b[33m环境结果已经正确，但还需要完成右侧当前教学步骤，' +
@@ -238,12 +366,16 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
       }
       case 'telemetry-command':
         // VM wrapper 上报命令执行；allowlist 由 telemetry 层校验，非白名单静默忽略
-        telemetry.trackCommand(message.command)
+        getTelemetry().trackCommand(message.command)
         break
       case 'hint-request':
-        if (message.level === progress.state.currentLevel) {
+        if (message.level !== undefined && message.level === progress.state.currentLevel) {
           progress.useHint(message.level)
-          telemetry.trackHint(message.level)
+          getTelemetry().trackHint(message.level)
+        }
+        if (message.labId !== undefined && message.labId === progress.state.currentLabId) {
+          progress.useLabHint(message.labId)
+          getTelemetry().trackActivityHint(message.labId)
         }
         break
       case 'progress':
@@ -252,8 +384,12 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
       case 'error': {
         // htcheck 对未通过的 check 发 "level N check failed"；计入正确率分母。
         // 该消息未签名，与 telemetry-command 同属尽力而为统计（威胁模型已接受）。
-        const failed = /^level (\d+) check failed$/.exec(message.message)
-        if (failed !== null) telemetry.trackCheckResult(Number.parseInt(failed[1], 10), false)
+        const failedLevel = /^level (\d+) check failed$/.exec(message.message)
+        if (failedLevel !== null) {
+          getTelemetry().trackCheckResult(Number.parseInt(failedLevel[1], 10), false)
+        }
+        const failedLab = /^lab ([a-z0-9-]+) check failed$/.exec(message.message)
+        if (failedLab !== null) getTelemetry().trackActivityCheck(failedLab[1], false)
         // 虚拟机内检查失败等信息已在终端中给出人类可读反馈
         console.warn('[hashteam] vm error:', message.message)
         break
@@ -271,6 +407,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     clearBootLog()
     stage.value = 'loading-assets'
     log('stage', '阶段：loading-assets')
+    bootStartedAt = Date.now()
 
     const currentGeneration = ++generation
     const nextController = createController((nextStage) => {
@@ -352,10 +489,36 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     controller?.sendSerial(input)
   }
 
-  function syncCompletionToVm(completedLevels: number[]): void {
-    if (completedLevels.length === 0) return
-    const maxCompleted = completedLevels.reduce((a, b) => (a > b ? a : b), 0)
-    sendSerial(`hashteamctl mark-completed ${maxCompleted}\n`)
+  function syncCompletionToVm(completedLevels: number[], completedLabIds: string[]): void {
+    if (completedLevels.length > 0) {
+      const maxCompleted = completedLevels.reduce((a, b) => (a > b ? a : b), 0)
+      sendSerial(`hashteamctl mark-completed ${maxCompleted}\n`)
+    }
+    for (const labId of completedLabIds) {
+      const lab = getCourseLab(labId)
+      if (lab !== undefined && lab.legacyLevel === undefined) {
+        sendSerial(`hashteamctl mark-lab-completed ${labId}\n`)
+      }
+    }
+  }
+
+  function syncTemporaryUnlockToVm(lab: CourseLabDef): void {
+    if (!isTemporarilyUnlocked(lab.labId)) return
+
+    const prerequisiteIds = new Set(lab.unlockAfter)
+    const chapter = COURSE.chapters.find((item) => item.chapterId === lab.chapterId)
+    chapter?.unlockAfter.forEach((labId) => prerequisiteIds.add(labId))
+
+    let maxLegacyLevel = lab.legacyLevel === undefined ? 0 : Math.max(0, lab.legacyLevel - 1)
+    for (const prerequisiteId of prerequisiteIds) {
+      const prerequisite = getCourseLab(prerequisiteId)
+      if (prerequisite?.legacyLevel !== undefined) {
+        maxLegacyLevel = Math.max(maxLegacyLevel, prerequisite.legacyLevel)
+      } else if (prerequisite !== undefined) {
+        sendSerial(`hashteamctl mark-lab-completed ${prerequisite.labId}\n`)
+      }
+    }
+    if (maxLegacyLevel > 0) sendSerial(`hashteamctl mark-completed ${maxLegacyLevel}\n`)
   }
 
   function clearLine(): void {
@@ -367,12 +530,32 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
   }
 
   function gotoLevel(level: number): void {
-    if (!isKnownLevel(level)) return
-    const unlocked = level === 1 || progress.state.completedLevels.includes(level - 1)
-    if (!unlocked) return
+    if (!isKnownLevel(level) || !canNavigateToLevel(level)) return
+    interruptForeground()
     clearLine()
+    const lab = getCourseLab(legacyLabId(level))
+    if (lab !== undefined) syncTemporaryUnlockToVm(lab)
     progress.setLevel(level)
     void controller?.restoreLevel(level)
+  }
+
+  function gotoLab(labId: string): void {
+    const lab = getCourseLab(labId)
+    if (lab === undefined || !canNavigateToLab(lab)) return
+    if (lab.legacyLevel !== undefined) {
+      gotoLevel(lab.legacyLevel)
+      return
+    }
+    interruptForeground()
+    clearLine()
+    syncTemporaryUnlockToVm(lab)
+    progress.setLab(labId)
+    void controller?.restoreLab(labId)
+  }
+
+  function temporarilyUnlockLab(labId: string): void {
+    if (!isKnownLab(labId)) return
+    temporarilyUnlockedLabIds.add(labId)
   }
 
   function resetCurrentLevel(): void {
@@ -380,10 +563,23 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     // 与切关保持一致：reset-level 的 init 是子进程，改不了交互 shell 的 cwd，
     // 重建环境后补一行 cd 把学生 shell 带回 HOME。
     sendSerial('reset-level\ncd "$HOME"\n')
-    telemetry.trackReset(progress.state.currentLevel)
+    if (activeModule === 'pwnhub') {
+      getTelemetry().trackActivityReset(progress.state.currentLabId)
+    } else {
+      getTelemetry().trackReset(progress.state.currentLevel)
+    }
+  }
+
+  function setModule(module: ModuleId): void {
+    activeModule = module
   }
 
   function runCommand(command: string): void {
+    if (controller?.runCommand !== undefined) {
+      controller.runCommand(command)
+      return
+    }
+    interruptForeground()
     clearLine()
     sendSerial(`${command}\n`)
   }
@@ -429,6 +625,9 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     onDisplay,
     sendSerial,
     gotoLevel,
+    gotoLab,
+    temporarilyUnlockLab,
+    setModule,
     resetCurrentLevel,
     runCommand,
     waitForProtocolIdle,

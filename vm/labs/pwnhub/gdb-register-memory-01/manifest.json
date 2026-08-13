@@ -1,0 +1,108 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "gdb-pwndbg",
+  "labId": "gdb-register-memory-01",
+  "title": "比较寄存器与真实内存",
+  "summary": "在固定停靠点用原生 GDB 对照 EAX、变量地址、小端字节和四字节内存值。",
+  "goals": ["读取指定寄存器", "区分变量地址与地址中的内容", "用 x 命令按字节和四字节两种宽度观察同一内存"],
+  "prerequisites": ["能够让 GDB 停在指定函数", "理解地址、值和 i386 小端字节序"],
+  "kind": "gdb",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 25, "max": 45 },
+  "unlockAfter": ["gdb-breakpoints-01"],
+  "artifacts": [{
+    "path": "/opt/pwnhub/labs/gdb-register-memory-01/gdb-runtime",
+    "architecture": "i386",
+    "sha256": "b5560fdf2ab16ffa5b3004ceeb3eaec0363b7c99bb3142927a9feb3df33b66e4",
+    "purpose": "固定、离线、带调试信息的原生 GDB 寄存器与内存观察样本",
+    "downloadable": true
+  }],
+  "concepts": [
+    { "id": "gdb-register-read", "term": "运行时寄存器", "explanation": "info registers 读取当前暂停时刻的处理器寄存器，不代表程序其他时刻的值。" },
+    { "id": "gdb-memory-examine", "term": "按地址查看内存", "explanation": "x 命令从指定地址读取真实进程内存；显示宽度会改变分组方式，不会改变内存字节。" },
+    { "id": "gdb-state-moment", "term": "同一停靠时刻", "explanation": "寄存器与内存必须在同一暂停点比较，继续运行后状态可能已经变化。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "prediction",
+      "title": "预测显示宽度是否改变内存",
+      "objective": "区分观察格式与真实状态",
+      "instruction": "x/4bx 按四个字节显示，x/wx 按一个四字节整数显示。预测切换格式是否修改内存。",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [{ "id": "gdb-memory-examine", "term": "按地址查看内存", "explanation": "x 命令从指定地址读取真实进程内存；显示宽度会改变分组方式，不会改变内存字节。" }],
+      "uses": ["gdb-memory-examine"],
+      "evidence": "prediction",
+      "tool": "gdb",
+      "question": {
+        "prompt": "从 x/4bx 切换到 x/wx 会发生什么？",
+        "choices": [
+          { "id": "format", "label": "只改变显示分组" },
+          { "id": "write", "label": "把新值写入内存" },
+          { "id": "restart", "label": "重启被调试程序" }
+        ],
+        "answer": "format",
+        "success": "预测已记录：观察宽度不改变真实字节。"
+      }
+    },
+    {
+      "id": 2,
+      "type": "terminal",
+      "title": "在更新完成后自动停靠",
+      "objective": "从同一时刻读取寄存器和全局变量",
+      "instruction": "自动输出已经停在 gdb_after_update。核对 EAX，再比较 &observed_value 与 x/wx 的左、右两侧。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "autoRun": true,
+      "introduces": [
+        { "id": "gdb-register-read", "term": "运行时寄存器", "explanation": "info registers 读取当前暂停时刻的处理器寄存器，不代表程序其他时刻的值。" },
+        { "id": "gdb-state-moment", "term": "同一停靠时刻", "explanation": "寄存器与内存必须在同一暂停点比较，继续运行后状态可能已经变化。" }
+      ],
+      "uses": ["gdb-register-read", "gdb-memory-examine", "gdb-state-moment"],
+      "evidence": "observation",
+      "tool": "gdb",
+      "observation": "EAX 与 observed_value 的四字节内容相同；&observed_value 是存放位置。"
+    },
+    {
+      "id": 3,
+      "type": "terminal",
+      "title": "交互切换字节与四字节视图",
+      "objective": "自己用两个宽度解释小端内存",
+      "instruction": "运行 gdb -q ./gdb-runtime -x session.gdb。在停靠点重复 x/4bx &observed_value 和 x/wx &observed_value，说明四个字节怎样组成 EAX 中的值。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "uses": ["gdb-register-read", "gdb-memory-examine", "gdb-state-moment"],
+      "evidence": "observation",
+      "tool": "gdb",
+      "observation": "同一地址的字节顺序与四字节数值符合 i386 小端解释。"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "先固定在 gdb_after_update，不要把不同运行时刻的值混在一起。" },
+    { "level": 2, "kind": "tool", "text": "info registers eax 读取 EAX；print/x &observed_value 读取地址；x/wx 读取该地址的四字节内容。" },
+    { "level": 3, "kind": "structure", "text": "最终结构是 check <EAX> <变量地址> <内存值>，三项都可带 0x。" }
+  ],
+  "verification": {
+    "type": "answer",
+    "usage": "check <EAX> <变量地址> <内存值>",
+    "instruction": "填写同一次 gdb_after_update 停靠时观察到的三个十六进制事实。",
+    "placeholders": [
+      { "token": "<EAX>", "meaning": "info registers eax 显示的值" },
+      { "token": "<变量地址>", "meaning": "print/x &observed_value 得到的地址" },
+      { "token": "<内存值>", "meaning": "x/wx &observed_value 右侧的四字节值" }
+    ],
+    "feedback": {
+      "empty": "还没有提供寄存器与内存观察值。",
+      "incorrect": "回到同一个 gdb_after_update 停靠点，逐项核对 EAX、地址和地址中的内容。",
+      "success": "真实 GDB 会话确认了同一时刻的寄存器与内存状态。"
+    }
+  },
+  "completionSummary": {
+    "solved": "在同一真实停靠时刻连接了寄存器、变量地址、内存字节与四字节值。",
+    "mastered": ["info registers", "x/4bx 与 x/wx", "地址和值", "运行时状态时刻"],
+    "next": "下一实验会把当前函数放回完整调用栈，读取参数、局部变量和保存的返回位置。"
+  }
+}

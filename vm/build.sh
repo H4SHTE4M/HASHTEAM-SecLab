@@ -24,7 +24,11 @@
 #   BUSYBOX_CROSS_COMPILE
 #                      SUID BusyBox 交叉编译器前缀（默认 /opt/32/bin/i686-aosc-linux-gnu-）
 #                      精确版本及工具哈希锁定在 vm/suid-toolchain.lock
+#   HTCHECK_CC         htcheck i386 交叉编译器（默认 i686-linux-gnu-gcc）
+#   HTCHECK_LD         htcheck i386 链接器（默认 i686-linux-gnu-ld）
 #   SOURCE_DATE_EPOCH  BusyBox 与内核的可复现构建时间戳（默认 0）
+#   REBUILD_SUID       设为 1 时忽略已校验的 SUID BusyBox 缓存（默认复用）
+#   REBUILD_HTCHECK    设为 1 时忽略已校验的 htcheck 缓存（默认复用）
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -45,11 +49,14 @@ SEABIOS_DEB_SHA256="${SEABIOS_DEB_SHA256:-2b590534250b940f43222eeab9a8f57f337a9d
 BUSYBOX_VERSION="1.38.0"
 BUSYBOX_SOURCE_SHA256="34f9ea6ff8636f2c9241153b9114eefa9e65674a45318ae1ef95bb5f31c53bb2"
 BUSYBOX_CROSS_COMPILE="${BUSYBOX_CROSS_COMPILE:-/opt/32/bin/i686-aosc-linux-gnu-}"
+HTCHECK_CC="${HTCHECK_CC:-/opt/32/bin/i686-aosc-linux-gnu-gcc}"
+HTCHECK_LD="${HTCHECK_LD:-/opt/32/bin/i686-aosc-linux-gnu-ld}"
 BUSYBOX_CHECKSUM="$ROOT/vm/busybox.sha256"
 BUSYBOX_SUID_CONFIG="$ROOT/vm/busybox-suid.config"
 BUSYBOX_SUID_CHECKSUM="$ROOT/vm/busybox-suid.sha256"
 BUSYBOX_TOOLCHAIN_LOCK="$ROOT/vm/suid-toolchain.lock"
 AOSC_GLIBC_RECIPE="$ROOT/vm/toolchain-source/aosc-glibc32"
+HTCHECK_TOOLCHAIN_LOCK="$ROOT/vm/toolchain-source/htcheck/toolchain.lock"
 BUSYBOX_BUILD_EPOCH="${SOURCE_DATE_EPOCH:-0}"
 export KBUILD_BUILD_USER="${KBUILD_BUILD_USER:-hashteam}"
 export KBUILD_BUILD_HOST="${KBUILD_BUILD_HOST:-reproducible-builder}"
@@ -121,6 +128,20 @@ verify_sha256 "$_expected_busybox_sha256" "$WORK/busybox" >/dev/null || {
 # ---------- 1b. 最小 SUID busybox（严格仅含 su）----------
 BUSYBOX_SUID="$WORK/busybox-suid"
 BUSYBOX_SOURCE_ARCHIVE="$WORK/busybox-$BUSYBOX_VERSION.tar.bz2"
+
+_expected_suid_sha256="$(awk 'NF >= 2 && $2 == "bin/busybox-suid" { print $1 }' "$BUSYBOX_SUID_CHECKSUM")"
+[ -n "$_expected_suid_sha256" ] || {
+    echo "错误：SUID helper 校验文件格式无效" >&2
+    exit 1
+}
+_reuse_suid_cache=0
+if [ "${REBUILD_SUID:-0}" != 1 ] && [ -f "$BUSYBOX_SUID" ] &&
+    verify_sha256 "$_expected_suid_sha256" "$BUSYBOX_SUID" >/dev/null 2>&1; then
+    _reuse_suid_cache=1
+    log "复用已审核的 SUID BusyBox 缓存"
+fi
+
+if [ "$_reuse_suid_cache" -eq 0 ]; then
 
 [ -f "$BUSYBOX_SUID_CONFIG" ] || {
     echo "错误：缺少 $BUSYBOX_SUID_CONFIG" >&2
@@ -264,29 +285,75 @@ if [ "$_suid_applets" != "su" ]; then
     exit 1
 fi
 cp "$_busybox_build/busybox" "$BUSYBOX_SUID"
-_expected_suid_sha256="$(awk 'NF >= 2 && $2 == "bin/busybox-suid" { print $1 }' "$BUSYBOX_SUID_CHECKSUM")"
-[ -n "$_expected_suid_sha256" ] || {
-    echo "错误：SUID helper 校验文件格式无效" >&2
-    exit 1
-}
 verify_sha256 "$_expected_suid_sha256" "$BUSYBOX_SUID" >/dev/null || {
     echo "错误：SUID helper 与审核锁定值不一致；请先审查工具链/配置变化，再更新校验值" >&2
     exit 1
 }
 rm -rf "$_busybox_build"
 trap - EXIT
+fi
 
 # ---------- 1c. SUID 签名评分检查器 htcheck ----------
-# 与 busybox-suid 共用同一条锁定工具链；源码在 vm/toolchain-source/htcheck/。
+# 源码和独立的 i386 工具链/产物锁在 vm/toolchain-source/htcheck/。
 HTCHECK_SOURCE="$ROOT/vm/toolchain-source/htcheck/htcheck.c"
+htcheck_lock_value() {
+    local key="$1"
+    sed -n "s/^${key}=//p" "$HTCHECK_TOOLCHAIN_LOCK"
+}
+
+[ -f "$HTCHECK_TOOLCHAIN_LOCK" ] || {
+    echo "错误：缺少 $HTCHECK_TOOLCHAIN_LOCK" >&2
+    exit 1
+}
+_expected_htcheck_sha256="$(htcheck_lock_value output_sha256)"
+[ -n "$_expected_htcheck_sha256" ] || {
+    echo "错误：htcheck 输出校验值缺失" >&2
+    exit 1
+}
+_reuse_htcheck_cache=0
+if [ "${REBUILD_HTCHECK:-0}" != 1 ] && [ -f "$WORK/htcheck" ] &&
+    verify_sha256 "$_expected_htcheck_sha256" "$WORK/htcheck" >/dev/null 2>&1; then
+    _reuse_htcheck_cache=1
+    log "复用已审核的 htcheck 缓存"
+fi
+
+if [ "$_reuse_htcheck_cache" -eq 0 ]; then
 [ -f "$HTCHECK_SOURCE" ] || {
     echo "错误：缺少 $HTCHECK_SOURCE" >&2
     exit 1
 }
+command -v "$HTCHECK_CC" >/dev/null 2>&1 || {
+    echo "错误：找不到 htcheck 编译器 $HTCHECK_CC" >&2
+    exit 1
+}
+command -v "$HTCHECK_LD" >/dev/null 2>&1 || {
+    echo "错误：找不到 htcheck 链接器 $HTCHECK_LD" >&2
+    exit 1
+}
+
+_htcheck_cc_path="$(command -v "$HTCHECK_CC")"
+_htcheck_ld_path="$(command -v "$HTCHECK_LD")"
+_actual_htcheck_cc_version="$(LC_ALL=C "$HTCHECK_CC" --version | sed -n '1p')"
+_actual_htcheck_ld_version="$(LC_ALL=C "$HTCHECK_LD" --version | sed -n '1p')"
+[ "$_actual_htcheck_cc_version" = "$(htcheck_lock_value compiler_version)" ] &&
+[ "$_actual_htcheck_ld_version" = "$(htcheck_lock_value linker_version)" ] || {
+    echo "错误：htcheck 工具链版本与锁定值不一致" >&2
+    echo "  GCC: $_actual_htcheck_cc_version" >&2
+    echo "  LD:  $_actual_htcheck_ld_version" >&2
+    exit 1
+}
+verify_sha256 "$(htcheck_lock_value compiler_sha256)" "$_htcheck_cc_path" >/dev/null
+verify_sha256 "$(htcheck_lock_value linker_sha256)" "$_htcheck_ld_path" >/dev/null
+
 log "编译 SUID 签名评分检查器 htcheck（i386 静态）"
 env SOURCE_DATE_EPOCH="$BUSYBOX_BUILD_EPOCH" TZ=UTC \
-    "${BUSYBOX_CROSS_COMPILE}gcc" -static -Os -Wall -Wextra -Werror \
+    "$HTCHECK_CC" -m32 -static -Os -Wall -Wextra -Werror \
+        -Wl,--build-id=none -Wl,-z,noexecstack -Wl,-z,relro,-z,now \
         -o "$WORK/htcheck" "$HTCHECK_SOURCE"
+verify_sha256 "$_expected_htcheck_sha256" "$WORK/htcheck" >/dev/null || {
+    echo "错误：htcheck 产物与审核锁定值不一致" >&2
+    exit 1
+}
 _htcheck_machine="$(LC_ALL=C readelf -h "$WORK/htcheck" | sed -n 's/^.*Machine:[[:space:]]*//p')"
 [ "$_htcheck_machine" = "Intel 80386" ] || {
     echo "错误：htcheck 不是 i386 可执行文件：$_htcheck_machine" >&2
@@ -296,6 +363,11 @@ LC_ALL=C readelf -l "$WORK/htcheck" | grep -q 'INTERP' && {
     echo "错误：htcheck 不是静态链接（含 INTERP 段）" >&2
     exit 1
 }
+LC_ALL=C readelf -l "$WORK/htcheck" | grep -Eq 'GNU_STACK[^R]*RW ' || {
+    echo "错误：htcheck 栈不是非可执行" >&2
+    exit 1
+}
+fi
 
 # ---------- 2. 定制 32 位内核 ----------
 if [ "$SKIP_KERNEL" -eq 0 ]; then
@@ -326,7 +398,8 @@ if [ "$SKIP_KERNEL" -eq 0 ]; then
         --enable PRINTK_TIME \
         --enable MODULES \
         --enable PTRACE --enable CHECKPOINT_RESTORE \
-        --enable COMMONCAP --enable SECURITYFS
+        --enable COMMONCAP --enable SECURITY --enable SECURITY_YAMA \
+        --enable SECURITYFS
     make ARCH=i386 olddefconfig
     log "编译内核（需要 gcc make flex bison bc，约 5-15 分钟）"
     make ARCH=i386 -j"$(nproc)" bzImage
@@ -342,6 +415,9 @@ log "打包 initramfs（busybox + SUID busybox + htcheck + 关卡系统）"
 python3 "$ROOT/scripts/pack-initramfs.py" \
     --root "$OVERLAY" --busybox "$WORK/busybox" --busybox-suid "$BUSYBOX_SUID" \
     --htcheck "$WORK/htcheck" \
+    --profile "$ROOT/vm/profiles/production.json" \
+    --labs-root "$ROOT/vm/labs/pwnhub" \
+    --binary-tools-root "$ROOT/vm/binary-tools/prebuilt" \
     --out "$OUT_VM/rootfs.cpio.gz"
 
 # ---------- 4. v86 运行时与 BIOS ----------

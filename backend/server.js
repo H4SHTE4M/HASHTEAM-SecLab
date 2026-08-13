@@ -66,20 +66,46 @@ if (!ADMIN_PASSWORD_HASH) {
 
 const SESSION_TTL_MS = 30 * 60 * 1000
 const MAX_EVENTS_PER_SESSION = 500
-const PROTOCOL_VERSION = 1
+const PROTOCOL_VERSIONS = new Set([1, 2])
 /** 事件明细保留天数（超出后定期删除）。 */
 const EVENT_LOG_RETENTION_DAYS = 90
 
+const PWNHUB_ACTIVITIES = [
+  'memory-addresses-01', 'memory-layout-01', 'memory-register-stack-01',
+  'asm-registers-01', 'asm-arithmetic-01', 'asm-stack-ops-01',
+  'asm-branches-01', 'asm-call-stack-01',
+  'elf-bytes-01', 'elf-sections-01', 'elf-symbols-01', 'elf-disassembly-01',
+]
+
 const MODULES = {
   seclab: {
+    version: 1,
     events: ['command', 'level_complete', 'check_result', 'hint', 'reset'],
     levels: 10,
   },
+  pwnhub: {
+    version: 2,
+    events: [
+      'command', 'activity_complete', 'activity_check', 'activity_hint',
+      'activity_reset', 'vm_boot',
+    ],
+    activities: new Set(PWNHUB_ACTIVITIES),
+  },
 }
 
-const COMMAND_ALLOWLIST = new Set([
-  'find', 'grep', 'chmod', 'ls', 'cat', 'cd', 'pwd', 'whoami', 'check', 'help', 'su',
-])
+const COMMAND_ALLOWLISTS = {
+  seclab: new Set([
+    'find', 'grep', 'chmod', 'ls', 'cat', 'cd', 'pwd', 'whoami', 'check', 'help', 'su',
+  ]),
+  pwnhub: new Set([
+    'ls', 'cat', 'cd', 'pwd', 'check', 'help', 'readelf', 'nm', 'objdump',
+    'file', 'hexdump', 'strings', 'od',
+  ]),
+}
+
+const VM_BOOT_OUTCOMES = new Set(['ready', 'timeout', 'asset_error', 'linux_error'])
+const VM_BOOT_DURATIONS = new Set(['<3s', '3-5s', '5-10s', '10-20s', '>=20s'])
+const VM_CACHE_STATES = new Set(['cold', 'warm', 'unknown'])
 
 const COMPLETION_PATHS = new Set(['guided', 'mixed', 'challenge'])
 const SESSION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/
@@ -111,6 +137,13 @@ db.exec(`
     module      TEXT NOT NULL,
     level       INTEGER NOT NULL,
     PRIMARY KEY (token_hash, module, level)
+  );
+
+  CREATE TABLE IF NOT EXISTS activity_completions (
+    token_hash  TEXT NOT NULL,
+    module      TEXT NOT NULL,
+    activity_id TEXT NOT NULL,
+    PRIMARY KEY (token_hash, module, activity_id)
   );
 
   CREATE TABLE IF NOT EXISTS aggregates (
@@ -157,6 +190,12 @@ const stmtCheckCompletion = db.prepare(
 const stmtInsertCompletion = db.prepare(
   'INSERT OR IGNORE INTO completions (token_hash, module, level) VALUES (?, ?, ?)',
 )
+const stmtCheckActivityCompletion = db.prepare(
+  'SELECT 1 FROM activity_completions WHERE token_hash = ? AND module = ? AND activity_id = ?',
+)
+const stmtInsertActivityCompletion = db.prepare(
+  'INSERT OR IGNORE INTO activity_completions (token_hash, module, activity_id) VALUES (?, ?, ?)',
+)
 
 const stmtGetAggregate = db.prepare(
   'SELECT count FROM aggregates WHERE module = ? AND metric = ? AND dimension = ?',
@@ -190,6 +229,16 @@ const stmtTimeseriesDaily = db.prepare(`
   GROUP BY day_bucket, event_type
   ORDER BY day_bucket ASC, event_type ASC
 `)
+const stmtTimeseriesDailyByModule = db.prepare(`
+  SELECT
+    (ts - (ts % 86400000)) AS day_bucket,
+    event_type,
+    COUNT(*) AS count
+  FROM event_log
+  WHERE ts >= ? AND (module = ? OR module = '')
+  GROUP BY day_bucket, event_type
+  ORDER BY day_bucket ASC, event_type ASC
+`)
 // 按小时聚合最近 N 小时的事件明细（仅 session_create 和 command）
 const stmtTimeseriesHourly = db.prepare(`
   SELECT
@@ -198,6 +247,17 @@ const stmtTimeseriesHourly = db.prepare(`
     COUNT(*) AS count
   FROM event_log
   WHERE ts >= ? AND event_type IN ('session_create', 'command')
+  GROUP BY hour_bucket, event_type
+  ORDER BY hour_bucket ASC, event_type ASC
+`)
+const stmtTimeseriesHourlyByModule = db.prepare(`
+  SELECT
+    (ts - (ts % 3600000)) AS hour_bucket,
+    event_type,
+    COUNT(*) AS count
+  FROM event_log
+  WHERE ts >= ? AND (module = ? OR module = '')
+    AND event_type IN ('session_create', 'command')
   GROUP BY hour_bucket, event_type
   ORDER BY hour_bucket ASC, event_type ASC
 `)
@@ -286,7 +346,16 @@ function hasOnlyKeys(value, allowedKeys) {
 }
 
 function isValidLevel(mod, level) {
-  return Number.isInteger(level) && level >= 1 && level <= MODULES[mod].levels
+  return Number.isInteger(MODULES[mod].levels) &&
+    Number.isInteger(level) &&
+    level >= 1 &&
+    level <= MODULES[mod].levels
+}
+
+function isValidActivity(mod, activityId) {
+  return typeof activityId === 'string' &&
+    MODULES[mod].activities instanceof Set &&
+    MODULES[mod].activities.has(activityId)
 }
 
 function validateEvent(mod, event) {
@@ -297,7 +366,7 @@ function validateEvent(mod, event) {
     case 'command':
       return hasOnlyKeys(event, ['type', 'command']) &&
         typeof event.command === 'string' &&
-        COMMAND_ALLOWLIST.has(event.command)
+        COMMAND_ALLOWLISTS[mod].has(event.command)
     case 'level_complete':
       return hasOnlyKeys(event, ['type', 'level', 'path']) &&
         isValidLevel(mod, event.level) &&
@@ -310,6 +379,24 @@ function validateEvent(mod, event) {
     case 'hint':
     case 'reset':
       return hasOnlyKeys(event, ['type', 'level']) && isValidLevel(mod, event.level)
+    case 'activity_complete':
+      return hasOnlyKeys(event, ['type', 'activityId', 'path']) &&
+        isValidActivity(mod, event.activityId) &&
+        typeof event.path === 'string' &&
+        COMPLETION_PATHS.has(event.path)
+    case 'activity_check':
+      return hasOnlyKeys(event, ['type', 'activityId', 'passed']) &&
+        isValidActivity(mod, event.activityId) &&
+        typeof event.passed === 'boolean'
+    case 'activity_hint':
+    case 'activity_reset':
+      return hasOnlyKeys(event, ['type', 'activityId']) &&
+        isValidActivity(mod, event.activityId)
+    case 'vm_boot':
+      return hasOnlyKeys(event, ['type', 'outcome', 'duration', 'cache']) &&
+        VM_BOOT_OUTCOMES.has(event.outcome) &&
+        VM_BOOT_DURATIONS.has(event.duration) &&
+        VM_CACHE_STATES.has(event.cache)
     default:
       return false
   }
@@ -323,12 +410,10 @@ function processEvent(mod, event, tokenHash) {
       stmtInsertEventLog.run(mod, 'command', event.command, now)
       return true
     case 'check_result':
-      // 每次 check 执行都计数（不去重），正确率 = check_pass / (check_pass + check_fail)
       stmtUpsertAggregate.run(mod, event.passed ? 'check_pass' : 'check_fail', `level-${event.level}`, 1)
       stmtInsertEventLog.run(mod, 'check_result', `level-${event.level}:${event.passed ? 'passed' : 'failed'}`, now)
       return true
     case 'level_complete': {
-      // 每 session 每 module 每 level 最多统计一次完成
       const already = stmtCheckCompletion.get(tokenHash, mod, event.level)
       if (already) return false
       stmtInsertCompletion.run(tokenHash, mod, event.level)
@@ -345,6 +430,36 @@ function processEvent(mod, event, tokenHash) {
       stmtUpsertAggregate.run(mod, 'reset', `level-${event.level}`, 1)
       stmtInsertEventLog.run(mod, 'reset', `level-${event.level}`, now)
       return true
+    case 'activity_check':
+      stmtUpsertAggregate.run(mod, event.passed ? 'check_pass' : 'check_fail', event.activityId, 1)
+      stmtInsertEventLog.run(mod, 'activity_check', `${event.activityId}:${event.passed ? 'passed' : 'failed'}`, now)
+      return true
+    case 'activity_complete': {
+      const already = stmtCheckActivityCompletion.get(tokenHash, mod, event.activityId)
+      if (already) return false
+      stmtInsertActivityCompletion.run(tokenHash, mod, event.activityId)
+      stmtUpsertAggregate.run(mod, 'complete', event.activityId, 1)
+      stmtUpsertAggregate.run(mod, 'complete_path', `${event.activityId}:${event.path}`, 1)
+      stmtInsertEventLog.run(mod, 'activity_complete', event.activityId, now)
+      return true
+    }
+    case 'activity_hint':
+      stmtUpsertAggregate.run(mod, 'hint', event.activityId, 1)
+      stmtInsertEventLog.run(mod, 'activity_hint', event.activityId, now)
+      return true
+    case 'activity_reset':
+      stmtUpsertAggregate.run(mod, 'reset', event.activityId, 1)
+      stmtInsertEventLog.run(mod, 'activity_reset', event.activityId, now)
+      return true
+    case 'vm_boot': {
+      const dimension = `${event.outcome}:${event.duration}:${event.cache}`
+      stmtUpsertAggregate.run(mod, 'vm_boot', dimension, 1)
+      stmtUpsertAggregate.run(mod, 'vm_boot_outcome', event.outcome, 1)
+      stmtUpsertAggregate.run(mod, 'vm_boot_duration', event.duration, 1)
+      stmtUpsertAggregate.run(mod, 'vm_boot_cache', event.cache, 1)
+      stmtInsertEventLog.run(mod, 'vm_boot', dimension, now)
+      return true
+    }
     default:
       return false
   }
@@ -357,8 +472,10 @@ function processBatch(batch, sig) {
   // 这里用 X-Telemetry-Sig 头验证。
   if (!verifyEdgeSignature(sig, JSON.stringify(batch))) return { status: 401 }
   if (!hasOnlyKeys(batch, ['v', 'module', 'session', 'seq', 'events'])) return { status: 400 }
-  if (batch.v !== PROTOCOL_VERSION) return { status: 400 }
   if (typeof batch.module !== 'string' || !(batch.module in MODULES)) return { status: 400 }
+  if (!PROTOCOL_VERSIONS.has(batch.v) || batch.v !== MODULES[batch.module].version) {
+    return { status: 400 }
+  }
   if (typeof batch.session !== 'string' || !SESSION_TOKEN_PATTERN.test(batch.session)) {
     return { status: 400 }
   }
@@ -418,13 +535,13 @@ function getStats(mod) {
  * 补零：没有事件的天也会出现，方便前端直接画趋势图。
  * 返回格式：[{ day, session_create, command, level_complete, hint, reset }]
  */
-function getTimeseries(days = 30) {
+function getTimeseries(days = 30, mod) {
   const now = Date.now()
   const dayMs = 86400000
   const startOfDay = now - (now % dayMs)
   const cutoff = startOfDay - (days - 1) * dayMs
 
-  const rows = stmtTimeseriesDaily.all(cutoff)
+  const rows = mod ? stmtTimeseriesDailyByModule.all(cutoff, mod) : stmtTimeseriesDaily.all(cutoff)
 
   // 初始化每天的结构，补零
   const buckets = new Map()
@@ -443,9 +560,11 @@ function getTimeseries(days = 30) {
   // 填入实际数据
   for (const row of rows) {
     const entry = buckets.get(row.day_bucket)
-    if (entry && row.event_type in entry) {
-      entry[row.event_type] = row.count
-    }
+    if (!entry) continue
+    const eventType = row.event_type.startsWith('activity_')
+      ? row.event_type.slice('activity_'.length)
+      : row.event_type
+    if (eventType in entry) entry[eventType] = row.count
   }
 
   return [...buckets.values()]
@@ -456,13 +575,13 @@ function getTimeseries(days = 30) {
  * 补零：没有事件的小时也会出现，方便前端直接画折线图。
  * 返回格式：[{ hour, session_create, command }]
  */
-function getHourlyTimeseries(hours = 24) {
+function getHourlyTimeseries(hours = 24, mod) {
   const now = Date.now()
   const hourMs = 3600000
   const startOfHour = now - (now % hourMs)
   const cutoff = startOfHour - (hours - 1) * hourMs
 
-  const rows = stmtTimeseriesHourly.all(cutoff)
+  const rows = mod ? stmtTimeseriesHourlyByModule.all(cutoff, mod) : stmtTimeseriesHourly.all(cutoff)
 
   // 初始化每小时的结构，补零
   const buckets = new Map()
@@ -764,7 +883,13 @@ const server = http.createServer(async (req, res) => {
       const mod = url.searchParams.get('module') || undefined
       const result = getStats(mod)
       if (result.status !== 200) return sendJson(res, result.status, { error: 'invalid module' }, API_HEADERS)
-      return sendJson(res, 200, { ok: true, generatedAt: Date.now(), modules: result.body, timeseries: getTimeseries(30), hourly: getHourlyTimeseries(24) }, API_HEADERS)
+      return sendJson(res, 200, {
+        ok: true,
+        generatedAt: Date.now(),
+        modules: result.body,
+        timeseries: getTimeseries(30, mod),
+        hourly: getHourlyTimeseries(24, mod),
+      }, API_HEADERS)
     }
 
     // POST /api/admin/login — scrypt 密码校验，下发 HttpOnly 管理 cookie

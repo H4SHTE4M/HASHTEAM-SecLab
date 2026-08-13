@@ -1,0 +1,138 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "ida-companion",
+  "labId": "rev-functions-flow-01",
+  "title": "识别函数并阅读控制流",
+  "summary": "在同一锁定样本中识别候选值判断函数，按语义重命名，并从 cmp 与条件跳转还原两条静态路径。",
+  "goals": ["根据调用和返回边界识别函数", "用语义名称替代工具生成或原始名称", "读取比较常量与条件跳转", "区分静态可能路径与运行时已走路径"],
+  "prerequisites": ["能够从字符串跟随数据交叉引用进入函数", "认识 cmp 和条件跳转的基本作用"],
+  "kind": "external-tool",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 35, "max": 65 },
+  "unlockAfter": ["rev-strings-xrefs-01"],
+  "artifacts": [{
+    "path": "/opt/pwnhub/labs/rev-functions-flow-01/reverse-companion",
+    "architecture": "i386",
+    "sha256": "a1d48129804d6eee16ddf44e8697b780dc47a9b2b088503bc5a41fe7543d66cb",
+    "purpose": "固定、离线的函数边界、语义重命名和静态控制流观察样本",
+    "downloadable": true
+  }],
+  "concepts": [
+    { "id": "reverse-function-boundary", "term": "函数边界", "explanation": "函数边界把一组有共同入口和返回点的指令组织起来；调用目标、函数序言和返回指令是互相印证的线索。" },
+    { "id": "reverse-semantic-rename", "term": "语义重命名", "explanation": "重命名只改变分析工程里的标签，不修改 ELF；好的名称应概括已由指令证据支持的职责。" },
+    { "id": "reverse-control-flow", "term": "控制流分支", "explanation": "比较指令更新标志，紧随其后的条件跳转连接两条可能路径；静态图展示可能性，不证明本次走向。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "concept",
+      "title": "先识别函数边界",
+      "objective": "把调用目标组织成一个可命名的功能单元",
+      "instruction": "从 _start 的调用目标进入判断候选值的代码。用入口地址、序言和 ret 共同确认边界，再观察它接收一个参数并返回 0 或 1。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [{ "id": "reverse-function-boundary", "term": "函数边界", "explanation": "函数边界把一组有共同入口和返回点的指令组织起来；调用目标、函数序言和返回指令是互相印证的线索。" }],
+      "uses": ["reverse-function-boundary"]
+    },
+    {
+      "id": 2,
+      "type": "external-tool",
+      "title": "重命名并记录分支事实",
+      "objective": "在任一等价工具中给判断函数添加语义名称并读取控制流",
+      "instruction": "识别比较候选值的函数后，在自己的 IDA/Ghidra 工程中把它重命名为 check_candidate。随后记录 ELF 原始函数标签和入口地址、cmp 的立即数，以及 cmp 后第一个条件跳转助记符。终端路线直接读取同一事实。",
+      "completion": "confirm",
+      "allowRun": false,
+      "introduces": [
+        { "id": "reverse-semantic-rename", "term": "语义重命名", "explanation": "重命名只改变分析工程里的标签，不修改 ELF；好的名称应概括已由指令证据支持的职责。" },
+        { "id": "reverse-control-flow", "term": "控制流分支", "explanation": "比较指令更新标志，紧随其后的条件跳转连接两条可能路径；静态图展示可能性，不证明本次走向。" }
+      ],
+      "uses": ["reverse-function-boundary", "reverse-semantic-rename", "reverse-control-flow"],
+      "evidence": "external-observation",
+      "companion": {
+        "labId": "rev-functions-flow-01",
+        "title": "函数边界、重命名与控制流",
+        "artifact": {
+          "name": "reverse-companion",
+          "downloadUrl": "./artifacts/reverse-companion",
+          "architecture": "i386",
+          "sha256": "a1d48129804d6eee16ddf44e8697b780dc47a9b2b088503bc5a41fe7543d66cb",
+          "purpose": "与上一实验相同的固定静态逆向样本"
+        },
+        "tools": [
+          {
+            "tool": "ida",
+            "label": "IDA",
+            "versionNote": "支持 ELF32 i386 的 IDA Free 或已授权版本",
+            "installNote": "使用上一实验的本地工程即可；重命名只保存于分析数据库。",
+            "steps": ["从 _start 的调用图进入接收候选值的判断函数。", "确认函数入口与返回边界，并重命名为 check_candidate。", "在图形视图中记录 cmp 立即数和离开当前基本块的条件跳转。"]
+          },
+          {
+            "tool": "ghidra",
+            "label": "Ghidra",
+            "versionNote": "支持 ELF32 x86 的 Ghidra 正式版本",
+            "installNote": "继续使用上一实验工程；Rename Function 不会修改下载的 ELF。",
+            "steps": ["从 Function Call Tree 或 Listing 进入判断函数。", "确认入口、返回点并重命名为 check_candidate。", "在 Function Graph 或 Listing 中读取比较常量与条件跳转。"]
+          },
+          {
+            "tool": "objdump",
+            "label": "终端等价路线",
+            "versionNote": "课程 VM 内锁定的 GNU Binutils 2.42",
+            "installNote": "运行 HOME 中的 inspect.sh；终端标签不可持久重命名，但能提供相同函数和分支事实。",
+            "steps": ["用 nm -n 找到接收候选值的函数入口。", "用 objdump -d -M intel --disassemble=<函数> 聚焦边界。", "记录 cmp 的立即数和随后第一个 j 开头助记符。"]
+          }
+        ],
+        "tasks": [
+          { "id": "identify-function", "title": "确认函数边界", "description": "用调用目标、入口和 ret 共同确认判断函数范围。" },
+          { "id": "rename-function", "title": "添加语义名称", "description": "在本地分析工程中重命名为 check_candidate，并确认 ELF 哈希未改变。" },
+          { "id": "map-branches", "title": "读取两条路径", "description": "从 cmp 进入顺序路径和条件跳转目标，记录决定分支的事实。" }
+        ],
+        "observations": [
+          { "id": "gate-address", "label": "判断函数入口地址", "kind": "address", "placeholder": "填写函数标签前的 0x 地址", "required": true },
+          { "id": "gate-name", "label": "ELF 中的原函数名", "kind": "function-name", "placeholder": "填写重命名前的函数标签", "required": true },
+          { "id": "compare-value", "label": "cmp 比较常量", "kind": "integer", "placeholder": "可填写十进制或 0x 十六进制", "required": true },
+          { "id": "false-jump", "label": "不相等路径跳转助记符", "kind": "text", "placeholder": "填写 cmp 后的 j 开头助记符", "required": true }
+        ],
+        "verificationCommandTemplate": "check {{gate-address}} {{gate-name}} {{compare-value}} {{false-jump}}"
+      }
+    },
+    {
+      "id": 3,
+      "type": "worksheet",
+      "title": "区分静态图与本次执行",
+      "objective": "说明控制流图为何不是运行轨迹",
+      "instruction": "静态工具展示两条可能路径；只有 GDB 的断点或单步才能证明某次输入实际走了哪条。确认你记录的是分支条件，而不是把静态图误写成运行结果。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "uses": ["reverse-control-flow"],
+      "evidence": "observation"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "从 _start 调用的函数中找出返回 0 或 1 的短函数，再看它唯一的 cmp。" },
+    { "level": 2, "kind": "tool", "text": "IDA/Ghidra 使用调用图和函数图；终端路线使用 nm 与 objdump --disassemble。" },
+    { "level": 3, "kind": "structure", "text": "提交结构是 check <入口地址> <原函数名> <比较常量> <条件跳转>；重命名后的 check_candidate 不作为答案。" }
+  ],
+  "verification": {
+    "type": "external-observation",
+    "usage": "check <入口地址> <原函数名> <比较常量> <条件跳转>",
+    "instruction": "提交锁定 ELF 中可由三条路线共同复核的四个静态事实。",
+    "placeholders": [
+      { "token": "<入口地址>", "meaning": "判断函数第一条指令的虚拟地址" },
+      { "token": "<原函数名>", "meaning": "ELF 符号表与函数标签中的原名称" },
+      { "token": "<比较常量>", "meaning": "cmp 指令中的立即数，可用十进制或 0x 十六进制" },
+      { "token": "<条件跳转>", "meaning": "cmp 后第一个 j 开头的条件跳转助记符" }
+    ],
+    "feedback": {
+      "empty": "还没有提供完整的函数与控制流观察。",
+      "incorrect": "回到判断函数边界，逐项核对函数标签、cmp 操作数和下一条条件跳转。",
+      "success": "锁定 nm 与 objdump 已从真实 ELF 确认函数和静态控制流。"
+    }
+  },
+  "completionSummary": {
+    "solved": "识别并语义重命名了判断函数，再从真实指令记录了比较常量和两条静态路径。",
+    "mastered": ["函数边界", "语义重命名", "比较常量", "条件控制流", "静态与动态证据区别"],
+    "next": "下一章会把静态函数地址、GDB 栈证据和受限 stdin 文件连接到第一个栈覆盖实验。"
+  }
+}

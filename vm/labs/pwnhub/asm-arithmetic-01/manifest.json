@@ -1,0 +1,195 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "asm-reading",
+  "labId": "asm-arithmetic-01",
+  "title": "算术、余数与位运算",
+  "summary": "用真实 i386 指令观察加减、乘除以及 and、or、xor 的位模式变化。",
+  "goals": [
+    "按执行顺序计算 add 和 sub 的结果",
+    "说明 idiv 把商放在 EAX、余数放在 EDX",
+    "用 and、or、xor 解释逐位保留、设置和翻转"
+  ],
+  "prerequisites": ["理解 EAX 等寄存器是四字节工作位置", "能够读取八位十六进制值"],
+  "kind": "visual",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 35, "max": 55 },
+  "unlockAfter": ["asm-registers-01"],
+  "artifacts": [
+    {
+      "path": "/opt/pwnhub/labs/asm-arithmetic-01/asm-arithmetic",
+      "architecture": "i386",
+      "sha256": "8c30413bbc6fa5a4a76c1834b0cf43f49a4421c687f80a7a60a3d7a26bd1ac5c",
+      "purpose": "固定、离线的 add、sub、imul、idiv、and、or、xor 观察样本",
+      "downloadable": true
+    }
+  ],
+  "concepts": [
+    { "id": "add-sub", "term": "add 与 sub", "explanation": "add 把源值加到目标，sub 从目标减去源值；结果写回目标寄存器。" },
+    { "id": "multiply-divide", "term": "imul 与 idiv", "explanation": "imul 完成有符号乘法；本实验的 idiv 用 EAX 保存商、EDX 保存余数。" },
+    { "id": "bitwise-logic", "term": "and、or 与 xor", "explanation": "and 逐位保留双方都为 1 的位，or 设置任一方为 1 的位，xor 翻转两边不同的位。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "prediction",
+      "title": "先按顺序算加减",
+      "objective": "确认多条指令读取的是上一条写回的结果",
+      "instruction": "EAX 从十进制 10 开始，先执行 add eax, 7，再执行 sub eax, 4。第二条指令读取第一条已经写回的值。",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [
+        { "id": "add-sub", "term": "add 与 sub", "explanation": "add 把源值加到目标，sub 从目标减去源值；结果写回目标寄存器。" }
+      ],
+      "uses": ["add-sub"],
+      "evidence": "prediction",
+      "question": {
+        "prompt": "两条指令都执行后，EAX 的十进制值是多少？",
+        "choices": [
+          { "id": "thirteen", "label": "13" },
+          { "id": "seventeen", "label": "17" },
+          { "id": "three", "label": "3" }
+        ],
+        "answer": "thirteen",
+        "success": "预测已记录：10+7-4 最终为 13。"
+      }
+    },
+    {
+      "id": 2,
+      "type": "visual-trace",
+      "title": "逐步执行 add 和 sub",
+      "objective": "观察 EAX 在每一步的真实写回值",
+      "instruction": "使用下一步和上一步，在 10、17、13 三个状态之间切换。十六进制 0x0d 与十进制 13 是同一个位模式。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "uses": ["add-sub"],
+      "evidence": "observation",
+      "tool": "elf",
+      "initialTab": "registers",
+      "workbench": {
+        "registers": {
+          "instruction": "add eax, 7; sub eax, 4",
+          "registers": [{ "name": "eax", "before": 10, "after": 13 }],
+          "flagsBefore": [],
+          "flagsAfter": []
+        },
+        "assemblyTui": {
+          "title": "加减单步",
+          "states": [
+            { "id": "start", "title": "开始", "instruction": "mov eax, 10", "explanation": "EAX 的起始值是十进制 10。", "registers": { "instruction": "mov eax, 10", "registers": [{ "name": "eax", "before": 10, "after": 10 }], "flagsBefore": [], "flagsAfter": [] } },
+            { "id": "after-add", "title": "加法后", "instruction": "add eax, 7", "explanation": "add 把 7 加到 EAX 并写回 17。", "registers": { "instruction": "add eax, 7", "registers": [{ "name": "eax", "before": 10, "after": 17 }], "flagsBefore": [], "flagsAfter": [] } },
+            { "id": "after-sub", "title": "减法后", "instruction": "sub eax, 4", "explanation": "sub 从当前的 17 减去 4，EAX 最终为 13。", "registers": { "instruction": "sub eax, 4", "registers": [{ "name": "eax", "before": 17, "after": 13 }], "flagsBefore": [], "flagsAfter": [] } }
+          ]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "visual-trace",
+      "title": "分开保存商和余数",
+      "objective": "把乘积、除法商和余数对应到寄存器",
+      "instruction": "样本先用 imul 得到 6×7=42；随后独立计算 43÷5。idiv 完成后 EAX 是商 8，EDX 是余数 3。余数不是小数部分。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        { "id": "multiply-divide", "term": "imul 与 idiv", "explanation": "imul 完成有符号乘法；本实验的 idiv 用 EAX 保存商、EDX 保存余数。" }
+      ],
+      "uses": ["multiply-divide"],
+      "evidence": "observation",
+      "tool": "elf",
+      "initialTab": "registers",
+      "workbench": {
+        "registers": {
+          "instruction": "idiv ebx",
+          "registers": [{ "name": "eax", "before": 43, "after": 8 }, { "name": "edx", "before": 0, "after": 3 }],
+          "flagsBefore": [],
+          "flagsAfter": []
+        },
+        "assemblyTui": {
+          "title": "乘除单步",
+          "states": [
+            { "id": "multiply", "title": "乘法", "instruction": "imul eax, ebx", "explanation": "EAX=6、EBX=7，乘积 42 写回 EAX。", "registers": { "instruction": "imul eax, ebx", "registers": [{ "name": "eax", "before": 6, "after": 42 }, { "name": "ebx", "before": 7, "after": 7 }], "flagsBefore": [], "flagsAfter": [] } },
+            { "id": "divide", "title": "除法", "instruction": "idiv ebx", "explanation": "43 除以 5 后，EAX 保存商 8，EDX 保存余数 3。", "registers": { "instruction": "idiv ebx", "registers": [{ "name": "eax", "before": 43, "after": 8 }, { "name": "edx", "before": 0, "after": 3 }, { "name": "ebx", "before": 5, "after": 5 }], "flagsBefore": [], "flagsAfter": [] } }
+          ]
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "visual-trace",
+      "title": "逐位保留、设置和翻转",
+      "objective": "观察 and、or、xor 连续作用于同一位模式",
+      "instruction": "EAX 从 0xf0 开始：and 0x3c 得到 0x30，or 0x03 得到 0x33，xor 0x11 最终得到 0x22。每一步都对对应二进制位独立运算。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        { "id": "bitwise-logic", "term": "and、or 与 xor", "explanation": "and 逐位保留双方都为 1 的位，or 设置任一方为 1 的位，xor 翻转两边不同的位。" }
+      ],
+      "uses": ["bitwise-logic"],
+      "evidence": "observation",
+      "tool": "elf",
+      "initialTab": "registers",
+      "workbench": {
+        "registers": {
+          "instruction": "and; or; xor",
+          "registers": [{ "name": "eax", "before": 240, "after": 34 }],
+          "flagsBefore": [],
+          "flagsAfter": []
+        },
+        "assemblyTui": {
+          "title": "位运算单步",
+          "states": [
+            { "id": "start", "title": "开始", "instruction": "mov eax, 0xf0", "explanation": "先记录起始位模式。", "registers": { "instruction": "mov eax, 0xf0", "registers": [{ "name": "eax", "before": 240, "after": 240 }], "flagsBefore": [], "flagsAfter": [] } },
+            { "id": "and", "title": "按位与后", "instruction": "and eax, 0x3c", "explanation": "只有双方同为 1 的位保留下来，得到 0x30。", "registers": { "instruction": "and eax, 0x3c", "registers": [{ "name": "eax", "before": 240, "after": 48 }], "flagsBefore": [], "flagsAfter": [] } },
+            { "id": "or", "title": "按位或后", "instruction": "or eax, 0x03", "explanation": "低两位被设置，得到 0x33。", "registers": { "instruction": "or eax, 0x03", "registers": [{ "name": "eax", "before": 48, "after": 51 }], "flagsBefore": [], "flagsAfter": [] } },
+            { "id": "xor", "title": "按位异或后", "instruction": "xor eax, 0x11", "explanation": "掩码为 1 的对应位被翻转，最终得到 0x22。", "registers": { "instruction": "xor eax, 0x11", "registers": [{ "name": "eax", "before": 51, "after": 34 }], "flagsBefore": [], "flagsAfter": [] } }
+          ]
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "terminal",
+      "title": "在真实终端复现",
+      "objective": "从自动运行的 ELF 表格提取五个结果",
+      "instruction": "样本进入实验时已经自动运行。沿前值到后值逐行核对，不要把十进制心算结果直接填进要求的十六进制位置。",
+      "completion": "input",
+      "allowRun": false,
+      "autoRun": true,
+      "uses": ["add-sub", "multiply-divide", "bitwise-logic"],
+      "evidence": "observation",
+      "tool": "shell",
+      "observation": "sub 最终值、imul 乘积、idiv 的商和余数、xor 最终值。",
+      "commonErrors": ["idiv 的余数在 EDX，不是 EAX。", "位运算结果按十六进制位模式填写。"],
+      "reinforcement": "同一寄存器可以连续保存中间结果；除法则同时使用 EAX 和 EDX。"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "按表格从上到下跟随后值，除法单独记录商与余数。" },
+    { "level": 2, "kind": "tool", "text": "重新输入 ./asm-arithmetic 可再次运行 HOME 中的真实 ELF。" },
+    { "level": 3, "kind": "structure", "text": "最终结构是 check <加减结果> <乘积> <商> <余数> <位运算结果>。" }
+  ],
+  "verification": {
+    "type": "answer",
+    "usage": "check <加减结果> <乘积> <商> <余数> <位运算结果>",
+    "instruction": "依次填入 sub、imul、除法商、除法余数和 xor 行的后值。",
+    "placeholders": [
+      { "token": "<加减结果>", "meaning": "sub eax, 4 行的后值" },
+      { "token": "<乘积>", "meaning": "imul eax, ebx 行的后值" },
+      { "token": "<商>", "meaning": "idiv ebx 行的 EAX 后值" },
+      { "token": "<余数>", "meaning": "idiv 后的 EDX 行的后值" },
+      { "token": "<位运算结果>", "meaning": "xor eax, 0x11 行的后值" }
+    ],
+    "feedback": {
+      "empty": "还没有提供五项算术观察值。",
+      "incorrect": "回到真实输出，逐行核对指令名称和后值列。",
+      "success": "真实 ELF 重放与加减、乘除和位运算观察一致。"
+    }
+  },
+  "completionSummary": {
+    "solved": "通过真实 i386 ELF 观察了常用算术和位运算的数据流。",
+    "mastered": ["add/sub 写回", "imul/idiv 商余数", "and/or/xor 位运算"],
+    "next": "下一实验会把数据放入栈，再用 push 和 pop 在栈与寄存器之间传递。"
+  }
+}

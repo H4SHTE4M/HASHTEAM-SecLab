@@ -7,16 +7,23 @@ import { log as bootLog } from '../services/boot-logger'
 import { useLabPreferences } from './useLabPreferences'
 import {
   completeLevel,
+  completeLab,
   consumeProgressResetNotice,
   createSafeStorage,
   advanceGuideStep,
+  advanceLabGuideStep,
   completeLearningStep,
+  completeLabLearningStep,
   loadProgress,
   markGuidedAssistance,
+  markLabGuidedAssistance,
   recordHint,
+  recordLabHint,
   resetLevelAttempt,
+  resetLabAttempt,
   resetAllProgress,
   setCurrentLevel,
+  setCurrentLab,
 } from '../services/progress-store'
 import type { LevelCompletionRecord } from '../types/lab'
 
@@ -69,9 +76,21 @@ export function useLabProgress() {
     return completeLevel(storage, state, level, record)
   }
 
+  function completeByLabId(
+    labId: string,
+    chapterId: string,
+    record: LevelCompletionRecord,
+  ): boolean {
+    return completeLab(storage, state, labId, chapterId, record)
+  }
+
   /** 记录一次提示使用，返回该关累计提示数 */
   function useHint(level: number): number {
     return recordHint(storage, state, level)
+  }
+
+  function useLabHint(labId: string): number {
+    return recordLabHint(storage, state, labId)
   }
 
   function setLevel(level: number): void {
@@ -79,11 +98,24 @@ export function useLabProgress() {
     setCurrentLevel(storage, state, level)
   }
 
+  function setLab(labId: string, legacyLevel?: number): void {
+    setCurrentLab(storage, state, labId, legacyLevel)
+  }
+
   /** 重新开始：清空全部进度 */
   function resetAll(): void {
     const fresh = resetAllProgress(storage)
+    state.schemaVersion = fresh.schemaVersion
     state.currentLevel = fresh.currentLevel
+    state.currentLabId = fresh.currentLabId
     state.completedLevels = fresh.completedLevels
+    state.completedLabIds = fresh.completedLabIds
+    state.chapterProgress = fresh.chapterProgress
+    state.labHintsUsed = fresh.labHintsUsed
+    state.labGuideSteps = fresh.labGuideSteps
+    state.labCompletedSteps = fresh.labCompletedSteps
+    state.guidedAssistanceLabIds = fresh.guidedAssistanceLabIds
+    state.labCompletionRecords = fresh.labCompletionRecords
     state.hintsUsed = fresh.hintsUsed
     state.guideSteps = fresh.guideSteps
     state.completedSteps = fresh.completedSteps
@@ -102,28 +134,61 @@ export function useLabProgress() {
     return Math.min(state.guideSteps[level] ?? 0, totalSteps - 1)
   }
 
+  function labGuideStepFor(labId: string, totalSteps: number): number {
+    if (totalSteps <= 0) return 0
+    return Math.min(state.labGuideSteps[labId] ?? 0, totalSteps - 1)
+  }
+
   function advanceGuide(level: number, totalSteps: number): number {
     return advanceGuideStep(storage, state, level, totalSteps)
+  }
+
+  function advanceLabGuide(labId: string, totalSteps: number): number {
+    return advanceLabGuideStep(storage, state, labId, totalSteps)
   }
 
   function resetLevel(level: number): void {
     resetLevelAttempt(storage, state, level)
   }
 
+  function resetLab(labId: string): void {
+    resetLabAttempt(storage, state, labId)
+  }
+
   function completeStep(level: number, stepId: number): number[] {
     return completeLearningStep(storage, state, level, stepId)
+  }
+
+  function completeLabStep(labId: string, stepId: number): number[] {
+    return completeLabLearningStep(storage, state, labId, stepId)
   }
 
   function completedStepsFor(level: number): number[] {
     return state.completedSteps[level] ?? []
   }
 
+  function completedLabStepsFor(labId: string): number[] {
+    return state.labCompletedSteps[labId] ?? []
+  }
+
   function markGuided(level: number): boolean {
     return markGuidedAssistance(storage, state, level)
   }
 
+  function markLabGuided(labId: string): boolean {
+    return markLabGuidedAssistance(storage, state, labId)
+  }
+
   function hasGuidedAssistance(level: number): boolean {
     return state.guidedAssistanceLevels.includes(level)
+  }
+
+  function hasLabGuidedAssistance(labId: string): boolean {
+    return state.guidedAssistanceLabIds.includes(labId)
+  }
+
+  function labHintsUsedFor(labId: string): number {
+    return state.labHintsUsed[labId] ?? 0
   }
 
   function dismissProgressResetNotice(): void {
@@ -135,17 +200,28 @@ export function useLabProgress() {
     allCompleted,
     progressResetNotice,
     complete,
+    completeByLabId,
     useHint,
+    useLabHint,
     setLevel,
+    setLab,
     resetAll,
     hintsUsedFor,
     guideStepFor,
+    labGuideStepFor,
     advanceGuide,
+    advanceLabGuide,
     resetLevel,
+    resetLab,
     completeStep,
+    completeLabStep,
     completedStepsFor,
+    completedLabStepsFor,
     markGuided,
+    markLabGuided,
     hasGuidedAssistance,
+    hasLabGuidedAssistance,
+    labHintsUsedFor,
     dismissProgressResetNotice,
   }
 }

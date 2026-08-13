@@ -102,6 +102,30 @@ describe('SerialProtocolParser', () => {
     ])
   })
 
+  it('解析稳定实验的就绪、判题和提示消息', () => {
+    const parser = new SerialProtocolParser()
+    const input = [
+      `${M}{"type":"lab-ready","labId":"memory-addresses-01"}\n`,
+      `${M}{"type":"lab-result","labId":"memory-addresses-01","status":"passed"}\n`,
+      `${M}{"type":"hint-request","labId":"memory-addresses-01"}\n`,
+    ].join('')
+    expect(parser.feed(input).messages).toEqual([
+      { type: 'lab-ready', labId: 'memory-addresses-01' },
+      { type: 'lab-result', labId: 'memory-addresses-01', status: 'passed' },
+      { type: 'hint-request', labId: 'memory-addresses-01' },
+    ])
+  })
+
+  it('拒绝可穿越路径或同时带数字与稳定身份的实验消息', () => {
+    const parser = new SerialProtocolParser()
+    const invalid = [
+      `${M}{"type":"lab-ready","labId":"../memory"}\n`,
+      `${M}{"type":"lab-result","labId":"Memory","status":"passed"}\n`,
+      `${M}{"type":"hint-request","level":1,"labId":"memory-addresses-01"}\n`,
+    ].join('')
+    expect(parser.feed(invalid).messages).toEqual([])
+  })
+
   it('协议标记不在行首时按普通文本处理', () => {
     const parser = new SerialProtocolParser()
     const { display, messages } = parser.feed(`echo ${M}{"type":"ready"}\n`)
@@ -152,15 +176,19 @@ describe('SerialProtocolParser 验签字段', () => {
     expect(parser.feed(invalid).messages).toEqual([])
   })
 
-  it('level-result 与 level-ready 保留合法的 64 位小写十六进制签名', () => {
+  it('数字关卡和稳定实验消息都保留合法的 64 位小写十六进制签名', () => {
     const parser = new SerialProtocolParser()
     const input = [
       `${M}{"type":"level-result","level":1,"status":"passed","sig":"${sig}"}\n`,
       `${M}{"type":"level-ready","level":2,"sig":"${sig}"}\n`,
+      `${M}{"type":"lab-result","labId":"memory-addresses-01","status":"passed","sig":"${sig}"}\n`,
+      `${M}{"type":"lab-ready","labId":"memory-addresses-01","sig":"${sig}"}\n`,
     ].join('')
     expect(parser.feed(input).messages).toEqual([
       { type: 'level-result', level: 1, status: 'passed', sig },
       { type: 'level-ready', level: 2, sig },
+      { type: 'lab-result', labId: 'memory-addresses-01', status: 'passed', sig },
+      { type: 'lab-ready', labId: 'memory-addresses-01', sig },
     ])
   })
 

@@ -1,0 +1,137 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "memory-model",
+  "labId": "memory-register-stack-01",
+  "title": "后入先出的栈",
+  "summary": "用两个四字节值观察后入先出、栈顶和入栈/出栈。",
+  "goals": [
+    "说明栈顶是入栈和出栈共用的一端",
+    "用两个不同的值验证后入先出",
+    "用地址变化解释入栈和出栈时栈顶如何移动"
+  ],
+  "prerequisites": ["知道栈是进程内存中的一个区域", "理解本课程的 i386 栈通常向低地址增长"],
+  "kind": "visual",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 20, "max": 35 },
+  "unlockAfter": ["memory-layout-01"],
+  "artifacts": [
+    {
+      "path": "/opt/pwnhub/labs/memory-register-stack-01/memory-register-stack",
+      "architecture": "i386",
+      "sha256": "39088feedfa54f33289fd875a5ccd7a8094a5e17a239f1122928243c55a1e74a",
+      "purpose": "固定、离线的后入先出、入栈与出栈行为观察样本",
+      "downloadable": true
+    }
+  ],
+  "concepts": [
+    { "id": "stack-top", "term": "栈顶", "explanation": "栈顶是栈中唯一直接放入和取出值的一端。" },
+    { "id": "stack-lifo", "term": "后入先出", "explanation": "后放入的值更靠近栈顶，因此会先被取出。" },
+    { "id": "stack-entry", "term": "入栈与出栈", "explanation": "入栈会让新值占据栈顶；出栈先取走栈顶的值，然后让栈顶回到上一个位置。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "concept",
+      "title": "只在栈顶放入和取出",
+      "objective": "认识栈顶与后入先出",
+      "instruction": "把栈想成一列只能从最上方放入和取出的四字节位置。这个可操作的一端叫栈顶。后放入的值离栈顶最近，因此会先被取出。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        { "id": "stack-top", "term": "栈顶", "explanation": "栈顶是栈中唯一直接放入和取出值的一端。" },
+        { "id": "stack-lifo", "term": "后入先出", "explanation": "后放入的值更靠近栈顶，因此会比先放入的值更早被取出。" }
+      ],
+      "uses": ["stack-top", "stack-lifo"],
+      "evidence": "observation"
+    },
+    {
+      "id": 2,
+      "type": "prediction",
+      "title": "先预测哪个值会先出栈",
+      "objective": "用两个值验证后入先出",
+      "instruction": "假设先放入 A=0x11111111，再放入 B=0x22222222。只从栈顶取出时，第一次会取出哪个值？",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [],
+      "uses": ["stack-top", "stack-lifo"],
+      "evidence": "prediction",
+      "question": {
+        "prompt": "第一次出栈时，哪个值会先被取出？",
+        "choices": [
+          { "id": "first", "label": "A：0x11111111" },
+          { "id": "second", "label": "B：0x22222222" },
+          { "id": "both", "label": "两个值同时取出" }
+        ],
+        "answer": "second",
+        "success": "预测已记录：后放入的 B 更靠近栈顶。"
+      }
+    },
+    {
+      "id": 3,
+      "type": "visual-trace",
+      "title": "观察两个值都在栈上时的位置",
+      "objective": "把后入的值与更低的栈顶地址对应起来",
+      "instruction": "先看两个值都放入后的栈表：B 位于新的栈顶，A 位于它的上方。核对两个地址相差 4 字节。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        { "id": "stack-entry", "term": "入栈与出栈", "explanation": "入栈会让新值占据栈顶；出栈先取走栈顶的值，然后让栈顶回到上一个位置。" }
+      ],
+      "uses": ["stack-top", "stack-lifo", "stack-entry"],
+      "evidence": "observation",
+      "tool": "elf",
+      "initialTab": "stack",
+      "workbench": {
+        "stack": {
+          "entries": [
+            { "address": 134529368, "value": 572662306, "label": "栈顶 · 后进入的 B", "kind": "stack-pointer" },
+            { "address": 134529372, "value": 286331153, "label": "先进入的 A", "kind": "stack-pointer" },
+            { "address": 134529376, "value": 0, "label": "入栈前的边界", "kind": "stack-pointer" }
+          ]
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "terminal",
+      "title": "核对两次出栈顺序",
+      "objective": "从真实 ELF 的全部表格输出中提取四个观察事实",
+      "instruction": "样本进入实验时已经自动运行。依次核对第二个值入栈后的栈顶地址、第一次取出的值、随后栈顶保留的值和第二次取出的值。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "autoRun": true,
+      "uses": ["stack-top", "stack-lifo", "stack-entry"],
+      "evidence": "observation",
+      "tool": "shell",
+      "observation": "表格显示 B 先被取出，随后 A 被取出，最后栈顶回到开始地址。"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "先找第二个值入栈后的栈顶，再跟踪两次出栈行。" },
+    { "level": 2, "kind": "tool", "text": "栈视图按地址从低到高排出两个值；终端表格显示每次取出的值。" },
+    { "level": 3, "kind": "structure", "text": "最终结构是 check <第二个值入栈后的栈顶地址> <第一次取出值> <随后栈顶值> <第二次取出值>。" }
+  ],
+  "verification": {
+    "type": "answer",
+    "usage": "check <第二个值入栈后的栈顶地址> <第一次取出值> <随后栈顶值> <第二次取出值>",
+    "instruction": "依次填入表格中的四个事实：第二个值入栈后的地址、第一次取出的值、第一次出栈后仍在栈顶的值、第二次取出的值。",
+    "placeholders": [
+      { "token": "<第二个值入栈后的栈顶地址>", "meaning": "第二个值入栈后那一行的栈顶地址" },
+      { "token": "<第一次取出值>", "meaning": "第一次出栈后“本次取出”列的值" },
+      { "token": "<随后栈顶值>", "meaning": "第一次出栈后“栈顶值”列的值" },
+      { "token": "<第二次取出值>", "meaning": "第二次出栈后“本次取出”列的值" }
+    ],
+    "feedback": {
+      "empty": "还没有提供四个栈操作观察值。",
+      "incorrect": "回到表格，按操作顺序检查栈顶地址和两次取出的值。",
+      "success": "真实 ELF 重放确认了后入先出的栈行为。"
+    }
+  },
+  "completionSummary": {
+    "solved": "通过真实 i386 ELF 验证了两个值后入先出，以及入栈和出栈时栈顶地址的变化。",
+    "mastered": ["栈顶", "后入先出", "入栈与出栈"],
+    "next": "下一章会在汇编读写开头介绍寄存器和值的复制。"
+  }
+}

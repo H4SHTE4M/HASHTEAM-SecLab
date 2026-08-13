@@ -1,9 +1,9 @@
-# HASHTEAM Security Lab · 安全新手村
+# HASHTEAM Security Lab
 
-一个**完全运行在浏览器里**的交互式 Linux 安全入门实验平台，面向零基础新生：
-打开网页就能获得一个真实的 Linux 终端，跟着任务卡完成 10 个精心设计的
-安全入门实验——从认识 Shell、文件整理，到日志分析、编码还原、
-进程排查、Web 信息泄露和配置修复。
+一个**完全运行在浏览器里**的交互式安全实验平台。根路径提供 Lab 选择器：
+SecLab「安全新手村」包含 10 个 Linux 安全入门关卡；PwnHub 首批开放
+内存模型、汇编与 ELF 三章共 12 个二进制安全实验。两者共用真实的 32 位
+Linux 虚拟机、引导/挑战模式和本地进度存档。
 
 整个环境基于 WebAssembly 在本地虚拟化运行，**不依赖任何后端容器**；
 刷新页面或点击「重新开始」即可恢复原样。
@@ -14,8 +14,8 @@
 
 - 浏览器内启动一个真实（非模拟）的 32 位 Linux：自构建精简内核 + BusyBox 用户态。
 - 使用 xterm.js 作为终端，v86（WebAssembly x86 虚拟机）作为运行时。
-- 10 个零基础关卡：前几关通常约 5–10 分钟，后半程综合关约 15–30 分钟：初次登录 / 隐藏文件 / 搬家整理 / 权限加固 /
-  日志分析（计数 + 追踪） / 编码取证 / 进程排查 / 本地 Web 服务 / 配置修复。
+- SecLab：10 个零基础关卡，覆盖终端、文件、权限、日志、编码、进程、本地 Web 与配置修复。
+- PwnHub：首批开放内存模型 3 个、汇编 5 个、ELF 4 个实验；后续章节不进入生产课程包。
 - 首次进入可明确选择**引导模式**或**挑战模式**：引导模式逐步讲解并要求留下
   教学证据；挑战模式只展示目标、按需提示和最终验证，允许在真实终端自由探索。
   两种模式共用同一套环境与最终状态判题，并可随时无损切换。
@@ -38,12 +38,13 @@
 │  └─ useLabProgress（LocalStorage 持久化）                                     │
 │                                                                               │
 │  v86 (WebAssembly)                                                            │
-│  └─ 32 位 Linux：定制内核 bzImage + initramfs（BusyBox + 关卡系统）           │
+│  └─ 32 位 Linux：定制内核 bzImage + 统一 initramfs（BusyBox + 实验系统）     │
 │       ├─ 自动登录 guest@hashteam（cttyhack + su）                             │
 │       ├─ /usr/local/bin：check / hint / status / help / reset-level /         │
-│       │   hashteamctl / curl(兼容层) / file(简化实现)                          │
-│       └─ /opt/hashteam/levels/level-N/{challenge.json, init.sh, check.sh, ...}│
-│            串口输出 @@HASHTEAM:{"type":"level-result","level":3,...}          │
+│       │   hashteamctl / readelf / nm / objdump / payload 教学工具             │
+│       ├─ /opt/hashteam/levels/level-N：SecLab 数字关卡                        │
+│       └─ /opt/pwnhub/labs/<labId>：PwnHub 稳定实验标识                        │
+│            串口输出签名的 level-result 或 lab-result 协议                     │
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -112,12 +113,14 @@ pnpm dev            # 启动开发服务器（默认 http://localhost:5173）
 pnpm test               # 前端单元测试（协议解析、进度持久化）
 pnpm test:watch         # Vitest 监听模式，适合本地迭代
 pnpm validate:challenges # 校验关卡 manifest、连续编号与必要脚本
+pnpm validate:binary-profile # 校验 PwnHub ELF、工具链锁与生产 profile
 pnpm test:vm            # Linux 检查脚本测试（需要 busybox，见下）
 pnpm test:suid          # 校验 initramfs 中 SUID helper 的权限与 applet 白名单
-pnpm test:integration   # 端到端测试：Node 无头启动真实虚拟机通关全部 10 关
-pnpm build              # vue-tsc 严格类型检查 + 生产构建（输出 dist/）
-pnpm verify:dist        # 校验内容寻址 VM 资产及其 SHA-256 清单
-./scripts/verify-build.sh  # 一键完成：资源检查 + 全部测试 + 构建
+pnpm test:binary-profile # 重放离线 i386 二进制样本
+pnpm test:integration   # 端到端测试：真实 VM 覆盖 SecLab 与首个 PwnHub 实验
+pnpm build              # manifest / binary profile / 类型检查 + 生产构建
+pnpm verify:dist        # 校验 VM、companion、发布实验下载物与法律声明
+./scripts/verify-build.sh  # 一键完成全部 release gate
 ```
 
 `pnpm test:vm` 需要一个 busybox 静态二进制：运行过 `vm/build.sh` 后会自动
@@ -183,6 +186,11 @@ pnpm verify:dist        # 校验内容寻址 VM 资产及其 SHA-256 清单
 `init.sh` / `check.sh` 是否完整。然后补充 VM 测试并运行
 `./vm/build.sh --skip-kernel` 重打包。
 
+PwnHub 实验位于 `vm/labs/pwnhub/<labId>/`，使用稳定字符串 `labId` 和
+`manifest.json`。`vm/profiles/production.json` 是唯一生产发布清单；只有其中
+列出的实验会进入 initramfs、前端课程和 `dist/artifacts/`。修改二进制实验时还需
+运行 `pnpm validate:binary-profile` 与 `pnpm test:binary-profile`。
+
 完整字段说明、最小模板和脚本约定见
 [关卡开发指南](docs/challenges.md)。
 
@@ -204,6 +212,8 @@ pnpm verify:dist        # 校验内容寻址 VM 资产及其 SHA-256 清单
 | `ready` | `version`, `key` | Linux 启动，提供本次 VM 的临时验签材料 |
 | `level-ready` | `level`, `sig` | 关卡环境初始化完成（进入/重置某关后发出） |
 | `level-result` | `level`, `status`, `sig` | 关卡验证结果（`passed`） |
+| `lab-ready` | `labId`, `sig` | 稳定标识实验初始化完成 |
+| `lab-result` | `labId`, `status`, `sig` | 稳定标识实验验证结果 |
 | `hint-request` | `level` | 用户在终端输入了 `hint`，请求前端显示提示 |
 | `progress` | `level`, `value` | （预留）细粒度进度 |
 | `error` | `message` | 检查失败等错误信息 |
@@ -213,11 +223,11 @@ pnpm verify:dist        # 校验内容寻址 VM 资产及其 SHA-256 清单
 1. 只识别**行首**以 `@@HASHTEAM:` 开头的行；
 2. 协议行**不显示**在终端中，普通输出原样显示；
 3. 支持半包 / 粘包（按行缓冲），非法 JSON 静默忽略不会导致崩溃；
-4. 前端只根据协议消息更新状态，从不监听用户输入判题；version 2 的关卡切换与
-   通过结果必须验签，且只接受当前会话和顺序解锁范围内的消息。
+4. 前端只根据协议消息更新状态，从不监听用户输入判题；version 2 的数字关卡和
+   稳定实验切换/通过结果都必须验签，且只接受当前会话和顺序解锁范围内的消息。
 
-前端 → 虚拟机方向：通过串口输入调用虚拟机内的
-`hashteamctl goto N / reset-level / factory-reset` 等命令。
+前端 → 虚拟机方向：通过串口输入调用
+`hashteamctl goto N / goto-lab <labId> / reset-level / factory-reset`。
 
 ## 10. 静态部署方法
 

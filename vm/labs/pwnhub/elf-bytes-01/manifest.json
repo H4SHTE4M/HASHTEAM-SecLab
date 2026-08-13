@@ -1,0 +1,209 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "elf-static",
+  "labId": "elf-bytes-01",
+  "title": "先识别文件，再读取 ELF 字节",
+  "summary": "用 file 判断真实样本类型，再用 hexdump、ByteView 和 strings 区分格式字段与静态线索。",
+  "goals": [
+    "使用 file 判断样本是 32 位小端 i386 ELF 可执行文件",
+    "使用 hexdump 查看文件偏移、十六进制字节和 ASCII",
+    "从文件开头识别 ELF 魔数",
+    "用标记字节判断 32 位与小端",
+    "说明 strings 只能发现可打印片段"
+  ],
+  "prerequisites": ["能够读取十六进制字节", "理解 i386 使用小端字节序"],
+  "kind": "elf",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 30, "max": 50 },
+  "unlockAfter": ["asm-call-stack-01"],
+  "artifacts": [
+    {
+      "path": "/opt/pwnhub/labs/elf-bytes-01/elf-bytes",
+      "architecture": "i386",
+      "sha256": "b95b37f88a4bd1f8bcbb126b353eec2f5cb7a8c2357ec24d449d4a5b4251a698",
+      "purpose": "固定、离线的 ELF 识别字节与字符串观察样本",
+      "downloadable": true
+    }
+  ],
+  "concepts": [
+    {
+      "id": "file-identification",
+      "term": "文件类型识别",
+      "explanation": "file 读取文件头的识别字段并报告格式、位数、字节序和架构，不需要先执行目标文件。"
+    },
+    {
+      "id": "elf-ident",
+      "term": "ELF 识别字段",
+      "explanation": "ELF 以 7f 45 4c 46 开头；偏移 4 的 01 表示 32 位，偏移 5 的 01 表示小端。"
+    },
+    {
+      "id": "printable-strings",
+      "term": "可打印字符串",
+      "explanation": "strings 扫描连续可打印字节，能提供线索，但不能证明该字符串一定会被执行或打印。"
+    }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "prediction",
+      "title": "先选择文件识别工具",
+      "objective": "在运行未知文件前先判断它的格式",
+      "instruction": "面对一个未见过的文件，先不要执行。选择能读取文件头并报告类型的工具。",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "file-identification",
+          "term": "文件类型识别",
+          "explanation": "file 读取文件头的识别字段并报告格式、位数、字节序和架构，不需要先执行目标文件。"
+        }
+      ],
+      "uses": ["file-identification"],
+      "evidence": "prediction",
+      "question": {
+        "prompt": "哪个命令最适合先判断 ./elf-bytes 是什么类型？",
+        "choices": [
+          { "id": "file", "label": "file ./elf-bytes" },
+          { "id": "cat", "label": "cat ./elf-bytes" },
+          { "id": "chmod", "label": "chmod +x ./elf-bytes" }
+        ],
+        "answer": "file",
+        "success": "预测已记录：先用 file 读取类型，不需要先执行样本。"
+      }
+    },
+    {
+      "id": 2,
+      "type": "observe",
+      "title": "运行 file",
+      "objective": "从真实文件头得到格式、位数、字节序和架构",
+      "instruction": "运行观察命令，依次读取 ELF、32-bit、LSB 和 Intel 80386。它们说明这是 32 位小端 i386 ELF 可执行文件。",
+      "completion": "run",
+      "allowRun": true,
+      "introduces": [
+        {
+          "id": "file-identification",
+          "term": "文件类型识别",
+          "explanation": "file 读取文件头的识别字段并报告格式、位数、字节序和架构，不需要先执行目标文件。"
+        }
+      ],
+      "uses": ["file-identification"],
+      "command": "file ./elf-bytes",
+      "observation": "输出中的 ELF、32-bit、LSB、executable 和 Intel 80386。",
+      "commonErrors": [
+        "file 只读取文件头，不会执行目标程序。",
+        "LSB 表示最低有效字节在前，也就是这里使用的小端编码。"
+      ],
+      "reinforcement": "以后拿到未知样本，先用 file 建立最基本的格式事实。"
+    },
+    {
+      "id": 3,
+      "type": "observe",
+      "title": "用 hexdump 读取原始字节",
+      "objective": "把文件偏移、十六进制字节和 ASCII 对照起来",
+      "instruction": "运行命令读取前 16 字节。左侧是文件偏移，中间是原始字节，右侧只是这些字节的可打印 ASCII 表示。",
+      "completion": "run",
+      "allowRun": true,
+      "introduces": [
+        {
+          "id": "elf-ident",
+          "term": "ELF 识别字段",
+          "explanation": "ELF 以 7f 45 4c 46 开头；偏移 4 的 01 表示 32 位，偏移 5 的 01 表示小端。"
+        }
+      ],
+      "uses": ["elf-ident"],
+      "command": "hexdump -C -n 16 ./elf-bytes",
+      "observation": "偏移 00000000 行开头的 16 个字节，尤其是前六个字节。",
+      "commonErrors": [
+        "右侧 .ELF 是 ASCII 辅助显示，真正判读仍以中间的十六进制字节为准。",
+        "-n 16 限制只读取前 16 字节，不会修改文件。"
+      ],
+      "reinforcement": "xxd -g 1 -l 16 和 od -An -tx1 -N16 能观察同一组字节，只是排版不同。"
+    },
+    {
+      "id": 4,
+      "type": "visual-trace",
+      "title": "读取位数和字节序标记",
+      "objective": "把偏移 4、5 的原始字节与 32 位、小端两个格式事实对应起来",
+      "instruction": "观察前 16 字节。前四字节是魔数，随后两个 01 分别表示 32 位和小端；不要把这些标记当成运行时变量。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "uses": ["file-identification", "elf-ident"],
+      "evidence": "observation",
+      "tool": "elf",
+      "initialTab": "bytes",
+      "workbench": {
+        "bytes": {
+          "baseAddress": 0,
+          "bytes": [127, 69, 76, 70, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "endian": "little",
+          "selectedOffset": 0,
+          "selectedLength": 6
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "observe",
+      "title": "从可打印字节寻找线索",
+      "objective": "使用 strings 找到未被程序直接打印的分析标记",
+      "instruction": "运行观察命令，记录冒号后的标记。strings 只证明这些字节存在于文件中，不证明控制流一定使用它。",
+      "completion": "run",
+      "allowRun": true,
+      "introduces": [
+        {
+          "id": "printable-strings",
+          "term": "可打印字符串",
+          "explanation": "strings 扫描连续可打印字节，能提供线索，但不能证明该字符串一定会被执行或打印。"
+        }
+      ],
+      "uses": ["printable-strings"],
+      "command": "strings /opt/pwnhub/labs/elf-bytes-01/elf-bytes | grep '^PwnHub_ELF_marker:'",
+      "observation": "输出中 PwnHub_ELF_marker 冒号后的短标记。",
+      "commonErrors": [
+        "程序正常运行时不会打印分析标记；需要读取 ELF 文件本身。",
+        "strings 的结果只是静态线索，不能单独证明某条控制流会到达该字符串。"
+      ],
+      "reinforcement": "文件头提供格式事实，strings 提供内容线索；两类证据不能互相替代。"
+    }
+  ],
+  "hints": [
+    {
+      "level": 1,
+      "kind": "direction",
+      "text": "先用 file 建立类型事实，再按偏移读取前六个字节，最后单独寻找带 PwnHub_ELF_marker 前缀的字符串。"
+    },
+    {
+      "level": 2,
+      "kind": "tool",
+      "text": "用 hexdump -C -n 16 查看文件头；xxd -g 1 -l 16 和 od -An -tx1 -N16 是等价观察路线。"
+    },
+    {
+      "level": 3,
+      "kind": "structure",
+      "text": "最终结构是 check <魔数> <位数标记> <字节序标记> <字符串标记>；十六进制字段不带空格。"
+    }
+  ],
+  "verification": {
+    "type": "answer",
+    "usage": "check <魔数> <位数标记> <字节序标记> <字符串标记>",
+    "instruction": "依次填入前四字节、偏移 4、偏移 5，以及 strings 输出中冒号后的标记。",
+    "placeholders": [
+      { "token": "<魔数>", "meaning": "文件偏移 0 开始的四个连续十六进制字节，不含空格" },
+      { "token": "<位数标记>", "meaning": "文件偏移 4 的一个十六进制字节" },
+      { "token": "<字节序标记>", "meaning": "文件偏移 5 的一个十六进制字节" },
+      { "token": "<字符串标记>", "meaning": "PwnHub_ELF_marker 冒号后的标记" }
+    ],
+    "feedback": {
+      "empty": "还没有提供四项 ELF 观察值。",
+      "incorrect": "回到文件头偏移和 strings 输出，逐项核对格式。",
+      "success": "真实 ELF 的识别字节和字符串线索与观察一致。"
+    }
+  },
+  "completionSummary": {
+    "solved": "通过 file、hexdump 和 strings 验证了真实 ELF 的类型、识别字段与静态字符串线索。",
+    "mastered": ["file 文件识别", "hexdump/xxd/od 字节观察", "ELF 魔数与格式标记", "strings 的证据边界"],
+    "next": "下一实验会在相同证据原则下加入节表、符号和反汇编观察。"
+  }
+}

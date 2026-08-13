@@ -1,0 +1,120 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "gdb-pwndbg",
+  "labId": "gdb-stack-frames-01",
+  "title": "沿调用栈切换栈帧",
+  "summary": "用原生 GDB 的 backtrace、frame、up 和 down 连接当前函数、调用者、参数、局部变量与保存的返回位置。",
+  "goals": ["从 backtrace 读取当前函数与调用者顺序", "切换栈帧并读取各自参数和局部变量", "理解切换查看帧不会继续执行程序"],
+  "prerequisites": ["理解 call、ret 与 EBP 栈帧", "能够在 GDB 中停到指定函数"],
+  "kind": "gdb",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 30, "max": 50 },
+  "unlockAfter": ["gdb-register-memory-01"],
+  "artifacts": [{
+    "path": "/opt/pwnhub/labs/gdb-stack-frames-01/gdb-runtime",
+    "architecture": "i386",
+    "sha256": "b5560fdf2ab16ffa5b3004ceeb3eaec0363b7c99bb3142927a9feb3df33b66e4",
+    "purpose": "固定、离线、带调试信息的原生 GDB 栈帧与调用链观察样本",
+    "downloadable": true
+  }],
+  "concepts": [
+    { "id": "gdb-backtrace", "term": "调用栈回溯", "explanation": "backtrace 从当前函数开始列出仍未返回的调用链，编号越大越接近较早的调用者。" },
+    { "id": "gdb-selected-frame", "term": "当前查看的栈帧", "explanation": "frame、up 和 down 只切换 GDB 正在查看的栈帧，不会让被调试程序执行。" },
+    { "id": "gdb-frame-evidence", "term": "帧内证据", "explanation": "info args、info locals 和 info frame 分别展示当前帧的参数、局部变量和保存的返回状态。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "concept",
+      "title": "从当前函数向调用者回看",
+      "objective": "理解 backtrace 的帧号与顺序",
+      "instruction": "#0 是当前暂停的函数，#1 是直接调用者，后续编号沿仍未返回的调用链向外。每一行代表一个尚在栈上的函数调用。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [{ "id": "gdb-backtrace", "term": "调用栈回溯", "explanation": "backtrace 从当前函数开始列出仍未返回的调用链，编号越大越接近较早的调用者。" }],
+      "uses": ["gdb-backtrace"],
+      "evidence": "observation",
+      "tool": "gdb"
+    },
+    {
+      "id": 2,
+      "type": "terminal",
+      "title": "自动观察一条真实调用链",
+      "objective": "按帧号提取四层强相关函数",
+      "instruction": "自动输出停在 gdb_after_update 时的 backtrace，并切到 frame_middle。先按 #0 到 #3 记录函数顺序，再看 frame_middle 的 input 与 local_value。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "autoRun": true,
+      "introduces": [{ "id": "gdb-frame-evidence", "term": "帧内证据", "explanation": "info args、info locals 和 info frame 分别展示当前帧的参数、局部变量和保存的返回状态。" }],
+      "uses": ["gdb-backtrace", "gdb-frame-evidence"],
+      "evidence": "observation",
+      "tool": "gdb",
+      "observation": "#0 到 #3 从最深层函数依次回到外层；frame 2 的参数和局部变量属于 frame_middle。"
+    },
+    {
+      "id": 3,
+      "type": "prediction",
+      "title": "判断 frame 是否执行程序",
+      "objective": "区分调试器视角移动与进程执行",
+      "instruction": "在暂停状态输入 frame 2，再输入 up。预测 EIP 所属的真实暂停状态是否因此继续运行。",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [{ "id": "gdb-selected-frame", "term": "当前查看的栈帧", "explanation": "frame、up 和 down 只切换 GDB 正在查看的栈帧，不会让被调试程序执行。" }],
+      "uses": ["gdb-selected-frame"],
+      "evidence": "prediction",
+      "tool": "gdb",
+      "question": {
+        "prompt": "frame 和 up 会让被调试程序继续执行吗？",
+        "choices": [
+          { "id": "view", "label": "不会，只切换查看帧" },
+          { "id": "execute", "label": "会，执行到调用者" },
+          { "id": "restart", "label": "会，重新启动程序" }
+        ],
+        "answer": "view",
+        "success": "判断已记录：切换查看帧不执行程序。"
+      }
+    },
+    {
+      "id": 4,
+      "type": "terminal",
+      "title": "交互查看每一帧",
+      "objective": "在调用链中往返并核对帧内事实",
+      "instruction": "运行 gdb -q ./gdb-runtime -x session.gdb。使用 frame 1、frame 2、up、down，并在每一帧运行 info frame、info args、info locals。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "uses": ["gdb-backtrace", "gdb-selected-frame", "gdb-frame-evidence"],
+      "evidence": "observation",
+      "tool": "gdb",
+      "observation": "不同帧显示各自参数与局部变量；返回地址连接到直接调用者。"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "只记录 #0 到 #3，按输出顺序区分当前函数与三层调用者。" },
+    { "level": 2, "kind": "tool", "text": "backtrace 列调用链；frame 2 选中第三行；info args 读取该帧参数。" },
+    { "level": 3, "kind": "structure", "text": "最终结构是 check <#0函数> <#1函数> <#2函数> <#3函数> <frame2参数>。" }
+  ],
+  "verification": {
+    "type": "answer",
+    "usage": "check <#0函数> <#1函数> <#2函数> <#3函数> <frame2参数>",
+    "instruction": "按 backtrace 顺序填写前四个函数名，再填写 frame 2 的 input 十进制值。",
+    "placeholders": [
+      { "token": "<#0函数>", "meaning": "当前暂停的函数名称" },
+      { "token": "<#1函数>", "meaning": "直接调用者函数名称" },
+      { "token": "<#2函数>", "meaning": "backtrace 的 #2 函数名称" },
+      { "token": "<#3函数>", "meaning": "backtrace 的 #3 函数名称" },
+      { "token": "<frame2参数>", "meaning": "选中 frame 2 后 info args 显示的 input 十进制值" }
+    ],
+    "feedback": {
+      "empty": "还没有提供调用栈与栈帧观察值。",
+      "incorrect": "重新核对 backtrace 的帧号顺序，并确认参数来自 frame 2。",
+      "success": "真实 GDB 会话确认了调用链和选中栈帧的参数。"
+    }
+  },
+  "completionSummary": {
+    "solved": "沿真实调用栈切换了栈帧，并把函数顺序、参数、局部变量和返回位置联系起来。",
+    "mastered": ["backtrace", "frame、up 与 down", "info args", "info locals", "info frame"],
+    "next": "下一实验会用文件重定向稳定复现崩溃，再从信号、当前指令和调用栈定位原因。"
+  }
+}

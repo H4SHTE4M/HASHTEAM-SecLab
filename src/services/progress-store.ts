@@ -1,17 +1,25 @@
 import type { LabProgress, LevelCompletionRecord } from '../types/lab'
+import {
+  chapterIdForLegacyLevel,
+  createStableProgressFields,
+  legacyLabId,
+} from './course-progress'
 
-export const PROGRESS_STORAGE_KEY = 'hashteam-lab-progress-v4'
+export const PROGRESS_STORAGE_KEY = 'hashteam-lab-progress-v6'
 export const LEGACY_PROGRESS_STORAGE_KEY = 'hashteam-lab-progress-v1'
 export const PREVIOUS_PROGRESS_STORAGE_KEY = 'hashteam-lab-progress-v2'
+/** v3 是已有线上存档的迁移入口，保留导出名供旧客户端测试和用户存档使用。 */
 export const MIGRATABLE_PROGRESS_STORAGE_KEY = 'hashteam-lab-progress-v3'
-const MIGRATION_NOTICE_STORAGE_KEY = 'hashteam-lab-progress-v3-reset-notice'
+export const V4_PROGRESS_STORAGE_KEY = 'hashteam-lab-progress-v4'
+export const V5_PROGRESS_STORAGE_KEY = 'hashteam-lab-progress-v5'
+const MIGRATION_NOTICE_STORAGE_KEY = 'hashteam-lab-progress-v6-migration-notice'
 
 /** 可注入的存储接口，便于在测试中使用内存实现 */
 export interface StorageLike {
   getItem(key: string): string | null
   setItem(key: string, value: string): void
   removeItem(key: string): void
-  /** 持久化是否已降级（配额/权限失败回退内存，或本就是内存实现）；问题日志用 */
+  /** 持久化是否已降级；问题日志用。 */
   isDegraded?(): boolean
 }
 
@@ -27,7 +35,6 @@ class MemoryStorage implements StorageLike {
   removeItem(key: string): void {
     this.store.delete(key)
   }
-  /** 内存实现本身就是降级形态 */
   isDegraded(): boolean {
     return true
   }
@@ -77,13 +84,11 @@ class ResilientStorage implements StorageLike {
     }
   }
 
-  /** 主存储已失败、正在用内存副本支撑本会话 */
   isDegraded(): boolean {
     return !this.primaryAvailable
   }
 }
 
-/** 本模块创建过的全部存储实例（进度档与界面偏好各一个），用于降级观测 */
 const trackedStorages = new Set<StorageLike>()
 
 /**
@@ -92,7 +97,11 @@ const trackedStorages = new Set<StorageLike>()
  * useLabProgress 在模块加载阶段调用本函数，因此这里必须不抛--否则整个应用白屏。
  */
 export function createSafeStorage(): StorageLike {
-  if (typeof window === 'undefined') return new MemoryStorage()
+  if (typeof window === 'undefined') {
+    const memory = new MemoryStorage()
+    trackedStorages.add(memory)
+    return memory
+  }
   try {
     const storage = window.localStorage
     // Safari 隐私模式下 localStorage 对象存在但 setItem 抛 SecurityError，需实测探针
@@ -103,14 +112,12 @@ export function createSafeStorage(): StorageLike {
     trackedStorages.add(resilient)
     return resilient
   } catch {
-    // 探针失败即降级形态，纳入跟踪
     const memory = new MemoryStorage()
     trackedStorages.add(memory)
     return memory
   }
 }
 
-/** 任一已创建的存储实例曾发生降级（刷新后进度静默回滚的成因，随问题日志上报） */
 export function isStorageDegraded(): boolean {
   for (const storage of trackedStorages) {
     if (storage.isDegraded?.() === true) return true
@@ -119,9 +126,17 @@ export function isStorageDegraded(): boolean {
 }
 
 export function createDefaultProgress(now: number = Date.now()): LabProgress {
+  const stable = createStableProgressFields(1, [])
   return {
+    schemaVersion: 6,
     currentLevel: 1,
+    ...stable,
     completedLevels: [],
+    labHintsUsed: {},
+    labGuideSteps: {},
+    labCompletedSteps: {},
+    guidedAssistanceLabIds: [],
+    labCompletionRecords: {},
     hintsUsed: {},
     guideSteps: {},
     completedSteps: {},
@@ -135,10 +150,20 @@ export function createDefaultProgress(now: number = Date.now()): LabProgress {
 function isValidProgress(value: unknown, totalLevels: number): value is LabProgress {
   if (typeof value !== 'object' || value === null) return false
   const p = value as Partial<LabProgress>
+  if (p.schemaVersion !== 6) return false
   if (!isLevelNumber(p.currentLevel, totalLevels)) return false
+  if (!isLabId(p.currentLabId)) return false
   if (!Array.isArray(p.completedLevels)) return false
+  if (
+    !Array.isArray(p.completedLabIds) ||
+    p.completedLabIds.some((labId) => !isLabId(labId)) ||
+    new Set(p.completedLabIds).size !== p.completedLabIds.length
+  ) {
+    return false
+  }
   if (p.completedLevels.some((level) => !isLevelNumber(level, totalLevels))) return false
   if (new Set(p.completedLevels).size !== p.completedLevels.length) return false
+  if (p.completedLevels.some((level) => !p.completedLabIds?.includes(legacyLabId(level)))) return false
   const completedInOrder = [...p.completedLevels].sort((left, right) => left - right)
   if (completedInOrder.some((level, index) => level !== index + 1)) return false
   if (p.currentLevel > Math.min(completedInOrder.length + 1, totalLevels)) return false
@@ -181,19 +206,42 @@ function isValidProgress(value: unknown, totalLevels: number): value is LabProgr
   ) {
     return false
   }
+  if (typeof p.chapterProgress !== 'object' || p.chapterProgress === null) return false
+  if (
+    Object.entries(p.chapterProgress).some(
+      ([chapterId, labIds]) =>
+        chapterId.length === 0 ||
+        !Array.isArray(labIds) ||
+        labIds.some((labId) => typeof labId !== 'string' || !p.completedLabIds?.includes(labId)),
+    )
+  ) {
+    return false
+  }
+  if (!isValidLabNumberMap(p.labHintsUsed, totalLevels, 'hint')) return false
+  if (!isValidLabNumberMap(p.labGuideSteps, totalLevels, 'guide')) return false
+  if (!isValidLabStepsMap(p.labCompletedSteps)) return false
+  if (
+    !Array.isArray(p.guidedAssistanceLabIds) ||
+    p.guidedAssistanceLabIds.some((labId) => !isLabId(labId)) ||
+    new Set(p.guidedAssistanceLabIds).size !== p.guidedAssistanceLabIds.length
+  ) {
+    return false
+  }
+  if (typeof p.labCompletionRecords !== 'object' || p.labCompletionRecords === null) return false
+  if (
+    Object.entries(p.labCompletionRecords).some(
+      ([labId, record]) =>
+        !p.completedLabIds?.includes(labId) || !isCompletionRecord(record),
+    )
+  ) {
+    return false
+  }
   if (typeof p.completionRecords !== 'object' || p.completionRecords === null) return false
   if (
     Object.entries(p.completionRecords).some(([rawLevel, record]) => {
       const level = Number(rawLevel)
       if (!isLevelNumber(level, totalLevels) || !p.completedLevels?.includes(level)) return true
-      if (typeof record !== 'object' || record === null) return true
-      const value = record as Partial<LevelCompletionRecord>
-      return (
-        !['guided', 'challenge', 'mixed'].includes(value.path ?? '') ||
-        !Number.isInteger(value.hintsUsed) ||
-        (value.hintsUsed ?? -1) < 0 ||
-        (value.hintsUsed ?? 4) > 3
-      )
+      return !isCompletionRecord(record)
     })
   ) {
     return false
@@ -202,8 +250,129 @@ function isValidProgress(value: unknown, totalLevels: number): value is LabProgr
   return true
 }
 
+function normalizeProgress(value: unknown, totalLevels: number): LabProgress | null {
+  if (typeof value !== 'object' || value === null) return null
+  const source = value as Partial<LabProgress>
+  if (!isLevelNumber(source.currentLevel, totalLevels) || !Array.isArray(source.completedLevels)) {
+    return null
+  }
+  const stable = createStableProgressFields(source.currentLevel, source.completedLevels)
+  const hintsUsed = source.hintsUsed ?? {}
+  const guideSteps = source.guideSteps ?? {}
+  const completedSteps = source.completedSteps ?? {}
+  const guidedAssistanceLevels = source.guidedAssistanceLevels ?? []
+  const completionRecords = source.completionRecords ?? {}
+  const completedLabIds = [
+    ...new Set([
+      ...(Array.isArray(source.completedLabIds)
+        ? source.completedLabIds.filter(isLabId)
+        : []),
+      ...stable.completedLabIds,
+    ]),
+  ]
+  const labHintsUsed =
+    typeof source.labHintsUsed === 'object' && source.labHintsUsed !== null
+      ? source.labHintsUsed
+      : mapLegacyRecord(hintsUsed)
+  const labGuideSteps =
+    typeof source.labGuideSteps === 'object' && source.labGuideSteps !== null
+      ? source.labGuideSteps
+      : mapLegacyRecord(guideSteps)
+  const labCompletedSteps =
+    typeof source.labCompletedSteps === 'object' && source.labCompletedSteps !== null
+      ? source.labCompletedSteps
+      : mapLegacyRecord(completedSteps)
+  const guidedAssistanceLabIds =
+    Array.isArray(source.guidedAssistanceLabIds)
+      ? source.guidedAssistanceLabIds
+      : guidedAssistanceLevels.map(legacyLabId)
+  const labCompletionRecords =
+    typeof source.labCompletionRecords === 'object' && source.labCompletionRecords !== null
+      ? source.labCompletionRecords
+      : mapLegacyRecord(completionRecords)
+  const candidate = {
+    ...source,
+    schemaVersion: 6 as const,
+    currentLabId:
+      isLabId(source.currentLabId)
+        ? source.currentLabId
+        : stable.currentLabId,
+    completedLabIds,
+    chapterProgress:
+      typeof source.chapterProgress === 'object' && source.chapterProgress !== null
+        ? source.chapterProgress
+        : stable.chapterProgress,
+    labHintsUsed,
+    labGuideSteps,
+    labCompletedSteps,
+    guidedAssistanceLabIds,
+    labCompletionRecords,
+    hintsUsed,
+    guideSteps,
+    completedSteps,
+    guidedAssistanceLevels,
+    completionRecords,
+  }
+  return isValidProgress(candidate, totalLevels) ? candidate : null
+}
+
+function mapLegacyRecord<T>(record: Record<number, T>): Record<string, T> {
+  return Object.fromEntries(
+    Object.entries(record).map(([level, item]) => [legacyLabId(Number(level)), item]),
+  )
+}
+
+function migrateProgress(raw: string, totalLevels: number): LabProgress | null {
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return normalizeProgress(parsed, totalLevels)
+  } catch {
+    return null
+  }
+}
+
 function isLevelNumber(value: unknown, totalLevels: number): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= totalLevels
+}
+
+const LAB_ID_PATTERN = /^[a-z][a-z0-9-]{0,95}$/
+
+function isLabId(value: unknown): value is string {
+  return typeof value === 'string' && LAB_ID_PATTERN.test(value)
+}
+
+function isCompletionRecord(value: unknown): value is LevelCompletionRecord {
+  if (typeof value !== 'object' || value === null) return false
+  const record = value as Partial<LevelCompletionRecord>
+  return (
+    ['guided', 'challenge', 'mixed'].includes(record.path ?? '') &&
+    Number.isInteger(record.hintsUsed) &&
+    (record.hintsUsed ?? -1) >= 0 &&
+    (record.hintsUsed ?? 4) <= 3
+  )
+}
+
+function isValidLabNumberMap(
+  value: unknown,
+  _totalLevels: number,
+  kind: 'hint' | 'guide',
+): value is Record<string, number> {
+  if (typeof value !== 'object' || value === null) return false
+  return !Object.entries(value).some(([labId, count]) => {
+    if (!isLabId(labId) || !Number.isInteger(count) || (count as number) < 0) return true
+    return kind === 'hint' && (count as number) > 3
+  })
+}
+
+function isValidLabStepsMap(value: unknown): value is Record<string, number[]> {
+  if (typeof value !== 'object' || value === null) return false
+  return !Object.entries(value).some(
+    ([labId, steps]) =>
+      !isLabId(labId) ||
+      !Array.isArray(steps) ||
+      steps.some((step) => !Number.isInteger(step) || step < 1) ||
+      new Set(steps).size !== steps.length,
+  )
 }
 
 function isValidTimestamp(value: unknown): value is number {
@@ -214,44 +383,34 @@ function isValidTimestamp(value: unknown): value is number {
 export function loadProgress(storage: StorageLike, totalLevels: number): LabProgress {
   const raw = storage.getItem(PROGRESS_STORAGE_KEY)
   if (raw === null) {
-    const previousRaw = storage.getItem(MIGRATABLE_PROGRESS_STORAGE_KEY)
-    if (previousRaw !== null) {
-      try {
-        const previous: unknown = JSON.parse(previousRaw)
-        if (typeof previous === 'object' && previous !== null) {
-          const migrated = {
-            ...previous,
-            guidedAssistanceLevels: [],
-            completionRecords: {},
-          }
-          if (isValidProgress(migrated, totalLevels)) {
-            storage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(migrated))
-            storage.removeItem(MIGRATABLE_PROGRESS_STORAGE_KEY)
-            return migrated
-          }
-        }
-      } catch {
-        // 损坏的 v3 存档不能迁移，按全新进度处理。
+    const migratableKeys = [
+      V5_PROGRESS_STORAGE_KEY,
+      V4_PROGRESS_STORAGE_KEY,
+      MIGRATABLE_PROGRESS_STORAGE_KEY,
+      PREVIOUS_PROGRESS_STORAGE_KEY,
+      LEGACY_PROGRESS_STORAGE_KEY,
+    ]
+    for (const key of migratableKeys) {
+      const previousRaw = storage.getItem(key)
+      if (previousRaw === null) continue
+      const migrated = migrateProgress(previousRaw, totalLevels)
+      if (migrated !== null) {
+        storage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(migrated))
+        return migrated
       }
-      storage.removeItem(MIGRATABLE_PROGRESS_STORAGE_KEY)
     }
-    if (
-      storage.getItem(LEGACY_PROGRESS_STORAGE_KEY) !== null ||
-      storage.getItem(PREVIOUS_PROGRESS_STORAGE_KEY) !== null
-    ) {
-      storage.removeItem(LEGACY_PROGRESS_STORAGE_KEY)
-      storage.removeItem(PREVIOUS_PROGRESS_STORAGE_KEY)
-      storage.setItem(MIGRATION_NOTICE_STORAGE_KEY, '1')
-    }
+    const hasUnmigratedProgress = migratableKeys.some((key) => storage.getItem(key) !== null)
+    if (hasUnmigratedProgress) storage.setItem(MIGRATION_NOTICE_STORAGE_KEY, '1')
     return createDefaultProgress()
   }
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    if (isValidProgress(parsed, totalLevels)) return parsed
-  } catch {
-    // 损坏的存档：从头开始
+  const normalized = migrateProgress(raw, totalLevels)
+  if (normalized !== null) {
+    if (JSON.stringify(normalized) !== raw) {
+      storage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(normalized))
+    }
+    return normalized
   }
-  storage.removeItem(PROGRESS_STORAGE_KEY)
+  storage.setItem(MIGRATION_NOTICE_STORAGE_KEY, '1')
   return createDefaultProgress()
 }
 
@@ -265,6 +424,36 @@ export function consumeProgressResetNotice(storage: StorageLike): boolean {
 export function saveProgress(storage: StorageLike, progress: LabProgress): void {
   progress.updatedAt = Date.now()
   storage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progress))
+}
+
+interface LegacyV4Progress {
+  currentLevel: number
+  completedLevels: number[]
+  hintsUsed: Record<number, number>
+  guideSteps: Record<number, number>
+  completedSteps: Record<number, number[]>
+  guidedAssistanceLevels: number[]
+  completionRecords: Record<number, LevelCompletionRecord>
+  startedAt: number
+  updatedAt: number
+}
+
+function saveLevelProgress(storage: StorageLike, progress: LabProgress): void {
+  saveProgress(storage, progress)
+  const legacy: LegacyV4Progress = {
+    currentLevel: progress.currentLevel,
+    completedLevels: [...progress.completedLevels],
+    hintsUsed: { ...progress.hintsUsed },
+    guideSteps: { ...progress.guideSteps },
+    completedSteps: Object.fromEntries(
+      Object.entries(progress.completedSteps).map(([level, steps]) => [level, [...steps]]),
+    ),
+    guidedAssistanceLevels: [...progress.guidedAssistanceLevels],
+    completionRecords: { ...progress.completionRecords },
+    startedAt: progress.startedAt,
+    updatedAt: progress.updatedAt,
+  }
+  storage.setItem(V4_PROGRESS_STORAGE_KEY, JSON.stringify(legacy))
 }
 
 /**
@@ -284,6 +473,36 @@ export function completeLevel(
     path: record.path,
     hintsUsed: Math.min(3, Math.max(0, Math.round(record.hintsUsed))),
   }
+  const labId = legacyLabId(level)
+  if (!progress.completedLabIds.includes(labId)) progress.completedLabIds.push(labId)
+  progress.labCompletionRecords[labId] = progress.completionRecords[level]
+  const chapterId = chapterIdForLegacyLevel(level)
+  const chapterLabs = progress.chapterProgress[chapterId] ?? []
+  if (!chapterLabs.includes(labId)) chapterLabs.push(labId)
+  progress.chapterProgress[chapterId] = chapterLabs
+  saveLevelProgress(storage, progress)
+  return true
+}
+
+/** 标记稳定实验完成；新实验不会占用或伪造数字关卡编号。 */
+export function completeLab(
+  storage: StorageLike,
+  progress: LabProgress,
+  labId: string,
+  chapterId: string,
+  record: LevelCompletionRecord,
+): boolean {
+  if (!isLabId(labId) || !isLabId(chapterId) || progress.completedLabIds.includes(labId)) {
+    return false
+  }
+  progress.completedLabIds.push(labId)
+  progress.labCompletionRecords[labId] = {
+    path: record.path,
+    hintsUsed: Math.min(3, Math.max(0, Math.round(record.hintsUsed))),
+  }
+  const chapterLabs = progress.chapterProgress[chapterId] ?? []
+  if (!chapterLabs.includes(labId)) chapterLabs.push(labId)
+  progress.chapterProgress[chapterId] = chapterLabs
   saveProgress(storage, progress)
   return true
 }
@@ -292,6 +511,15 @@ export function completeLevel(
 export function recordHint(storage: StorageLike, progress: LabProgress, level: number): number {
   const used = Math.min((progress.hintsUsed[level] ?? 0) + 1, 3)
   progress.hintsUsed[level] = used
+  progress.labHintsUsed[legacyLabId(level)] = used
+  saveLevelProgress(storage, progress)
+  return used
+}
+
+export function recordLabHint(storage: StorageLike, progress: LabProgress, labId: string): number {
+  if (!isLabId(labId)) return 0
+  const used = Math.min((progress.labHintsUsed[labId] ?? 0) + 1, 3)
+  progress.labHintsUsed[labId] = used
   saveProgress(storage, progress)
   return used
 }
@@ -307,6 +535,21 @@ export function advanceGuideStep(
   const current = Math.min(progress.guideSteps[level] ?? 0, totalSteps - 1)
   const next = Math.min(current + 1, totalSteps - 1)
   progress.guideSteps[level] = next
+  progress.labGuideSteps[legacyLabId(level)] = next
+  saveLevelProgress(storage, progress)
+  return next
+}
+
+export function advanceLabGuideStep(
+  storage: StorageLike,
+  progress: LabProgress,
+  labId: string,
+  totalSteps: number,
+): number {
+  if (!isLabId(labId) || totalSteps <= 0) return 0
+  const current = Math.min(progress.labGuideSteps[labId] ?? 0, totalSteps - 1)
+  const next = Math.min(current + 1, totalSteps - 1)
+  progress.labGuideSteps[labId] = next
   saveProgress(storage, progress)
   return next
 }
@@ -322,6 +565,26 @@ export function resetLevelAttempt(
   progress.guidedAssistanceLevels = progress.guidedAssistanceLevels.filter(
     (assistedLevel) => assistedLevel !== level,
   )
+  resetLabAttemptFields(progress, legacyLabId(level))
+  saveLevelProgress(storage, progress)
+}
+
+function resetLabAttemptFields(progress: LabProgress, labId: string): void {
+  delete progress.labHintsUsed[labId]
+  progress.labGuideSteps[labId] = 0
+  progress.labCompletedSteps[labId] = []
+  progress.guidedAssistanceLabIds = progress.guidedAssistanceLabIds.filter(
+    (assistedLabId) => assistedLabId !== labId,
+  )
+}
+
+export function resetLabAttempt(
+  storage: StorageLike,
+  progress: LabProgress,
+  labId: string,
+): void {
+  if (!isLabId(labId)) return
+  resetLabAttemptFields(progress, labId)
   saveProgress(storage, progress)
 }
 
@@ -334,6 +597,21 @@ export function markGuidedAssistance(
   if (progress.guidedAssistanceLevels.includes(level)) return false
   progress.guidedAssistanceLevels.push(level)
   progress.guidedAssistanceLevels.sort((left, right) => left - right)
+  const labId = legacyLabId(level)
+  if (!progress.guidedAssistanceLabIds.includes(labId)) {
+    progress.guidedAssistanceLabIds.push(labId)
+  }
+  saveLevelProgress(storage, progress)
+  return true
+}
+
+export function markLabGuidedAssistance(
+  storage: StorageLike,
+  progress: LabProgress,
+  labId: string,
+): boolean {
+  if (!isLabId(labId) || progress.guidedAssistanceLabIds.includes(labId)) return false
+  progress.guidedAssistanceLabIds.push(labId)
   saveProgress(storage, progress)
   return true
 }
@@ -349,18 +627,47 @@ export function completeLearningStep(
   if (!completed.includes(stepId)) completed.push(stepId)
   completed.sort((left, right) => left - right)
   progress.completedSteps[level] = completed
+  progress.labCompletedSteps[legacyLabId(level)] = [...completed]
+  saveLevelProgress(storage, progress)
+  return completed
+}
+
+export function completeLabLearningStep(
+  storage: StorageLike,
+  progress: LabProgress,
+  labId: string,
+  stepId: number,
+): number[] {
+  if (!isLabId(labId) || !Number.isInteger(stepId) || stepId < 1) return []
+  const completed = progress.labCompletedSteps[labId] ?? []
+  if (!completed.includes(stepId)) completed.push(stepId)
+  completed.sort((left, right) => left - right)
+  progress.labCompletedSteps[labId] = completed
   saveProgress(storage, progress)
   return completed
 }
 
 export function setCurrentLevel(storage: StorageLike, progress: LabProgress, level: number): void {
   progress.currentLevel = level
+  progress.currentLabId = legacyLabId(level)
+  saveLevelProgress(storage, progress)
+}
+
+export function setCurrentLab(
+  storage: StorageLike,
+  progress: LabProgress,
+  labId: string,
+  legacyLevel?: number,
+): void {
+  if (!isLabId(labId)) return
+  progress.currentLabId = labId
+  if (legacyLevel !== undefined) progress.currentLevel = legacyLevel
   saveProgress(storage, progress)
 }
 
 export function resetAllProgress(storage: StorageLike): LabProgress {
   const fresh = createDefaultProgress()
   storage.removeItem(PROGRESS_STORAGE_KEY)
-  saveProgress(storage, fresh)
+  saveLevelProgress(storage, fresh)
   return fresh
 }

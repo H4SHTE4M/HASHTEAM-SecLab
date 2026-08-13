@@ -2,7 +2,13 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { TelemetryClient } from '../src/telemetry/client'
 import type { TelemetryTransport, SessionBootstrapResponse, TelemetryBatchRequest } from '../src/telemetry/client'
-import { SECLAB_COMMAND_ALLOWLIST, MAX_EVENTS_PER_BATCH, MAX_QUEUE_SIZE } from '../src/telemetry/schema'
+import {
+  MAX_EVENTS_PER_BATCH,
+  MAX_QUEUE_SIZE,
+  PWNHUB_COMMAND_ALLOWLIST,
+  SECLAB_COMMAND_ALLOWLIST,
+  type ModuleId,
+} from '../src/telemetry/schema'
 
 class FakeTransport implements TelemetryTransport {
   bootstrapCalls = 0
@@ -29,12 +35,15 @@ class FakeTransport implements TelemetryTransport {
   }
 }
 
-function createClient(transport?: TelemetryTransport): TelemetryClient {
+function createClient(
+  transport?: TelemetryTransport,
+  module: ModuleId = 'seclab',
+): TelemetryClient {
   return new TelemetryClient({
-    module: 'seclab',
+    module,
     transport: transport ?? new FakeTransport(),
     now: () => Date.now(),
-    scheduler: (fn) => window.setTimeout(fn, 0),
+    scheduler: () => 1,
   })
 }
 
@@ -168,5 +177,45 @@ describe('TelemetryClient', () => {
       client.trackCommand(cmd)
     }
     expect(client.pendingCount).toBe(SECLAB_COMMAND_ALLOWLIST.length)
+  })
+
+  it('PwnHub 使用 v2 batch、独立命令 allowlist 与稳定 activityId 事件', async () => {
+    const client = createClient(transport, 'pwnhub')
+    for (const command of PWNHUB_COMMAND_ALLOWLIST) client.trackCommand(command)
+    client.trackCommand('find')
+    client.trackActivityComplete('memory-addresses-01', 'guided')
+    client.trackActivityCheck('memory-addresses-01', true)
+    client.trackActivityHint('memory-addresses-01')
+    client.trackActivityReset('memory-addresses-01')
+    client.trackVmBoot('ready', '5-10s', 'cold')
+
+    await client.flush()
+
+    expect(transport.sendCalls).toHaveLength(1)
+    expect(transport.sendCalls[0]).toMatchObject({ v: 2, module: 'pwnhub' })
+    expect(transport.sendCalls[0].events).toContainEqual({
+      type: 'activity_complete',
+      activityId: 'memory-addresses-01',
+      path: 'guided',
+    })
+    expect(transport.sendCalls[0].events).toContainEqual({
+      type: 'vm_boot',
+      outcome: 'ready',
+      duration: '5-10s',
+      cache: 'cold',
+    })
+    expect(transport.sendCalls[0].events).not.toContainEqual({
+      type: 'command',
+      command: 'find',
+    })
+  })
+
+  it('跨 module 的事件构造方法被客户端静默拒绝', () => {
+    const seclab = createClient(transport)
+    seclab.trackActivityHint('memory-addresses-01')
+    const pwnhub = createClient(transport, 'pwnhub')
+    pwnhub.trackLevelComplete(1, 'guided')
+    expect(seclab.pendingCount).toBe(0)
+    expect(pwnhub.pendingCount).toBe(0)
   })
 })

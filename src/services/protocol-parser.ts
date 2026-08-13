@@ -113,12 +113,36 @@ export class SerialProtocolParser {
                 ...(value.sig === undefined ? {} : { sig: value.sig }),
               }
             : null
+        case 'lab-ready':
+          return isLabId(value.labId) && isOptionalSig(value.sig)
+            ? {
+                type: 'lab-ready',
+                labId: value.labId,
+                ...(value.sig === undefined ? {} : { sig: value.sig }),
+              }
+            : null
+        case 'lab-result':
+          return isLabId(value.labId) &&
+            (value.status === 'passed' || value.status === 'failed') &&
+            isOptionalSig(value.sig)
+            ? {
+                type: 'lab-result',
+                labId: value.labId,
+                status: value.status,
+                ...(value.sig === undefined ? {} : { sig: value.sig }),
+              }
+            : null
         case 'telemetry-command':
           return typeof value.command === 'string' && value.command.length > 0
             ? { type: 'telemetry-command', command: value.command }
             : null
         case 'hint-request':
-          return isPositiveInteger(value.level) ? { type: 'hint-request', level: value.level } : null
+          if (isPositiveInteger(value.level) && value.labId === undefined) {
+            return { type: 'hint-request', level: value.level }
+          }
+          return isLabId(value.labId) && value.level === undefined
+            ? { type: 'hint-request', labId: value.labId }
+            : null
         case 'progress':
           return isPositiveInteger(value.level) && isFiniteNumber(value.value)
             ? { type: 'progress', level: value.level, value: value.value }
@@ -147,6 +171,12 @@ function isNonNegativeInteger(value: unknown): value is number {
 
 function isPositiveInteger(value: unknown): value is number {
   return isNonNegativeInteger(value) && value >= 1
+}
+
+const LAB_ID_PATTERN = /^[a-z][a-z0-9-]{0,95}$/
+
+function isLabId(value: unknown): value is string {
+  return typeof value === 'string' && LAB_ID_PATTERN.test(value)
 }
 
 /** 会话密钥：base64 编码的随机字节（init 写入 32 字节 → 44 字符，留出余量） */

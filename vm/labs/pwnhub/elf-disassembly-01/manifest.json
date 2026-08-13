@@ -1,0 +1,201 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "elf-static",
+  "labId": "elf-disassembly-01",
+  "title": "从符号地址阅读反汇编",
+  "summary": "用真实 objdump 把 ELF 代码字节解释成 Intel 语法指令，并沿 call、cmp 和条件跳转阅读静态控制流。",
+  "goals": [
+    "使用 objdump -d -M intel 反汇编 ELF 代码",
+    "从指令行中区分地址、机器字节、助记符和操作数",
+    "把 readelf 入口点与 nm 符号地址对应到函数标签",
+    "沿 call、cmp 和条件跳转读取静态控制流"
+  ],
+  "prerequisites": ["能够用 nm 找到函数符号与虚拟地址", "认识 mov、cmp、条件跳转、call 和 ret 的基本作用"],
+  "kind": "elf",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 30, "max": 50 },
+  "unlockAfter": ["elf-symbols-01"],
+  "artifacts": [
+    {
+      "path": "/opt/pwnhub/labs/elf-disassembly-01/elf-disassembly",
+      "architecture": "i386",
+      "sha256": "63deb66624d45292e645b51804c6f9802fa2dd86a2a86cb6dcba75e390fe2cea",
+      "purpose": "固定、离线的 ELF 指令行、函数调用与条件跳转观察样本",
+      "downloadable": true
+    }
+  ],
+  "concepts": [
+    {
+      "id": "elf-disassembly",
+      "term": "反汇编",
+      "explanation": "反汇编器把 ELF 代码节中的机器字节解释成汇编指令，读取文件即可完成，不会执行目标程序。"
+    },
+    {
+      "id": "elf-instruction-row",
+      "term": "指令地址、机器字节与助记符",
+      "explanation": "objdump 每条指令依次展示虚拟地址、组成该指令的字节、助记符和操作数；-M intel 选择本课程使用的 Intel 语法。"
+    },
+    {
+      "id": "elf-static-control-flow",
+      "term": "静态控制流",
+      "explanation": "call 指向另一个函数，cmp 设置 flags，条件跳转根据 flags 连接两条可能路径；静态反汇编展示可能路径，不证明本次运行走过哪条。"
+    }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "prediction",
+      "title": "先选择指令读取工具",
+      "objective": "在不运行样本的情况下把代码字节解释成汇编指令",
+      "instruction": "readelf 已找到节和入口点，nm 已给函数命名。现在选择能把 .text 机器字节解释成指令的工具。",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "elf-disassembly",
+          "term": "反汇编",
+          "explanation": "反汇编器把 ELF 代码节中的机器字节解释成汇编指令，读取文件即可完成，不会执行目标程序。"
+        }
+      ],
+      "uses": ["elf-disassembly"],
+      "evidence": "prediction",
+      "question": {
+        "prompt": "哪个命令能直接反汇编 ELF 的代码节？",
+        "choices": [
+          { "id": "objdump", "label": "objdump" },
+          { "id": "mkdir", "label": "mkdir" },
+          { "id": "whoami", "label": "whoami" }
+        ],
+        "answer": "objdump",
+        "success": "预测已记录：objdump -d 读取代码节并输出汇编指令。"
+      }
+    },
+    {
+      "id": 2,
+      "type": "observe",
+      "title": "从入口点和符号进入函数",
+      "objective": "把入口点、符号地址和反汇编函数标签连接起来",
+      "instruction": "运行完整反汇编。找到 _start、choose_path 和 compute_result 标签，确认标签前的虚拟地址来自上一实验的符号地址；再找到 compute_result 中 call 的目标函数名。",
+      "completion": "run",
+      "allowRun": true,
+      "introduces": [
+        {
+          "id": "elf-instruction-row",
+          "term": "指令地址、机器字节与助记符",
+          "explanation": "objdump 每条指令依次展示虚拟地址、组成该指令的字节、助记符和操作数；-M intel 选择本课程使用的 Intel 语法。"
+        }
+      ],
+      "uses": ["elf-disassembly", "elf-instruction-row"],
+      "command": "objdump -d -M intel ./elf-disassembly",
+      "observation": "三个函数标签的地址，以及 compute_result 中 call 指令末尾的目标函数名称。",
+      "commonErrors": [
+        "-M intel 只改变汇编语法显示方式，不改变 ELF 中的真实机器字节。",
+        "反汇编左侧是虚拟地址，不是文件偏移或行号。"
+      ],
+      "reinforcement": "readelf、nm 和 objdump 描述同一个 ELF：入口点落到函数标签，函数标签下面才是具体指令。"
+    },
+    {
+      "id": 3,
+      "type": "concept",
+      "title": "读懂指令行与静态控制流",
+      "objective": "区分指令表示和可能的控制流边",
+      "instruction": "冒号前是指令虚拟地址，随后是机器字节、助记符和操作数。call 进入另一个函数；cmp 只设置 flags；jne 等条件跳转根据 flags 选择下一地址。静态反汇编列出可能路径，但不说明某次运行实际选择哪条。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "elf-static-control-flow",
+          "term": "静态控制流",
+          "explanation": "call 指向另一个函数，cmp 设置 flags，条件跳转根据 flags 连接两条可能路径；静态反汇编展示可能路径，不证明本次运行走过哪条。"
+        }
+      ],
+      "uses": ["elf-instruction-row", "elf-static-control-flow"],
+      "evidence": "observation"
+    },
+    {
+      "id": 4,
+      "type": "observe",
+      "title": "聚焦一个条件函数",
+      "objective": "从 cmp、立即数和条件跳转还原两条可能路径",
+      "instruction": "只反汇编 choose_path。记录函数标签地址、cmp 比较的立即数和紧随其后的条件跳转助记符，再沿跳转目标与顺序下一条指令分别查看两个返回值计算。",
+      "completion": "run",
+      "allowRun": true,
+      "introduces": [
+        {
+          "id": "elf-static-control-flow",
+          "term": "静态控制流",
+          "explanation": "call 指向另一个函数，cmp 设置 flags，条件跳转根据 flags 连接两条可能路径；静态反汇编展示可能路径，不证明本次运行走过哪条。"
+        }
+      ],
+      "uses": ["elf-instruction-row", "elf-static-control-flow"],
+      "command": "objdump -d -M intel --disassemble=choose_path ./elf-disassembly",
+      "observation": "choose_path 标签地址、cmp 的立即数、条件跳转助记符和跳转目标地址。",
+      "commonErrors": [
+        "cmp 后的条件跳转读取刚更新的 flags；不要把 cmp 当成保存比较结果的赋值。",
+        "尖括号中的 choose_path+偏移是工具给地址添加的可读标签，不是另一条指令。"
+      ],
+      "reinforcement": "一个条件判断会在静态反汇编中形成顺序路径和跳转路径。"
+    },
+    {
+      "id": 5,
+      "type": "prediction",
+      "title": "迁移到分支条件",
+      "objective": "根据 cmp 与跳转助记符说明何时转向另一条路径",
+      "instruction": "查看 cmp 后紧邻的条件跳转。选择表示“不相等时跳转”的助记符。",
+      "completion": "answer",
+      "allowRun": false,
+      "uses": ["elf-static-control-flow"],
+      "evidence": "prediction",
+      "question": {
+        "prompt": "哪个助记符表示比较结果不相等时跳转？",
+        "choices": [
+          { "id": "jne", "label": "jne" },
+          { "id": "mov", "label": "mov" },
+          { "id": "ret", "label": "ret" }
+        ],
+        "answer": "jne",
+        "success": "判断已记录：jne 在零标志未设置时跳向目标地址。"
+      }
+    }
+  ],
+  "hints": [
+    {
+      "level": 1,
+      "kind": "direction",
+      "text": "先找到尖括号中的函数标签，再分别读取 choose_path 的 cmp/条件跳转和 compute_result 的 call。"
+    },
+    {
+      "level": 2,
+      "kind": "tool",
+      "text": "objdump -d -M intel 显示全部代码；--disassemble=<函数名> 可以只看一个函数。"
+    },
+    {
+      "level": 3,
+      "kind": "structure",
+      "text": "最终结构是 check <choose_path地址> <call目标函数> <条件跳转助记符> <cmp立即数>；地址和立即数可带 0x。"
+    }
+  ],
+  "verification": {
+    "type": "answer",
+    "usage": "check <choose_path地址> <call目标函数> <条件跳转助记符> <cmp立即数>",
+    "instruction": "按 objdump 输出依次填写函数地址、调用目标、条件跳转和比较立即数。",
+    "placeholders": [
+      { "token": "<choose_path地址>", "meaning": "choose_path 函数标签前的八位十六进制地址" },
+      { "token": "<call目标函数>", "meaning": "compute_result 中 call 指令末尾尖括号里的函数名称" },
+      { "token": "<条件跳转助记符>", "meaning": "choose_path 中 cmp 后的 j 开头助记符" },
+      { "token": "<cmp立即数>", "meaning": "choose_path 中 cmp 操作数里的十六进制立即数" }
+    ],
+    "feedback": {
+      "empty": "还没有提供函数地址、调用目标、条件跳转和比较立即数。",
+      "incorrect": "回到两个函数的反汇编，逐列核对标签地址、call 末尾、cmp 操作数和下一条条件跳转。",
+      "success": "锁定的 objdump 已从真实 ELF 重读并确认函数指令与静态控制流。"
+    }
+  },
+  "completionSummary": {
+    "solved": "通过真实 objdump 把入口点与符号地址落到指令，并沿 call、cmp 和条件跳转阅读静态控制流。",
+    "mastered": ["objdump -d", "Intel 语法", "指令地址与机器字节", "函数标签", "call 目标", "cmp 与条件跳转"],
+    "next": "下一章会用 GDB 在运行时单步这些指令，区分静态可能路径与本次实际执行路径。"
+  }
+}

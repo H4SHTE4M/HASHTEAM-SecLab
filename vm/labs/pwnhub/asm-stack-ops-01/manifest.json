@@ -1,0 +1,137 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "asm-reading",
+  "labId": "asm-stack-ops-01",
+  "title": "push、pop 与 ESP",
+  "summary": "把内存章的后入先出现象落实到 push、pop 和 ESP 的四字节变化。",
+  "goals": [
+    "说明 push 先降低 ESP 再把值写入新栈顶",
+    "说明 pop 先读取栈顶再提高 ESP",
+    "沿两次 push 和两次 pop 追踪后入先出的寄存器结果"
+  ],
+  "prerequisites": ["理解栈的后入先出", "能够读取寄存器和十六进制地址"],
+  "kind": "visual",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 25, "max": 40 },
+  "unlockAfter": ["asm-arithmetic-01"],
+  "artifacts": [
+    {
+      "path": "/opt/pwnhub/labs/asm-stack-ops-01/asm-stack-ops",
+      "architecture": "i386",
+      "sha256": "bd3b56a443f0059f57bd3af13f9e0ca1b2fe4ee6ebff60b64cefb9d57e398dbb",
+      "purpose": "固定、离线的 push、pop、ESP 和寄存器传值观察样本",
+      "downloadable": true
+    }
+  ],
+  "concepts": [
+    { "id": "push-instruction", "term": "push", "explanation": "在 i386 中，push 四字节值会让 ESP 减少 4，再把值写到新的栈顶。" },
+    { "id": "pop-instruction", "term": "pop", "explanation": "pop 先把当前栈顶四字节复制到目标寄存器，再让 ESP 增加 4。" },
+    { "id": "stack-register-transfer", "term": "栈与寄存器之间传值", "explanation": "连续 push 的最后一个值最先被 pop 取出；pop 的目标寄存器得到该位模式。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "prediction",
+      "title": "预测第一次 pop 的结果",
+      "objective": "把后入先出迁移到具体汇编指令",
+      "instruction": "程序依次 push 0x11111111、push 0x22222222，然后执行 pop eax。先预测 EAX 会得到哪一个值。",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [
+        { "id": "push-instruction", "term": "push", "explanation": "在 i386 中，push 四字节值会让 ESP 减少 4，再把值写到新的栈顶。" },
+        { "id": "pop-instruction", "term": "pop", "explanation": "pop 先把当前栈顶四字节复制到目标寄存器，再让 ESP 增加 4。" }
+      ],
+      "uses": ["push-instruction", "pop-instruction"],
+      "evidence": "prediction",
+      "question": {
+        "prompt": "第一次 pop 后，EAX 得到什么？",
+        "choices": [
+          { "id": "second", "label": "0x22222222" },
+          { "id": "first", "label": "0x11111111" },
+          { "id": "address", "label": "ESP 的地址" }
+        ],
+        "answer": "second",
+        "success": "预测已记录：后 push 的值先被 pop 取出。"
+      }
+    },
+    {
+      "id": 2,
+      "type": "visual-trace",
+      "title": "前后单步追踪 ESP",
+      "objective": "把每次四字节地址变化和传值结果对应起来",
+      "instruction": "使用下一步和上一步查看五个状态。push 时 ESP 向低地址移动 4；pop 时值进入目标寄存器，ESP 再向高地址移动 4。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        { "id": "stack-register-transfer", "term": "栈与寄存器之间传值", "explanation": "连续 push 的最后一个值最先被 pop 取出；pop 的目标寄存器得到该位模式。" }
+      ],
+      "uses": ["push-instruction", "pop-instruction", "stack-register-transfer"],
+      "evidence": "observation",
+      "tool": "elf",
+      "initialTab": "stack",
+      "workbench": {
+        "stack": {
+          "entries": [
+            { "address": 134529240, "value": 572662306, "label": "ESP · 后 push 的值", "kind": "stack-pointer" },
+            { "address": 134529244, "value": 286331153, "label": "先 push 的值", "kind": "stack-pointer" },
+            { "address": 134529248, "value": 0, "label": "开始时的 ESP", "kind": "stack-pointer" }
+          ]
+        },
+        "assemblyTui": {
+          "title": "push 与 pop 单步",
+          "states": [
+            { "id": "start", "title": "开始", "instruction": "准备教学栈", "explanation": "ESP 指向 0x0804c0e0，栈中还没有本实验的两个值。", "stack": { "entries": [{ "address": 134529248, "value": 0, "label": "ESP · 开始位置", "kind": "stack-pointer" }] } },
+            { "id": "push-first", "title": "第一次 push 后", "instruction": "push 0x11111111", "explanation": "ESP 减少 4，新值写入 0x0804c0dc。", "stack": { "entries": [{ "address": 134529244, "value": 286331153, "label": "ESP · 0x11111111", "kind": "stack-pointer" }, { "address": 134529248, "value": 0, "label": "开始位置", "kind": "stack-pointer" }] } },
+            { "id": "push-second", "title": "第二次 push 后", "instruction": "push 0x22222222", "explanation": "ESP 再减少 4，后进入的值成为新栈顶。", "stack": { "entries": [{ "address": 134529240, "value": 572662306, "label": "ESP · 0x22222222", "kind": "stack-pointer" }, { "address": 134529244, "value": 286331153, "label": "0x11111111", "kind": "stack-pointer" }] } },
+            { "id": "pop-eax", "title": "pop 到 EAX 后", "instruction": "pop eax", "explanation": "EAX 得到后进入的 0x22222222，ESP 回到 0x0804c0dc。", "registers": { "instruction": "pop eax", "registers": [{ "name": "eax", "before": 0, "after": 572662306 }, { "name": "esp", "before": 134529240, "after": 134529244 }], "flagsBefore": [], "flagsAfter": [] }, "stack": { "entries": [{ "address": 134529244, "value": 286331153, "label": "ESP · 0x11111111", "kind": "stack-pointer" }] } },
+            { "id": "pop-ebx", "title": "pop 到 EBX 后", "instruction": "pop ebx", "explanation": "EBX 再得到 0x11111111，ESP 恢复到开始位置。", "registers": { "instruction": "pop ebx", "registers": [{ "name": "ebx", "before": 0, "after": 286331153 }, { "name": "esp", "before": 134529244, "after": 134529248 }], "flagsBefore": [], "flagsAfter": [] }, "stack": { "entries": [{ "address": 134529248, "value": 0, "label": "ESP · 恢复位置", "kind": "stack-pointer" }] } }
+          ]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "terminal",
+      "title": "在真实终端复现",
+      "objective": "从自动运行的 ELF 表格提取 ESP 与寄存器结果",
+      "instruction": "样本进入实验时已经自动运行。按执行顺序读取 ESP 列和取出的值列，再按验证区格式提交。",
+      "completion": "input",
+      "allowRun": false,
+      "autoRun": true,
+      "uses": ["push-instruction", "pop-instruction", "stack-register-transfer"],
+      "evidence": "observation",
+      "tool": "shell",
+      "observation": "两次 push 后的 ESP，以及 pop eax、pop ebx 取出的值。",
+      "commonErrors": ["push 后 ESP 向更小的地址移动。", "pop 行的栈顶值是操作完成后的新栈顶，取出的旧栈顶在最后一列。"],
+      "reinforcement": "内存章的后入先出规律，现在由 push、pop、ESP 和目标寄存器共同证明。"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "先读两条 push 行的 ESP，再读两条 pop 行最后一列。" },
+    { "level": 2, "kind": "tool", "text": "重新输入 ./asm-stack-ops 可再次运行 HOME 中的真实 ELF。" },
+    { "level": 3, "kind": "structure", "text": "最终结构是 check <第一次PUSH后ESP> <第二次PUSH后ESP> <第一次POP值> <第二次POP值>。" }
+  ],
+  "verification": {
+    "type": "answer",
+    "usage": "check <第一次PUSH后ESP> <第二次PUSH后ESP> <第一次POP值> <第二次POP值>",
+    "instruction": "依次填入两条 push 行的 ESP，以及 pop eax、pop ebx 行的取出值。",
+    "placeholders": [
+      { "token": "<第一次PUSH后ESP>", "meaning": "push 0x11111111 行的 ESP" },
+      { "token": "<第二次PUSH后ESP>", "meaning": "push 0x22222222 行的 ESP" },
+      { "token": "<第一次POP值>", "meaning": "pop eax 行最后一列的值" },
+      { "token": "<第二次POP值>", "meaning": "pop ebx 行最后一列的值" }
+    ],
+    "feedback": {
+      "empty": "还没有提供四项 push/pop 观察值。",
+      "incorrect": "回到真实输出，按指令顺序核对 ESP 与取出值两列。",
+      "success": "真实 ELF 重放确认了 push、pop、ESP 和寄存器传值。"
+    }
+  },
+  "completionSummary": {
+    "solved": "通过真实 i386 ELF 把后入先出落实到 push、pop 和 ESP 的四字节变化。",
+    "mastered": ["push 与 ESP", "pop 与目标寄存器", "后入先出的指令序列"],
+    "next": "下一实验会让 test 和 cmp 设置 flags，再由 je、jg 决定下一条执行路径。"
+  }
+}

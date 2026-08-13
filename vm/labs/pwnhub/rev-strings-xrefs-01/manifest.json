@@ -1,0 +1,144 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "ida-companion",
+  "labId": "rev-strings-xrefs-01",
+  "title": "从字符串追到交叉引用",
+  "summary": "校验并加载真实 i386 样本，从成功字符串定位虚拟地址，再沿数据交叉引用找到使用它的函数。",
+  "goals": ["核对下载样本的架构与 SHA-256", "区分字符串内容、文件偏移和虚拟地址", "沿数据交叉引用定位使用字符串的函数", "用 IDA、Ghidra 或 objdump 提交同一组事实"],
+  "prerequisites": ["能够用 GDB 和 ELF 工具区分动态证据与静态证据", "能够读取函数符号与虚拟地址"],
+  "kind": "external-tool",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 35, "max": 65 },
+  "unlockAfter": ["gdb-input-crash-01"],
+  "artifacts": [{
+    "path": "/opt/pwnhub/labs/rev-strings-xrefs-01/reverse-companion",
+    "architecture": "i386",
+    "sha256": "a1d48129804d6eee16ddf44e8697b780dc47a9b2b088503bc5a41fe7543d66cb",
+    "purpose": "固定、离线的字符串、虚拟地址和数据交叉引用观察样本",
+    "downloadable": true
+  }],
+  "concepts": [
+    { "id": "reverse-string-clue", "term": "字符串线索", "explanation": "字符串能提示程序可能处理的状态，但字符串存在本身不证明哪条路径会执行。" },
+    { "id": "reverse-data-xref", "term": "数据交叉引用", "explanation": "数据交叉引用把某段代码使用的地址连接到字符串或全局数据，是从可读文本进入函数的导航边。" },
+    { "id": "reverse-equivalent-route", "term": "等价分析路线", "explanation": "IDA、Ghidra 和 objdump 的界面不同，但对同一锁定 ELF 的地址、符号和指令事实应当一致。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "prediction",
+      "title": "先判断字符串能证明什么",
+      "objective": "避免把可读文本误当成已执行路径",
+      "instruction": "样本中出现成功文本。先判断仅凭这个字符串是否足以证明程序本次一定进入成功路径。",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [{ "id": "reverse-string-clue", "term": "字符串线索", "explanation": "字符串能提示程序可能处理的状态，但字符串存在本身不证明哪条路径会执行。" }],
+      "uses": ["reverse-string-clue"],
+      "evidence": "prediction",
+      "question": {
+        "prompt": "仅发现成功字符串可以得出什么结论？",
+        "choices": [
+          { "id": "clue", "label": "它是继续追踪代码引用的线索" },
+          { "id": "executed", "label": "它证明成功路径本次一定执行" }
+        ],
+        "answer": "clue",
+        "success": "预测已记录：字符串是导航线索，执行事实仍需动态证据。"
+      }
+    },
+    {
+      "id": 2,
+      "type": "external-tool",
+      "title": "沿字符串交叉引用进入函数",
+      "objective": "使用任一等价路线记录字符串地址与引用函数",
+      "instruction": "先核对 SHA-256，再在外部工具中找到 ACCESS-GRANTED；记录它的虚拟地址并跟随数据交叉引用进入所属函数。没有外部工具时，选择 objdump 路线在 VM 内完成同一观察。",
+      "completion": "confirm",
+      "allowRun": false,
+      "introduces": [
+        { "id": "reverse-data-xref", "term": "数据交叉引用", "explanation": "数据交叉引用把某段代码使用的地址连接到字符串或全局数据，是从可读文本进入函数的导航边。" },
+        { "id": "reverse-equivalent-route", "term": "等价分析路线", "explanation": "IDA、Ghidra 和 objdump 的界面不同，但对同一锁定 ELF 的地址、符号和指令事实应当一致。" }
+      ],
+      "uses": ["reverse-string-clue", "reverse-data-xref", "reverse-equivalent-route"],
+      "evidence": "external-observation",
+      "companion": {
+        "labId": "rev-strings-xrefs-01",
+        "title": "字符串与数据交叉引用",
+        "artifact": {
+          "name": "reverse-companion",
+          "downloadUrl": "./artifacts/reverse-companion",
+          "architecture": "i386",
+          "sha256": "a1d48129804d6eee16ddf44e8697b780dc47a9b2b088503bc5a41fe7543d66cb",
+          "purpose": "课程提供的固定、离线、无害静态逆向样本"
+        },
+        "tools": [
+          {
+            "tool": "ida",
+            "label": "IDA",
+            "versionNote": "支持 ELF32 i386 的 IDA Free 或已授权版本",
+            "installNote": "只从 Hex-Rays 官方渠道获取，并遵守对应许可；网页不会检测或启动 IDA。",
+            "steps": ["以 32 位 x86 ELF 加载样本并等待自动分析完成。", "打开 Strings，定位 ACCESS-GRANTED。", "跳到字符串后查看数据交叉引用，并进入引用所在函数。"]
+          },
+          {
+            "tool": "ghidra",
+            "label": "Ghidra",
+            "versionNote": "支持 ELF32 x86 的 Ghidra 正式版本",
+            "installNote": "从 Ghidra 官方发布渠道获取开源版本；导入时保持默认 x86 little endian 分析。",
+            "steps": ["导入样本并运行自动分析。", "在 Defined Strings 中定位 ACCESS-GRANTED。", "查看 References To，并打开引用所在函数。"]
+          },
+          {
+            "tool": "objdump",
+            "label": "终端等价路线",
+            "versionNote": "课程 VM 内锁定的 GNU Binutils 2.42",
+            "installNote": "无需在宿主机安装；样本和 inspect.sh 已复制到 VM 的 HOME。",
+            "steps": ["运行 sha256sum 和 strings -tx 核对文件与字符串。", "用 nm -n 记录相关符号地址。", "用 objdump -d -M intel 查看哪个函数把字符串地址作为参数使用。"]
+          }
+        ],
+        "tasks": [
+          { "id": "verify-sample", "title": "校验样本", "description": "确认 SHA-256 与页面锁定值一致，并按 i386 小端 ELF 加载。" },
+          { "id": "locate-string", "title": "定位成功字符串", "description": "区分工具展示的文件偏移和加载后的虚拟地址。" },
+          { "id": "follow-data-xref", "title": "跟随数据交叉引用", "description": "从字符串进入真正使用该地址的函数，而不是停在字符串列表。" }
+        ],
+        "observations": [
+          { "id": "marker-address", "label": "成功字符串虚拟地址", "kind": "address", "placeholder": "填写工具显示的 0x 开头地址", "required": true },
+          { "id": "xref-function", "label": "引用所在函数名", "kind": "function-name", "placeholder": "填写交叉引用落入的函数标签", "required": true }
+        ],
+        "verificationCommandTemplate": "check {{marker-address}} {{xref-function}}"
+      }
+    },
+    {
+      "id": 3,
+      "type": "worksheet",
+      "title": "复盘线索与证据",
+      "objective": "说明字符串列表和代码引用各自回答的问题",
+      "instruction": "字符串列表回答“文件里有哪些可读文本”，数据交叉引用回答“哪些代码使用这个地址”。完成最终验证前，用这一区别检查自己的记录。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "uses": ["reverse-string-clue", "reverse-data-xref", "reverse-equivalent-route"],
+      "evidence": "observation"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "先在字符串视图定位成功文本，再查看引用该数据地址的代码位置。" },
+    { "level": 2, "kind": "tool", "text": "IDA 使用 Strings 和 Xrefs，Ghidra 使用 Defined Strings 和 References To；终端路线使用 strings、nm 与 objdump。" },
+    { "level": 3, "kind": "structure", "text": "提交结构是 check <字符串虚拟地址> <引用函数名>；不要填写 strings 左侧的文件偏移。" }
+  ],
+  "verification": {
+    "type": "external-observation",
+    "usage": "check <字符串虚拟地址> <引用函数名>",
+    "instruction": "伴侣表单会归一化并发送这两个静态事实，也可以在终端手工填写。",
+    "placeholders": [
+      { "token": "<字符串虚拟地址>", "meaning": "加载后成功字符串所在的虚拟地址，不是文件偏移" },
+      { "token": "<引用函数名>", "meaning": "数据交叉引用落入的函数标签" }
+    ],
+    "feedback": {
+      "empty": "还没有提供字符串地址和引用函数。",
+      "incorrect": "重新区分文件偏移与虚拟地址，并确认引用落入哪个函数边界。",
+      "success": "锁定工具已从真实 ELF 重建并确认字符串交叉引用。"
+    }
+  },
+  "completionSummary": {
+    "solved": "从可读字符串出发，沿真实数据交叉引用进入了使用该地址的函数。",
+    "mastered": ["样本哈希校验", "字符串虚拟地址", "数据交叉引用", "IDA/Ghidra/objdump 等价证据"],
+    "next": "下一实验会在同一样本中识别判断函数边界、重命名并阅读两条控制流路径。"
+  }
+}

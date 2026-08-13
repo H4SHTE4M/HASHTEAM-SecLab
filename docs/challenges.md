@@ -227,6 +227,22 @@ vm/rootfs-overlay/opt/hashteam/levels/
 - 第 8–10 关受保护的端口、路径、令牌和最终配置不在初始内容泄露。
 - 日志规模描述与当前训练数据一致。
 
+## PwnHub 稳定实验
+
+PwnHub 内容与 SecLab 数字关卡并存，但不复用 `level-N` 编号：
+
+- 源包位于 `vm/labs/pwnhub/<labId>/`，入口为 `manifest.json`、`init.sh`、
+  `reset.sh` 和 `check.sh`。
+- `labId` 是存档、签名协议、遥测和发布路径的稳定身份；发布后不得改名。
+- 课程 manifest 由 `src/modules/pwnhub/course.ts` 按构建时清单加载。
+- `vm/profiles/production.json` 只列当前公开实验；未列出的实验和 GDB/ROP
+  工具不进入生产 initramfs 或 `dist/artifacts/`。
+- `downloadable: true` 的发布实验素材会输出到
+  `dist/artifacts/<labId>/<filename>`，`verify:dist` 逐一核对 SHA-256。
+- 二进制样本、工具链锁或实验脚本变更后，运行
+  `pnpm validate:binary-profile`、`pnpm test:binary-profile`、`pnpm test:vm`
+  并重新构建 VM。
+
 ## 新增或修改关卡
 
 1. 添加或修改 `challenge.json`、`init.sh`、`check.sh` 和素材。

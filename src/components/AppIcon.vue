@@ -2,25 +2,35 @@
 defineProps<{
   name:
     | 'book-open'
+    | 'activity'
+    | 'braces'
     | 'check'
     | 'chevron-right'
+    | 'copy'
     | 'crosshair'
+    | 'download'
+    | 'external-link'
     | 'file-text'
+    | 'git-branch'
     | 'hash'
     | 'help-circle'
     | 'info'
     | 'lightbulb'
     | 'list-checks'
+    | 'layers'
     | 'lock'
     | 'moon'
     | 'minus'
     | 'palette'
     | 'plus'
     | 'rotate-ccw'
+    | 'save'
     | 'server'
+    | 'shield-check'
     | 'sun'
     | 'terminal'
     | 'trophy'
+    | 'trash-2'
     | 'x'
   size?: number
 }>()
@@ -43,6 +53,13 @@ defineProps<{
       <line x1="4" x2="20" y1="15" y2="15" />
       <line x1="10" x2="8" y1="3" y2="21" />
       <line x1="16" x2="14" y1="3" y2="21" />
+    </template>
+    <template v-else-if="name === 'activity'">
+      <path d="M3 12h4l3-8 4 16 3-8h4" />
+    </template>
+    <template v-else-if="name === 'braces'">
+      <path d="M8 3H7a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1" />
+      <path d="M16 3h1a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-1" />
     </template>
     <template v-else-if="name === 'help-circle'">
       <circle cx="12" cy="12" r="10" />
@@ -91,12 +108,37 @@ defineProps<{
       <line x1="8" x2="16" y1="13" y2="13" />
       <line x1="8" x2="16" y1="17" y2="17" />
     </template>
+    <template v-else-if="name === 'copy'">
+      <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </template>
+    <template v-else-if="name === 'download'">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" x2="12" y1="15" y2="3" />
+    </template>
+    <template v-else-if="name === 'external-link'">
+      <path d="M15 3h6v6" />
+      <path d="M10 14 21 3" />
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    </template>
+    <template v-else-if="name === 'git-branch'">
+      <line x1="6" x2="6" y1="3" y2="15" />
+      <circle cx="18" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M18 9a9 9 0 0 1-9 9" />
+    </template>
     <template v-else-if="name === 'list-checks'">
       <path d="m3 7 2 2 4-4" />
       <path d="m3 17 2 2 4-4" />
       <path d="M13 6h8" />
       <path d="M13 12h8" />
       <path d="M13 18h8" />
+    </template>
+    <template v-else-if="name === 'layers'">
+      <path d="m12.8 2.6 8.2 4.6a1 1 0 0 1 0 1.7l-8.2 4.6a1.6 1.6 0 0 1-1.6 0L3 8.9a1 1 0 0 1 0-1.7l8.2-4.6a1.6 1.6 0 0 1 1.6 0Z" />
+      <path d="m22 13-9.2 5.1a1.6 1.6 0 0 1-1.6 0L2 13" />
+      <path d="m22 17-9.2 5.1a1.6 1.6 0 0 1-1.6 0L2 17" />
     </template>
     <template v-else-if="name === 'chevron-right'">
       <path d="m9 18 6-6-6-6" />
@@ -106,6 +148,15 @@ defineProps<{
       <rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
       <line x1="6" x2="6.01" y1="6" y2="6" />
       <line x1="6" x2="6.01" y1="18" y2="18" />
+    </template>
+    <template v-else-if="name === 'save'">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+      <polyline points="17 21 17 13 7 13 7 21" />
+      <polyline points="7 3 7 8 15 8" />
+    </template>
+    <template v-else-if="name === 'shield-check'">
+      <path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3z" />
+      <path d="m9 12 2 2 4-4" />
     </template>
     <template v-else-if="name === 'moon'">
       <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
@@ -142,6 +193,13 @@ defineProps<{
       <path d="M17 4v4a5 5 0 0 1-10 0V4" />
       <path d="M5 4H3v2a4 4 0 0 0 4 4" />
       <path d="M19 4h2v2a4 4 0 0 1-4 4" />
+    </template>
+    <template v-else-if="name === 'trash-2'">
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M19 6l-1 15H6L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
     </template>
     <template v-else-if="name === 'x'">
       <path d="M18 6 6 18" />

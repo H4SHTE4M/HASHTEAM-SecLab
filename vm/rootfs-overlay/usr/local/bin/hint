@@ -1,11 +1,18 @@
 #!/bin/sh
 # 请求前端显示一条提示
 set -eu
+lab_id=$(cat "$HOME/.hashteam/lab" 2>/dev/null || true)
 level=$(cat "$HOME/.hashteam/level" 2>/dev/null || echo 1)
-printf '@@HASHTEAM:{"type":"hint-request","level":%s}\n' "$level"
+if [ -n "$lab_id" ]; then
+    printf '@@HASHTEAM:{"type":"hint-request","labId":"%s"}\n' "$lab_id"
+    hint_key=$lab_id
+else
+    printf '@@HASHTEAM:{"type":"hint-request","level":%s}\n' "$level"
+    hint_key=$level
+fi
 # VM 侧用文件计数跟踪已展开层数；hashteamctl 在 goto/reset-level 时清理
 mkdir -p "$HOME/.hashteam"
-count_file="$HOME/.hashteam/hint-count-$level"
+count_file="$HOME/.hashteam/hint-count-$hint_key"
 count=$(cat "$count_file" 2>/dev/null || echo 0)
 count=$((count + 1))
 if [ "$count" -ge 3 ]; then

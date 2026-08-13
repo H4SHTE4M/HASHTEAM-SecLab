@@ -1,0 +1,133 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "memory-model",
+  "labId": "memory-addresses-01",
+  "title": "地址、值与指针",
+  "summary": "从一个真实 i386 ELF 观察地址、内存值、指针和补码。",
+  "goals": [
+    "区分变量的地址与地址中的值",
+    "用小端字节重建一个四字节整数",
+    "解释指针保存的目标地址",
+    "解释独立有符号变量的四字节补码位模式"
+  ],
+  "prerequisites": ["能够在真实终端运行程序并记录输出"],
+  "kind": "visual",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 20, "max": 40 },
+  "unlockAfter": [],
+  "artifacts": [
+    {
+      "path": "/opt/pwnhub/labs/memory-addresses-01/memory-addresses",
+      "architecture": "i386",
+      "sha256": "ef9beb6b8c9ce744d867d9df12983fe74dc5847c7aff223f000a59d88ad303b8",
+      "purpose": "固定、离线、只读的地址与补码观察样本",
+      "downloadable": true
+    }
+  ],
+  "concepts": [
+    { "id": "memory-address", "term": "地址与值", "explanation": "地址是存放位置，值是该位置当前保存的位模式。" },
+    { "id": "pointer-value", "term": "指针值", "explanation": "指针变量保存另一个对象的地址，解引用才会读取目标值。" },
+    { "id": "little-endian-signed", "term": "小端与补码", "explanation": "i386 按最低有效字节在低地址排列。补码只规定怎样解释某个四字节位模式，不表示 cell 与 signed_cell 保存相同数据。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "visual-trace",
+      "title": "把地址和字节分开",
+      "objective": "从真实样本的字节视图中区分存放位置和存放内容",
+      "instruction": "先观察字节行的起始地址与四个连续字节，再记录你认为对应的四字节值。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        { "id": "memory-address", "term": "地址与值", "explanation": "地址是存放位置，值是该位置当前保存的位模式。" },
+        { "id": "pointer-value", "term": "指针值", "explanation": "指针变量保存另一个对象的地址，解引用才会读取目标值。" },
+        { "id": "little-endian-signed", "term": "小端与补码", "explanation": "i386 按最低有效字节在低地址排列。补码只规定怎样解释某个四字节位模式，不表示 cell 与 signed_cell 保存相同数据。" }
+      ],
+      "uses": ["memory-address", "little-endian-signed"],
+      "evidence": "observation",
+      "tool": "elf",
+      "initialTab": "bytes",
+      "workbench": {
+        "bytes": {
+          "baseAddress": 134525248,
+          "bytes": [66, 222, 192, 222],
+          "endian": "little",
+          "selectedOffset": 0,
+          "selectedLength": 4
+        },
+        "memory": {
+          "endian": "little",
+          "cells": [
+            { "address": 134525248, "name": "cell", "value": 3737181762, "kind": "value", "meaning": "四个字节组成的无符号整数。" },
+            { "address": 134525252, "name": "signed_cell", "value": 4294967254, "kind": "signed", "meaning": "独立变量；位模式 0xffffffd6 按四字节补码解释为 -42。" },
+            { "address": 134525256, "name": "cell_pointer", "value": 134525248, "kind": "pointer", "meaning": "保存 cell 的地址，解引用后得到 cell。", "targetAddress": 134525248, "targetName": "cell" }
+          ]
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "visual-trace",
+      "title": "追踪指针指向哪里",
+      "objective": "把指针保存的地址与解引用后的值对应起来",
+      "instruction": "在终端运行只读样本，核对 cell_pointer 行的变量值是否与 cell 行的地址相同。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "uses": ["pointer-value"],
+      "evidence": "observation",
+      "tool": "shell",
+      "initialTab": "memory",
+      "workbench": {
+        "memory": {
+          "endian": "little",
+          "cells": [
+            { "address": 134525248, "name": "cell", "value": 3737181762, "kind": "value", "meaning": "目标变量实际保存的位模式。" },
+            { "address": 134525256, "name": "cell_pointer", "value": 134525248, "kind": "pointer", "meaning": "指针值等于 cell 的地址。", "targetAddress": 134525248, "targetName": "cell" },
+            { "address": 134525248, "name": "*cell_pointer", "value": 3737181762, "kind": "value", "meaning": "解引用指针后读取到的目标值。" }
+          ]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "terminal",
+      "title": "辨认独立的有符号变量",
+      "objective": "在不同变量之间区分位模式，再用补码解释 signed_cell",
+      "instruction": "样本进入实验时已经自动运行。记录 signed_cell 行的十进制值。它是独立变量，不与 cell 共用位模式；这里只复用四字节补码解释规则。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "autoRun": true,
+      "uses": ["little-endian-signed"],
+      "evidence": "observation",
+      "tool": "shell"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "先比较 cell 行的地址和值，以及 cell_pointer 行的值，不要先猜答案。" },
+    { "level": 2, "kind": "tool", "text": "运行样本后，用十六进制视图或 od 复核字节顺序。" },
+    { "level": 3, "kind": "structure", "text": "最终结构是 check <地址> <内存值> <指针值> <有符号值>，每个占位符都来自真实输出。" }
+  ],
+  "verification": {
+    "type": "answer",
+    "usage": "check <地址> <内存值> <指针值> <有符号值>",
+    "instruction": "把样本输出中的四个事实按顺序填入；地址、内存值和指针值保留 0x 前缀。",
+    "placeholders": [
+      { "token": "<地址>", "meaning": "cell 行第一列的八位十六进制地址" },
+      { "token": "<内存值>", "meaning": "cell 行第三列的四字节位模式" },
+      { "token": "<指针值>", "meaning": "cell_pointer 行第三列保存的地址" },
+      { "token": "<有符号值>", "meaning": "signed_cell 行第三列的十进制值" }
+    ],
+    "feedback": {
+      "empty": "还没有提供四个观察值。",
+      "incorrect": "回到样本输出，检查地址、字节序和有符号解释。",
+      "success": "真实 ELF 重放输出与四个观察值一致。"
+    }
+  },
+  "completionSummary": {
+    "solved": "通过真实 i386 ELF 重放验证了地址、值、指针和补码之间的关系。",
+    "mastered": ["地址与内存值", "指针解引用", "小端字节序与补码"],
+    "next": "下一实验会把单个变量放回代码段、数据段、堆和栈组成的进程内存地图。"
+  }
+}

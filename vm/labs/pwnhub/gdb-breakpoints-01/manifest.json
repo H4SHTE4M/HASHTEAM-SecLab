@@ -1,0 +1,126 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "gdb-pwndbg",
+  "labId": "gdb-breakpoints-01",
+  "title": "在运行路径上停下来",
+  "summary": "用原生 GDB 在真实 i386 进程中设置函数断点、继续运行，并用指令级单步控制停靠位置。",
+  "goals": ["在函数入口设置断点", "区分 run、continue、nexti 与 stepi", "用 context 核对每次停靠的当前指令"],
+  "prerequisites": ["能够从 objdump 识别函数名与指令", "认识 EIP 表示当前指令位置"],
+  "kind": "gdb",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 25, "max": 45 },
+  "unlockAfter": ["elf-disassembly-01"],
+  "artifacts": [{
+    "path": "/opt/pwnhub/labs/gdb-breakpoints-01/gdb-runtime",
+    "architecture": "i386",
+    "sha256": "b5560fdf2ab16ffa5b3004ceeb3eaec0363b7c99bb3142927a9feb3df33b66e4",
+    "purpose": "固定、离线、带调试信息的原生 GDB 运行时观察样本",
+    "downloadable": true
+  }],
+  "concepts": [
+    { "id": "gdb-breakpoint", "term": "断点", "explanation": "断点让被调试进程在指定函数或地址执行前暂停，程序状态仍保留在真实进程中。" },
+    { "id": "gdb-resume", "term": "运行与继续", "explanation": "run 创建一次新运行，continue 让当前暂停的运行继续到下一个断点或退出。" },
+    { "id": "gdb-instruction-step", "term": "指令级单步", "explanation": "nexti 执行一条指令但跨过函数调用，stepi 执行一条指令并允许进入被调用函数。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "prediction",
+      "title": "先判断断点的作用",
+      "objective": "区分暂停真实进程和只读静态文件",
+      "instruction": "GDB 加载样本后，在 update_cell 设置断点。预测 run 之后发生什么。",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [{ "id": "gdb-breakpoint", "term": "断点", "explanation": "断点让被调试进程在指定函数或地址执行前暂停，程序状态仍保留在真实进程中。" }],
+      "uses": ["gdb-breakpoint"],
+      "evidence": "prediction",
+      "tool": "gdb",
+      "question": {
+        "prompt": "run 遇到 update_cell 断点时会怎样？",
+        "choices": [
+          { "id": "pause", "label": "暂停在函数入口" },
+          { "id": "exit", "label": "直接退出 GDB" },
+          { "id": "rewrite", "label": "修改 ELF 文件" }
+        ],
+        "answer": "pause",
+        "success": "预测已记录：断点暂停的是这一次真实运行。"
+      }
+    },
+    {
+      "id": 2,
+      "type": "terminal",
+      "title": "启动交互调试会话",
+      "objective": "让样本自动运行到函数断点",
+      "instruction": "在终端运行 gdb -q ./gdb-runtime -x session.gdb。会话脚本只负责加载样本、设置断点和运行；停下后由你控制。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [{ "id": "gdb-resume", "term": "运行与继续", "explanation": "run 创建一次新运行，continue 让当前暂停的运行继续到下一个断点或退出。" }],
+      "uses": ["gdb-breakpoint", "gdb-resume"],
+      "evidence": "observation",
+      "tool": "gdb",
+      "observation": "断点命中行应包含 update_cell 和 input 参数；EIP 指向该函数内的当前指令。"
+    },
+    {
+      "id": 3,
+      "type": "prediction",
+      "title": "选择是否进入调用",
+      "objective": "区分 nexti 与 stepi 的控制粒度",
+      "instruction": "在 call 指令前，如果想进入被调用函数，应选哪条指令级单步命令？",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [{ "id": "gdb-instruction-step", "term": "指令级单步", "explanation": "nexti 执行一条指令但跨过函数调用，stepi 执行一条指令并允许进入被调用函数。" }],
+      "uses": ["gdb-instruction-step"],
+      "evidence": "prediction",
+      "tool": "gdb",
+      "question": {
+        "prompt": "要进入当前 call 的目标函数，应使用哪条命令？",
+        "choices": [
+          { "id": "stepi", "label": "stepi" },
+          { "id": "nexti", "label": "nexti" },
+          { "id": "quit", "label": "quit" }
+        ],
+        "answer": "stepi",
+        "success": "判断已记录：stepi 允许进入被调用函数。"
+      }
+    },
+    {
+      "id": 4,
+      "type": "terminal",
+      "title": "亲自前进、进入与继续",
+      "objective": "在同一次运行中控制三个不同停靠位置",
+      "instruction": "在 GDB 中交替使用 nexti、stepi 和 context，观察 EIP 每次变化；最后使用 continue 让程序退出。退出 GDB 后输入 quit，终端会回到 Shell。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "uses": ["gdb-resume", "gdb-instruction-step"],
+      "evidence": "observation",
+      "tool": "gdb",
+      "observation": "每次单步后 EIP 落在新的真实指令；continue 最终显示进程正常退出。"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "先读断点命中行中的函数名和括号内参数，再观察 EIP。" },
+    { "level": 2, "kind": "tool", "text": "context 汇总当前寄存器、指令、栈顶和调用栈；display/i $eip 会在每次停下时显示当前指令。" },
+    { "level": 3, "kind": "structure", "text": "最终结构是 check <命中函数名> <十进制参数>；两个值都来自断点命中行。" }
+  ],
+  "verification": {
+    "type": "answer",
+    "usage": "check <命中函数名> <十进制参数>",
+    "instruction": "填写真实 GDB 断点命中行中的函数名和 input 参数。",
+    "placeholders": [
+      { "token": "<命中函数名>", "meaning": "Breakpoint 命中行中括号前的函数名称" },
+      { "token": "<十进制参数>", "meaning": "同一行 input= 后的十进制整数" }
+    ],
+    "feedback": {
+      "empty": "还没有提供断点运行时观察值。",
+      "incorrect": "重新启动 session.gdb，核对第一次断点命中行的函数名与参数。",
+      "success": "锁定 GDB 已重新运行真实样本并确认断点事实。"
+    }
+  },
+  "completionSummary": {
+    "solved": "在真实 i386 进程中使用断点、继续运行和指令级单步控制了执行位置。",
+    "mastered": ["函数断点", "run 与 continue", "nexti 与 stepi", "EIP 停靠位置"],
+    "next": "下一实验会在明确的停靠点比较寄存器和内存，而不只关注执行位置。"
+  }
+}

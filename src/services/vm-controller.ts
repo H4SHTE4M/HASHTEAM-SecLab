@@ -314,10 +314,27 @@ export class V86Controller implements VirtualMachineController {
    * 后续可替换为 v86 save_state/restore_state 快照实现，接口保持不变。
    */
   async restoreLevel(level: number): Promise<void> {
+    this.prepareCommand()
     // hashteamctl 的 init 是子进程，改变不了学生交互 shell 的 cwd。
     // 学生可能在上一关 cd 进了子目录，goto 之后补一行 cd 把 shell 带回 HOME，
     // 避免新关卡的相对路径命令错误地作用于旧目录。
     this.sendSerial(`hashteamctl goto ${level}\ncd "$HOME"\n`)
+  }
+
+  /** 恢复到使用稳定身份的 v3 实验，不经过数字关卡兼容层。 */
+  async restoreLab(labId: string): Promise<void> {
+    this.prepareCommand()
+    this.sendSerial(`hashteamctl goto-lab ${labId}\ncd "$HOME"\n`)
+  }
+
+  runCommand(command: string): void {
+    this.prepareCommand()
+    this.sendSerial(`${command}\n`)
+  }
+
+  private prepareCommand(): void {
+    this.sendSerial('\u0003')
+    this.sendSerial('\u0015')
   }
 
   sendSerial(input: string): void {

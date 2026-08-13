@@ -1,0 +1,137 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "memory-model",
+  "labId": "memory-layout-01",
+  "title": "进程内存布局与 rwx",
+  "summary": "从当前进程的真实 /proc 映射区分代码段、数据段、堆、栈和 rwx 权限。",
+  "goals": [
+    "说出代码段、数据段、堆和栈各自保存什么",
+    "用 rwx 判断一段内存允许读取、写入还是执行",
+    "区分堆向高地址和栈向低地址的典型增长方向"
+  ],
+  "prerequisites": ["理解地址表示内存中的位置", "能够从表格中逐列记录事实"],
+  "kind": "visual",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 20, "max": 35 },
+  "unlockAfter": ["memory-addresses-01"],
+  "artifacts": [
+    {
+      "path": "/opt/pwnhub/labs/memory-layout-01/inspect-memory-layout.sh",
+      "architecture": "any",
+      "sha256": "94a06311f6e006788bff713217216cc3b3b9c7ac064a651927f35219841ff2a7",
+      "purpose": "读取当前进程真实 /proc 映射并提取代码段、数据段、堆和栈的教学观察脚本",
+      "downloadable": true
+    }
+  ],
+  "concepts": [
+    { "id": "process-regions", "term": "代码段、数据段、堆与栈", "explanation": "代码段保存机器指令，数据段保存全局和静态数据，堆承载运行时申请的空间，栈保存当前调用的临时状态。" },
+    { "id": "memory-permissions", "term": "rwx 权限", "explanation": "r、w、x 分别表示可读、可写、可执行。权限属于整段内存映射；数据可读不等于它也应当被执行。" },
+    { "id": "region-growth", "term": "堆与栈的增长方向", "explanation": "在本课程的 i386 模型中，堆通常向高地址扩展，栈在入栈时向低地址扩展。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "concept",
+      "title": "给四类区域分工",
+      "objective": "按用途区分代码段、数据段、堆与栈",
+      "instruction": "把进程内存看成多个带地址范围的区域：CPU 从代码段读取机器指令；全局和静态变量位于数据段；运行时申请的空间来自堆；当前函数调用需要的临时状态放在栈。它们是用途不同的区域，不是四种变量类型。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        { "id": "process-regions", "term": "代码段、数据段、堆与栈", "explanation": "代码段保存机器指令，数据段保存全局和静态数据，堆承载运行时申请的空间，栈保存当前调用的临时状态。" }
+      ],
+      "uses": ["process-regions"],
+      "evidence": "observation"
+    },
+    {
+      "id": 2,
+      "type": "prediction",
+      "title": "先判断哪一段需要执行权限",
+      "objective": "在查看真实映射前区分读、写和执行",
+      "instruction": "r 表示读取，w 表示写入，x 表示作为机器指令执行。先判断四类区域中哪一类通常需要 x。",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [
+        { "id": "memory-permissions", "term": "rwx 权限", "explanation": "r、w、x 分别表示可读、可写、可执行。权限属于整段内存映射；数据可读不等于它也应当被执行。" }
+      ],
+      "uses": ["process-regions", "memory-permissions"],
+      "evidence": "prediction",
+      "question": {
+        "prompt": "哪一类区域通常需要 x 权限？",
+        "choices": [
+          { "id": "code", "label": "代码段" },
+          { "id": "heap", "label": "堆" },
+          { "id": "stack", "label": "栈" }
+        ],
+        "answer": "code",
+        "success": "预测已记录：代码段需要执行指令，普通堆和栈数据不需要 x。"
+      }
+    },
+    {
+      "id": 3,
+      "type": "terminal",
+      "title": "读取当前进程的真实映射",
+      "objective": "从 /proc 映射表核对四类区域的地址与 rwx",
+      "instruction": "进入实验时脚本已经自动读取当前 BusyBox Shell 的 /proc 映射。逐行核对地址范围和 rwx；这些地址来自本次真实进程，不要求背诵。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "autoRun": true,
+      "uses": ["process-regions", "memory-permissions"],
+      "evidence": "observation",
+      "tool": "shell",
+      "observation": "代码段包含 x，数据段、堆和栈包含 w；四行都来自当前进程的 /proc 映射。"
+    },
+    {
+      "id": 4,
+      "type": "prediction",
+      "title": "判断堆和栈的增长方向",
+      "objective": "为下一关的栈顶地址变化建立方向感",
+      "instruction": "表格最后一列给出本课程采用的 i386 典型模型。根据它判断一次入栈发生时，栈顶会往哪个方向移动。",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [
+        { "id": "region-growth", "term": "堆与栈的增长方向", "explanation": "在本课程的 i386 模型中，堆通常向高地址扩展，栈在入栈时向低地址扩展。" }
+      ],
+      "uses": ["region-growth"],
+      "evidence": "prediction",
+      "question": {
+        "prompt": "一个四字节值入栈时，新的栈顶地址通常怎样变化？",
+        "choices": [
+          { "id": "lower", "label": "向低地址移动" },
+          { "id": "higher", "label": "向高地址移动" },
+          { "id": "unchanged", "label": "地址不变" }
+        ],
+        "answer": "lower",
+        "success": "预测已记录：本课程的 i386 栈向低地址增长。"
+      }
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "先逐行看区域名称与 rwx，不需要记住每次启动得到的具体地址。" },
+    { "level": 2, "kind": "tool", "text": "输入 ./inspect-memory-layout.sh 可以重新读取当前 Shell 的 /proc 映射。" },
+    { "level": 3, "kind": "structure", "text": "最终结构是 check <代码段权限> <数据段权限> <堆权限> <栈权限>，每项使用三个字符。" }
+  ],
+  "verification": {
+    "type": "answer",
+    "usage": "check <代码段权限> <数据段权限> <堆权限> <栈权限>",
+    "instruction": "按表格顺序填入四类区域的三个字符 rwx 权限，缺少的权限用 - 表示。",
+    "placeholders": [
+      { "token": "<代码段权限>", "meaning": "代码段行的三个字符 rwx" },
+      { "token": "<数据段权限>", "meaning": "数据段行的三个字符 rwx" },
+      { "token": "<堆权限>", "meaning": "堆行的三个字符 rwx" },
+      { "token": "<栈权限>", "meaning": "栈行的三个字符 rwx" }
+    ],
+    "feedback": {
+      "empty": "还没有提供四类区域的权限观察值。",
+      "incorrect": "回到真实映射表，逐行核对 r、w、x 和 - 的位置。",
+      "success": "当前进程的真实 /proc 映射与四项权限观察一致。"
+    }
+  },
+  "completionSummary": {
+    "solved": "从真实 /proc 映射中区分了代码段、数据段、堆、栈及其 rwx 权限。",
+    "mastered": ["四类进程内存区域", "rwx 权限", "堆与栈的典型增长方向"],
+    "next": "下一实验只关注栈，观察一个四字节值入栈和出栈时栈顶怎样变化。"
+  }
+}

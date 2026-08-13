@@ -1,0 +1,200 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "asm-reading",
+  "labId": "asm-registers-01",
+  "title": "寄存器职责与地址计算",
+  "summary": "先认识 i386 常见寄存器约定，再观察 mov 复制值和 lea 计算地址表达式。",
+  "goals": [
+    "说明 EIP、ESP、EBP 和 EAX 的常见职责",
+    "说明 mov 复制位模式而不会搬走源值",
+    "说明 lea 计算地址表达式但不读取该地址中的内存"
+  ],
+  "prerequisites": ["理解地址和值的区别", "理解栈顶和后入先出"],
+  "kind": "visual",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 30, "max": 45 },
+  "unlockAfter": ["memory-register-stack-01"],
+  "artifacts": [
+    {
+      "path": "/opt/pwnhub/labs/asm-registers-01/asm-registers",
+      "architecture": "i386",
+      "sha256": "66bc1629d0e30810add25434272188290a6ab19db76432dbba5de2e1b9aaa4e1",
+      "purpose": "固定、离线的寄存器约定、mov 值复制和 lea 地址计算观察样本",
+      "downloadable": true
+    }
+  ],
+  "concepts": [
+    { "id": "i386-register-roles", "term": "常见寄存器职责", "explanation": "EIP 指向当前指令，ESP 指向栈顶，EBP 常作栈帧基准，EAX 常保存算术结果和函数返回值；ECX、EDX 常作临时值。" },
+    { "id": "mov-instruction", "term": "mov 的值复制", "explanation": "mov 把源操作数的位模式复制到目标，源操作数仍然保留。" },
+    { "id": "lea-instruction", "term": "lea 的地址计算", "explanation": "lea 计算方括号内的地址表达式并写入目标寄存器，但不会读取该地址中的内存。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "concept",
+      "title": "先给寄存器分工",
+      "objective": "把寄存器名称与最常见的职责连接起来",
+      "instruction": "把寄存器看成处理器内部的四字节工作位置。EIP 指向当前指令，ESP 指向栈顶，EBP 常作当前栈帧的稳定基准；EAX 常放算术结果和函数返回值，EBX、ECX、EDX 可参与基址、计数、临时值和除法。这里学习的是常见约定，不是硬件强制的变量类型。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        { "id": "i386-register-roles", "term": "常见寄存器职责", "explanation": "EIP 指向当前指令，ESP 指向栈顶，EBP 常作栈帧基准，EAX 常保存算术结果和函数返回值；ECX、EDX 常作临时值。" }
+      ],
+      "uses": ["i386-register-roles"],
+      "evidence": "observation"
+    },
+    {
+      "id": 2,
+      "type": "prediction",
+      "title": "预测 mov 的复制结果",
+      "objective": "区分复制值和移动源值",
+      "instruction": "EAX 开始为 0。执行 mov eax, 0x11223344 后，立即数的完整位模式会写入 EAX。先选择你预测的 EAX。",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [
+        { "id": "mov-instruction", "term": "mov 的值复制", "explanation": "mov 把源操作数的位模式复制到目标，源操作数仍然保留。" }
+      ],
+      "uses": ["i386-register-roles", "mov-instruction"],
+      "evidence": "prediction",
+      "question": {
+        "prompt": "执行 mov 后，EAX 是什么？",
+        "choices": [
+          { "id": "copied", "label": "0x11223344" },
+          { "id": "unchanged", "label": "0x00000000" },
+          { "id": "address", "label": "立即数所在的地址" }
+        ],
+        "answer": "copied",
+        "success": "预测已记录：mov 复制完整的四字节位模式。"
+      }
+    },
+    {
+      "id": 3,
+      "type": "visual-trace",
+      "title": "单步核对 mov",
+      "objective": "从真实 ELF 快照确认目标寄存器变化",
+      "instruction": "使用下一步和上一步比较执行前后状态。只有目标 EAX 从 0 变为 0x11223344。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "uses": ["i386-register-roles", "mov-instruction"],
+      "evidence": "observation",
+      "tool": "elf",
+      "initialTab": "registers",
+      "workbench": {
+        "registers": {
+          "instruction": "mov eax, 0x11223344",
+          "registers": [{ "name": "eax", "before": 0, "after": 287454020 }],
+          "flagsBefore": [],
+          "flagsAfter": []
+        },
+        "assemblyTui": {
+          "title": "mov 单步",
+          "states": [
+            {
+              "id": "before",
+              "title": "执行前",
+              "instruction": "mov eax, 0x11223344",
+              "explanation": "EAX 还没有接收立即数。",
+              "registers": { "instruction": "mov eax, 0x11223344", "registers": [{ "name": "eax", "before": 0, "after": 0 }], "flagsBefore": [], "flagsAfter": [] }
+            },
+            {
+              "id": "after",
+              "title": "执行后",
+              "instruction": "mov eax, 0x11223344",
+              "explanation": "EAX 得到完整位模式；mov 不会从某处把立即数搬走。",
+              "registers": { "instruction": "mov eax, 0x11223344", "registers": [{ "name": "eax", "before": 0, "after": 287454020 }], "flagsBefore": [], "flagsAfter": [] }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "visual-trace",
+      "title": "让 lea 只做地址计算",
+      "objective": "区分地址表达式和内存读取",
+      "instruction": "EBX 为 0x1000。lea ecx, [ebx+0x0c] 只把计算结果 0x100c 写入 ECX；方括号在 lea 中描述地址表达式，不会读取 0x100c 中的内容。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        { "id": "lea-instruction", "term": "lea 的地址计算", "explanation": "lea 计算方括号内的地址表达式并写入目标寄存器，但不会读取该地址中的内存。" }
+      ],
+      "uses": ["i386-register-roles", "lea-instruction"],
+      "evidence": "observation",
+      "tool": "elf",
+      "initialTab": "registers",
+      "workbench": {
+        "registers": {
+          "instruction": "lea ecx, [ebx+0x0c]",
+          "registers": [
+            { "name": "ebx", "before": 4096, "after": 4096 },
+            { "name": "ecx", "before": 0, "after": 4108 }
+          ],
+          "flagsBefore": [],
+          "flagsAfter": []
+        },
+        "assemblyTui": {
+          "title": "lea 单步",
+          "states": [
+            {
+              "id": "before",
+              "title": "执行前",
+              "instruction": "lea ecx, [ebx+0x0c]",
+              "explanation": "EBX 提供基址，ECX 还没有计算结果。",
+              "registers": { "instruction": "lea ecx, [ebx+0x0c]", "registers": [{ "name": "ebx", "before": 4096, "after": 4096 }, { "name": "ecx", "before": 0, "after": 0 }], "flagsBefore": [], "flagsAfter": [] }
+            },
+            {
+              "id": "after",
+              "title": "执行后",
+              "instruction": "lea ecx, [ebx+0x0c]",
+              "explanation": "ECX 得到 0x1000+0x0c；EBX 和内存都没有被改写。",
+              "registers": { "instruction": "lea ecx, [ebx+0x0c]", "registers": [{ "name": "ebx", "before": 4096, "after": 4096 }, { "name": "ecx", "before": 0, "after": 4108 }], "flagsBefore": [], "flagsAfter": [] }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "terminal",
+      "title": "在真实终端复现",
+      "objective": "从自动运行的 ELF 表格提取职责与结果",
+      "instruction": "样本进入实验时已经自动运行。核对职责表和两条操作行，再按验证区格式提交。",
+      "completion": "input",
+      "allowRun": false,
+      "autoRun": true,
+      "uses": ["i386-register-roles", "mov-instruction", "lea-instruction"],
+      "evidence": "observation",
+      "tool": "shell",
+      "observation": "mov 后 EAX、lea 后 ECX，以及职责表中指向栈顶的寄存器。",
+      "commonErrors": ["lea 得到的是地址表达式的结果，不是该地址中的值。", "寄存器名称使用职责表中的大写缩写。"],
+      "reinforcement": "寄存器职责帮助读懂上下文，mov 与 lea 则分别回答复制什么和计算什么。"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "先看操作表的最后一列，再回到职责表寻找“栈顶”。" },
+    { "level": 2, "kind": "tool", "text": "重新输入 ./asm-registers 可再次运行 HOME 中的真实 ELF。" },
+    { "level": 3, "kind": "structure", "text": "最终结构是 check <MOV后EAX> <LEA后ECX> <栈顶寄存器>。" }
+  ],
+  "verification": {
+    "type": "answer",
+    "usage": "check <MOV后EAX> <LEA后ECX> <栈顶寄存器>",
+    "instruction": "依次填入两条操作行的后值，以及职责表中指向栈顶的寄存器。",
+    "placeholders": [
+      { "token": "<MOV后EAX>", "meaning": "mov 操作行最后一列的八位十六进制值" },
+      { "token": "<LEA后ECX>", "meaning": "lea 操作行最后一列的八位十六进制值" },
+      { "token": "<栈顶寄存器>", "meaning": "职责表中指向当前栈顶的寄存器缩写" }
+    ],
+    "feedback": {
+      "empty": "还没有提供三项寄存器观察值。",
+      "incorrect": "回到职责表和操作表，核对目标列与后值列。",
+      "success": "真实 ELF 重放与寄存器职责、mov 和 lea 观察一致。"
+    }
+  },
+  "completionSummary": {
+    "solved": "通过真实 i386 ELF 区分了寄存器职责、值复制和地址计算。",
+    "mastered": ["常见寄存器职责", "mov 值复制", "lea 地址计算"],
+    "next": "下一实验会让这些工作位置参与加减、乘除和位运算。"
+  }
+}

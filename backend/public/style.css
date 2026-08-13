@@ -100,6 +100,35 @@ body {
   background: var(--panel-2);
 }
 
+.module-tabs {
+  display: inline-flex;
+  gap: 4px;
+  margin: 0 0 16px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.module-tab {
+  padding: 7px 18px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.module-tab:hover {
+  color: var(--text);
+}
+
+.module-tab.active {
+  color: var(--green);
+  background: var(--panel-2);
+}
+
 .btn {
   padding: 6px 14px;
   border-radius: 6px;

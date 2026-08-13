@@ -1,16 +1,35 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { CTF_POSITIONING, LAB_DIRECTIONS, LEVELS } from '../data/levels'
-import type { CompletionPath, LevelCompletionRecord } from '../types/lab'
+import type { CompletionPath, CourseDef, LevelCompletionRecord } from '../types/lab'
 import AppIcon from './AppIcon.vue'
 
 const props = defineProps<{
   completionRecords: Record<number, LevelCompletionRecord>
+  course?: CourseDef
+  labCompletionRecords?: Record<string, LevelCompletionRecord>
 }>()
 
 const emit = defineEmits<{
+  (e: 'exit'): void
   (e: 'restart'): void
 }>()
+
+const activeRecords = computed(() =>
+  props.course === undefined
+    ? Object.values(props.completionRecords)
+    : props.course.labs
+        .map((lab) => props.labCompletionRecords?.[lab.labId])
+        .filter((record): record is LevelCompletionRecord => record !== undefined),
+)
+
+const completionItems = computed(() =>
+  props.course?.labs.map((lab) => ({
+    id: lab.labId,
+    title: lab.title,
+    record: props.labCompletionRecords?.[lab.labId],
+  })) ?? [],
+)
 
 const pathCounts = computed(() => {
   const counts: Record<CompletionPath, number> = {
@@ -18,7 +37,7 @@ const pathCounts = computed(() => {
     challenge: 0,
     mixed: 0,
   }
-  Object.values(props.completionRecords).forEach((record) => {
+  activeRecords.value.forEach((record) => {
     counts[record.path] += 1
   })
   return counts
@@ -26,7 +45,7 @@ const pathCounts = computed(() => {
 
 const noHintChallenges = computed(
   () =>
-    Object.values(props.completionRecords).filter(
+    activeRecords.value.filter(
       (record) => record.path === 'challenge' && record.hintsUsed === 0,
     ).length,
 )
@@ -47,12 +66,18 @@ function recordLabel(record?: LevelCompletionRecord): string {
 <template>
   <main class="completion-page">
     <div class="completion-inner">
-      <p class="congrats-badge"><AppIcon name="trophy" :size="16" /> 全部关卡完成</p>
-      <h1 class="title">欢迎加入 HASHTEAM 的世界</h1>
-      <p class="intro">
+      <p class="congrats-badge"><AppIcon name="trophy" :size="16" /> 全部实验完成</p>
+      <h1 class="title">
+        {{ course === undefined ? '欢迎加入 HASHTEAM 的世界' : 'PwnHub 首批课程已完成' }}
+      </h1>
+      <p v-if="course === undefined" class="intro">
         你已经在真实的 Linux 终端里完成了身份确认、文件整理、隐藏信息探索、
         权限收紧、日志分析、编码还原、进程排查、Web 信息收集和配置修复——
         这正是安全工作的日常缩影。
+      </p>
+      <p v-else class="intro">
+        你已从内存模型走到汇编与 ELF 静态分析，并完成了真实 i386 实验的验证。
+        后续章节会按发布计划逐步开放。
       </p>
 
       <section class="completion-records">
@@ -63,7 +88,7 @@ function recordLabel(record?: LevelCompletionRecord): string {
           <span><strong>{{ pathCounts.mixed }}</strong> 混合完成</span>
           <span><strong>{{ noHintChallenges }}</strong> 无提示挑战</span>
         </div>
-        <ul class="record-list">
+        <ul v-if="course === undefined" class="record-list">
           <li v-for="level in LEVELS" :key="level.id">
             <span>第 {{ level.id }} 关 · {{ level.name }}</span>
             <strong :class="completionRecords[level.id]?.path">
@@ -71,9 +96,15 @@ function recordLabel(record?: LevelCompletionRecord): string {
             </strong>
           </li>
         </ul>
+        <ul v-else class="record-list">
+          <li v-for="item in completionItems" :key="item.id">
+            <span>{{ item.title }}</span>
+            <strong :class="item.record?.path">{{ recordLabel(item.record) }}</strong>
+          </li>
+        </ul>
       </section>
 
-      <section class="directions">
+      <section v-if="course === undefined" class="directions">
         <h2>实验室在做什么</h2>
         <div class="direction-grid">
           <article v-for="d in LAB_DIRECTIONS" :key="d.name" class="direction-card">
@@ -83,15 +114,21 @@ function recordLabel(record?: LevelCompletionRecord): string {
         </div>
       </section>
 
-      <section class="ctf-note">
+      <section v-if="course === undefined" class="ctf-note">
         <h2>关于 CTF</h2>
         <p>{{ CTF_POSITIONING }}</p>
       </section>
 
-      <button type="button" class="btn-restart" @click="emit('restart')">
-        <AppIcon name="rotate-ccw" :size="17" />
-        重新开始体验
-      </button>
+      <div class="completion-actions">
+        <button type="button" class="btn-exit" @click="emit('exit')">
+          <AppIcon name="hash" :size="17" />
+          返回 Lab 选择器
+        </button>
+        <button type="button" class="btn-restart" @click="emit('restart')">
+          <AppIcon name="rotate-ccw" :size="17" />
+          重新开始体验
+        </button>
+      </div>
     </div>
   </main>
 </template>
@@ -271,6 +308,14 @@ function recordLabel(record?: LevelCompletionRecord): string {
   text-align: left;
 }
 
+.completion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.btn-exit,
 .btn-restart {
   min-height: 44px;
   display: inline-flex;
@@ -280,12 +325,23 @@ function recordLabel(record?: LevelCompletionRecord): string {
   padding: 10px 28px;
   font-size: 15px;
   font-weight: 720;
-  color: var(--accent-cyan-contrast);
-  background: var(--accent-cyan);
-  border: none;
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
   border-radius: 7px;
   cursor: pointer;
-  box-shadow: 0 8px 22px rgba(101, 212, 206, 0.14), inset 0 1px rgba(255, 255, 255, 0.24);
+  box-shadow: var(--shadow-control);
+}
+
+.btn-exit:hover {
+  background: var(--surface-hover);
+  transform: translateY(-1px);
+}
+
+.btn-restart {
+  color: var(--accent-cyan-contrast);
+  background: var(--accent-cyan);
+  border-color: var(--accent-cyan);
 }
 
 .btn-restart:hover {

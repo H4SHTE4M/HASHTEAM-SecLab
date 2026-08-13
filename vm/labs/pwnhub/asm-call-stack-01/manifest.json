@@ -1,0 +1,275 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "asm-reading",
+  "labId": "asm-call-stack-01",
+  "title": "函数调用约定与一帧栈",
+  "summary": "用固定 i386 栈观察参数、返回地址、EBP 栈帧、调用方清理和 EAX 返回值。",
+  "goals": [
+    "说明 i386 cdecl 用栈传参并用 EAX 返回结果",
+    "按 ESP 变化解释 call 和 ret 对返回地址的处理",
+    "在 EBP 相对位置识别局部变量、保存的 EBP、返回地址和参数"
+  ],
+  "prerequisites": ["理解 cmp 与条件跳转", "能够在寄存器差分中读取 ESP/EBP 变化"],
+  "kind": "visual",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 30, "max": 50 },
+  "unlockAfter": ["asm-branches-01"],
+  "artifacts": [
+    {
+      "path": "/opt/pwnhub/labs/asm-call-stack-01/asm-call-stack",
+      "architecture": "i386",
+      "sha256": "1fd5e07c8b83e5d681164dde7ab590c50a1b8028c26b9405d9304279913de5c0",
+      "purpose": "固定、离线的 call、ret、EBP 栈帧和 cdecl 调用方清理观察样本",
+      "downloadable": true
+    }
+  ],
+  "concepts": [
+    { "id": "cdecl-register-contract", "term": "i386 cdecl 寄存器约定", "explanation": "参数从右到左放入栈，EAX 保存返回值；EAX、ECX、EDX 通常由调用方自行保留，EBX、ESI、EDI、EBP 通常由被调用方恢复。" },
+    { "id": "call-stack-effect", "term": "call 与 ret", "explanation": "call 把下一条指令的地址压入栈后跳转；ret 取出这个返回地址并回到调用方。" },
+    { "id": "ebp-frame-cleanup", "term": "EBP 栈帧与调用方清理", "explanation": "EBP 可作为当前帧基准；i386 cdecl 在 ret 后由调用方移过参数槽。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "concept",
+      "title": "先读函数调用约定",
+      "objective": "知道参数、返回值和需要保留的寄存器分别由谁负责",
+      "instruction": "本实验使用 i386 cdecl：调用方从右到左把参数放入栈，被调用函数把结果放进 EAX。EAX、ECX、EDX 通常视为临时寄存器，调用方若需要旧值就先保存；EBX、ESI、EDI、EBP 通常由被调用方在返回前恢复。随后再观察这些约定如何落在一帧真实栈上。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        { "id": "cdecl-register-contract", "term": "i386 cdecl 寄存器约定", "explanation": "参数从右到左放入栈，EAX 保存返回值；EAX、ECX、EDX 通常由调用方自行保留，EBX、ESI、EDI、EBP 通常由被调用方恢复。" }
+      ],
+      "uses": ["cdecl-register-contract"],
+      "evidence": "observation"
+    },
+    {
+      "id": 2,
+      "type": "prediction",
+      "title": "先预测 ret 后 ESP",
+      "objective": "区分 ret 弹返回地址和调用方弹参数的两个阶段",
+      "instruction": "调用方在 0x0804c24c 压入一个参数，call 后被调用函数 ret。先选择 ret 刚完成、调用方尚未 add esp,4 时的 ESP。",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [
+        { "id": "call-stack-effect", "term": "call 与 ret", "explanation": "call 把下一条指令的地址压入栈后跳转；ret 取出这个返回地址并回到调用方。" }
+      ],
+      "uses": ["call-stack-effect"],
+      "evidence": "prediction",
+      "question": {
+        "prompt": "ret 刚返回时 ESP 是多少？",
+        "choices": [
+          { "id": "argument-still", "label": "0x0804c24c（参数槽还在栈顶）" },
+          { "id": "caller-restored", "label": "0x0804c250（参数也已被弹出）" },
+          { "id": "frame-pointer", "label": "0x0804c244（EBP 的位置）" }
+        ],
+        "answer": "argument-still",
+        "success": "预测已记录：ret 只弹返回地址，cdecl 参数由调用方随后清理。"
+      }
+    },
+    {
+      "id": 3,
+      "type": "visual-trace",
+      "title": "读一帧 EBP 栈帧",
+      "objective": "按 EBP 偏移识别局部变量、保存的 EBP、返回地址和参数",
+      "instruction": "观察真实 ELF 的栈表格：局部变量位于 EBP-4，保存的 EBP 位于 EBP，返回地址位于 EBP+4，参数位于 EBP+8。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        { "id": "ebp-frame-cleanup", "term": "EBP 栈帧与调用方清理", "explanation": "EBP 可作为当前帧基准；i386 cdecl 在 ret 后由调用方移过参数槽。" }
+      ],
+      "uses": ["ebp-frame-cleanup"],
+      "evidence": "observation",
+      "tool": "elf",
+      "initialTab": "stack",
+      "workbench": {
+        "stack": {
+          "entries": [
+            { "address": 134529600, "value": 43, "label": "EBP-4 · local_value", "kind": "local" },
+            { "address": 134529604, "value": 0, "label": "EBP · saved EBP", "kind": "frame-pointer" },
+            { "address": 134529608, "value": 134516865, "label": "EBP+4 · return to caller", "kind": "return-address" },
+            { "address": 134529612, "value": 21, "label": "EBP+8 · argument 21", "kind": "argument" }
+          ]
+        },
+        "assemblyTui": {
+          "title": "EBP 栈帧单步",
+          "states": [
+            {
+              "id": "save-ebp",
+              "title": "保存调用方 EBP",
+              "instruction": "push ebp; mov ebp, esp",
+              "explanation": "EBP 成为当前栈帧的固定基准，保存值位于 EBP。",
+              "stack": { "entries": [
+                { "address": 134529604, "value": 0, "label": "EBP · saved EBP", "kind": "frame-pointer" }
+              ] }
+            },
+            {
+              "id": "local",
+              "title": "分配局部变量",
+              "instruction": "sub esp, 4",
+              "explanation": "ESP 向低地址移动四字节，局部变量位于 EBP-4。",
+              "stack": { "entries": [
+                { "address": 134529600, "value": 43, "label": "EBP-4 · local_value", "kind": "local" },
+                { "address": 134529604, "value": 0, "label": "EBP · saved EBP", "kind": "frame-pointer" }
+              ] }
+            },
+            {
+              "id": "return-address",
+              "title": "定位返回地址",
+              "instruction": "call teaching_callee",
+              "explanation": "call 压入的返回地址位于 EBP+4。",
+              "stack": { "entries": [
+                { "address": 134529600, "value": 43, "label": "EBP-4 · local_value", "kind": "local" },
+                { "address": 134529604, "value": 0, "label": "EBP · saved EBP", "kind": "frame-pointer" },
+                { "address": 134529608, "value": 134516865, "label": "EBP+4 · return to caller", "kind": "return-address" }
+              ] }
+            },
+            {
+              "id": "argument",
+              "title": "读取参数",
+              "instruction": "mov eax, [ebp+8]",
+              "explanation": "调用方先压入的参数位于 EBP+8；地址、变量名和值现在可以放进同一张表核对。",
+              "stack": { "entries": [
+                { "address": 134529600, "value": 43, "label": "EBP-4 · local_value", "kind": "local" },
+                { "address": 134529604, "value": 0, "label": "EBP · saved EBP", "kind": "frame-pointer" },
+                { "address": 134529608, "value": 134516865, "label": "EBP+4 · return to caller", "kind": "return-address" },
+                { "address": 134529612, "value": 21, "label": "EBP+8 · argument 21", "kind": "argument" }
+              ] }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "visual-trace",
+      "title": "跟随 call、ret 和清理",
+      "objective": "把调用轨迹、ESP 清理和 EAX 返回值连接起来",
+      "instruction": "从调用前、被调用函数序言、ret 返回到调用方清理，观察 ESP 依次为 0x0804c24c、0x0804c240、0x0804c24c、0x0804c250；函数计算出的 0x2b 通过 EAX 返回。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "uses": ["cdecl-register-contract", "call-stack-effect", "ebp-frame-cleanup"],
+      "evidence": "observation",
+      "tool": "elf",
+      "initialTab": "trace",
+      "workbench": {
+        "trace": {
+          "entries": [
+            { "id": "call", "kind": "call", "functionName": "capture_call", "instruction": "call teaching_callee", "stackPointer": 134529612 },
+            { "id": "current", "kind": "current", "functionName": "teaching_callee", "instruction": "push ebp; mov ebp, esp", "stackPointer": 134529600 },
+            { "id": "return", "kind": "return", "functionName": "teaching_callee", "instruction": "leave; ret", "stackPointer": 134529612 }
+          ]
+        },
+        "registers": {
+          "instruction": "ret; add esp, 4; EAX 返回值",
+          "registers": [{ "name": "esp", "before": 134529612, "after": 134529616 }, { "name": "eax", "before": 43, "after": 43 }],
+          "flagsBefore": [],
+          "flagsAfter": []
+        },
+        "assemblyTui": {
+          "title": "call 与 ret 单步",
+          "states": [
+            {
+              "id": "call",
+              "title": "执行 call",
+              "instruction": "call teaching_callee",
+              "explanation": "参数已经在栈顶；call 再压入返回地址并转入被调用函数。",
+              "trace": { "entries": [
+                { "id": "call", "kind": "call", "functionName": "capture_call", "instruction": "call teaching_callee", "stackPointer": 134529612 }
+              ] }
+            },
+            {
+              "id": "frame",
+              "title": "建立栈帧",
+              "instruction": "push ebp; mov ebp, esp",
+              "explanation": "被调用函数保存 EBP，并把 ESP 移到局部变量所在的低地址。",
+              "trace": { "entries": [
+                { "id": "call", "kind": "call", "functionName": "capture_call", "instruction": "call teaching_callee", "stackPointer": 134529612 },
+                { "id": "current", "kind": "current", "functionName": "teaching_callee", "instruction": "push ebp; mov ebp, esp", "stackPointer": 134529600 }
+              ] }
+            },
+            {
+              "id": "ret",
+              "title": "执行 ret",
+              "instruction": "leave; ret",
+              "explanation": "ret 弹出返回地址后回到调用方；参数仍在栈顶，EAX 已带回 0x2b。",
+              "registers": {
+                "instruction": "leave; ret",
+                "registers": [{ "name": "esp", "before": 134529600, "after": 134529612 }, { "name": "eax", "before": 43, "after": 43 }],
+                "flagsBefore": [],
+                "flagsAfter": []
+              },
+              "trace": { "entries": [
+                { "id": "call", "kind": "call", "functionName": "capture_call", "instruction": "call teaching_callee", "stackPointer": 134529612 },
+                { "id": "current", "kind": "current", "functionName": "teaching_callee", "instruction": "push ebp; mov ebp, esp", "stackPointer": 134529600 },
+                { "id": "return", "kind": "return", "functionName": "teaching_callee", "instruction": "leave; ret", "stackPointer": 134529612 }
+              ] }
+            },
+            {
+              "id": "cleanup",
+              "title": "调用方清理参数",
+              "instruction": "add esp, 4",
+              "explanation": "cdecl 由调用方把 ESP 增加四字节，移过参数位置；EAX 返回值保持 0x2b。",
+              "registers": {
+                "instruction": "add esp, 4",
+                "registers": [{ "name": "esp", "before": 134529612, "after": 134529616 }, { "name": "eax", "before": 43, "after": 43 }],
+                "flagsBefore": [],
+                "flagsAfter": []
+              },
+              "trace": { "entries": [
+                { "id": "call", "kind": "call", "functionName": "capture_call", "instruction": "call teaching_callee", "stackPointer": 134529612 },
+                { "id": "current", "kind": "current", "functionName": "teaching_callee", "instruction": "push ebp; mov ebp, esp", "stackPointer": 134529600 },
+                { "id": "return", "kind": "return", "functionName": "teaching_callee", "instruction": "leave; ret", "stackPointer": 134529612 }
+              ] }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "terminal",
+      "title": "在真实终端复现",
+      "objective": "运行官方 ELF 并记录栈帧、清理距离和 EAX 返回值",
+      "instruction": "样本进入实验时已经自动运行。核对栈表格和阶段行，再按验证区格式提交。",
+      "completion": "input",
+      "allowRun": false,
+      "autoRun": true,
+      "uses": ["cdecl-register-contract", "call-stack-effect", "ebp-frame-cleanup"],
+      "evidence": "observation",
+      "tool": "shell",
+      "observation": "返回地址、参数、局部结果、ret 后调用方清理距离，以及结果行中的 EAX 返回值。",
+      "commonErrors": ["不要把 ret 后的 ESP 当成已经完成参数清理的 ESP。", "返回地址是代码地址；函数结果由 EAX 返回，不是由参数槽自动返回。"],
+      "reinforcement": "参数从栈进入函数，返回地址引导控制流回去，计算结果则从 EAX 回到调用方。"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "先找栈表中的返回地址和参数，再比较返回、清理阶段与结果行。" },
+    { "level": 2, "kind": "tool", "text": "重新输入 ./asm-call-stack 可再次运行 HOME 中的真实 ELF。" },
+    { "level": 3, "kind": "structure", "text": "最终结构是 check <返回地址> <参数值> <局部值> <清理字节数> <EAX返回值>。" }
+  ],
+  "verification": {
+    "type": "answer",
+    "usage": "check <返回地址> <参数值> <局部值> <清理字节数> <EAX返回值>",
+    "instruction": "依次填入栈表中的返回地址、参数、局部变量，ret 后调用方清理的字节数，以及结果行中的 EAX 返回值。",
+    "placeholders": [
+      { "token": "<返回地址>", "meaning": "栈表中“返回地址”行的八位十六进制值" },
+      { "token": "<参数值>", "meaning": "栈表中“参数”行的八位十六进制值" },
+      { "token": "<局部值>", "meaning": "栈表中“局部变量”行的八位十六进制值" },
+      { "token": "<清理字节数>", "meaning": "“清理”阶段相对“返回”阶段增加的字节数" },
+      { "token": "<EAX返回值>", "meaning": "结果行中由 EAX 带回调用方的八位十六进制值" }
+    ],
+    "feedback": {
+      "empty": "还没有提供五项函数调用观察值。",
+      "incorrect": "回到栈、阶段和结果三部分，核对 EBP 偏移、ESP 差值与 EAX。",
+      "success": "真实 ELF 重放与 i386 cdecl 函数调用观察一致。"
+    }
+  },
+  "completionSummary": {
+    "solved": "通过真实 i386 ELF 验证了栈传参、call/ret、EBP 栈帧、调用方清理和 EAX 返回值。",
+    "mastered": ["cdecl 参数与返回值", "call/ret 返回地址", "EBP 栈帧与调用方清理"],
+    "next": "下一章会用 file、字节查看和 ELF 结构工具观察这些指令在文件中的位置。"
+  }
+}

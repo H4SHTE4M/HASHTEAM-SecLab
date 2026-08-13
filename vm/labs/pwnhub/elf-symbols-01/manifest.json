@@ -1,0 +1,206 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "elf-static",
+  "labId": "elf-symbols-01",
+  "title": "用符号表连接名称与地址",
+  "summary": "用真实 nm 把函数和数据的名称连接到地址，并从 T/t/D/B 类型字母判断内容类别与可见性。",
+  "goals": [
+    "使用 nm -n 按地址读取符号表",
+    "从一行输出中区分地址、类型字母和符号名称",
+    "用 T/t、D 和 B 区分代码、已初始化数据和未初始化数据",
+    "用类型字母大小写区分全局符号和局部符号"
+  ],
+  "prerequisites": ["能够从 readelf 节表区分代码节和数据节", "理解虚拟地址不是文件偏移"],
+  "kind": "elf",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 25, "max": 45 },
+  "unlockAfter": ["elf-sections-01"],
+  "artifacts": [
+    {
+      "path": "/opt/pwnhub/labs/elf-symbols-01/elf-symbols",
+      "architecture": "i386",
+      "sha256": "601d047adf4c98f03168236236e528ef19a445e688e0793aa774513810c0bf9f",
+      "purpose": "固定、离线的 ELF 符号名称、地址、类型与可见性观察样本",
+      "downloadable": true
+    }
+  ],
+  "concepts": [
+    {
+      "id": "elf-symbol-table",
+      "term": "符号表",
+      "explanation": "符号表记录程序中有名称的函数和数据，静态分析工具可以在不执行程序时读取它。"
+    },
+    {
+      "id": "elf-symbol-address",
+      "term": "符号地址",
+      "explanation": "nm 第一列给出符号对应的虚拟地址，-n 会按地址从低到高排序。"
+    },
+    {
+      "id": "elf-symbol-type",
+      "term": "类型字母与大小写",
+      "explanation": "T/t 表示代码，D 表示已初始化数据，B 表示未初始化数据；大写通常表示全局符号，小写表示局部符号。"
+    }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "prediction",
+      "title": "先选择名称读取工具",
+      "objective": "在不反汇编的情况下找到函数和数据的名称与地址",
+      "instruction": "readelf 已经说明文件有哪些节。现在选择专门列出符号名称、地址和类型字母的工具。",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "elf-symbol-table",
+          "term": "符号表",
+          "explanation": "符号表记录程序中有名称的函数和数据，静态分析工具可以在不执行程序时读取它。"
+        }
+      ],
+      "uses": ["elf-symbol-table"],
+      "evidence": "prediction",
+      "question": {
+        "prompt": "哪个命令会直接列出 ELF 中保留的符号名称？",
+        "choices": [
+          { "id": "nm", "label": "nm" },
+          { "id": "chmod", "label": "chmod" },
+          { "id": "pwd", "label": "pwd" }
+        ],
+        "answer": "nm",
+        "success": "预测已记录：nm 用紧凑表格展示符号地址、类型和名称。"
+      }
+    },
+    {
+      "id": 2,
+      "type": "observe",
+      "title": "按地址读取完整符号表",
+      "objective": "把每一行拆成地址、类型字母和名称",
+      "instruction": "运行命令并先看三列结构。第一列是虚拟地址，第二列是类型字母，最后一列是符号名称；-n 让地址从低到高排列。",
+      "completion": "run",
+      "allowRun": true,
+      "introduces": [
+        {
+          "id": "elf-symbol-address",
+          "term": "符号地址",
+          "explanation": "nm 第一列给出符号对应的虚拟地址，-n 会按地址从低到高排序。"
+        }
+      ],
+      "uses": ["elf-symbol-table", "elf-symbol-address"],
+      "command": "nm -n ./elf-symbols",
+      "observation": "compute_total、mix_value、initialized_seed 和 pending_total 各行的地址、类型字母与名称。",
+      "commonErrors": [
+        "第一列是加载后的虚拟地址，不是文件偏移。",
+        "没有第一列的 U 类型符号表示尚未在当前文件中定义，本样本没有这类依赖。"
+      ],
+      "reinforcement": "符号表为原本只有地址的代码和数据保留了便于分析的名称。"
+    },
+    {
+      "id": 3,
+      "type": "concept",
+      "title": "读懂类型字母和大小写",
+      "objective": "用一个字母同时判断内容类别和符号可见性",
+      "instruction": "T/t 表示代码，D 表示已初始化数据，B 表示未初始化数据。大写字母通常表示其他目标文件也能引用的全局符号，小写字母表示只在当前目标文件内可见的局部符号。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "elf-symbol-type",
+          "term": "类型字母与大小写",
+          "explanation": "T/t 表示代码，D 表示已初始化数据，B 表示未初始化数据；大写通常表示全局符号，小写表示局部符号。"
+        }
+      ],
+      "uses": ["elf-symbol-table", "elf-symbol-type"],
+      "evidence": "observation"
+    },
+    {
+      "id": 4,
+      "type": "observe",
+      "title": "比较函数与数据符号",
+      "objective": "在四个强相关符号中应用类型字母规则",
+      "instruction": "筛出两个函数和两份数据。记录 compute_total 的地址与类型、mix_value 的类型，以及 pending_total 的类型，并保留大小写。",
+      "completion": "run",
+      "allowRun": true,
+      "introduces": [
+        {
+          "id": "elf-symbol-address",
+          "term": "符号地址",
+          "explanation": "nm 第一列给出符号对应的虚拟地址，-n 会按地址从低到高排序。"
+        },
+        {
+          "id": "elf-symbol-type",
+          "term": "类型字母与大小写",
+          "explanation": "T/t 表示代码，D 表示已初始化数据，B 表示未初始化数据；大写通常表示全局符号，小写表示局部符号。"
+        }
+      ],
+      "uses": ["elf-symbol-address", "elf-symbol-type"],
+      "command": "nm -n ./elf-symbols | grep -E 'compute_total|mix_value|initialized_seed|pending_total'",
+      "observation": "两个函数的 T/t 大小写差异，以及 initialized_seed 与 pending_total 的 D/B 差异。",
+      "commonErrors": [
+        "T 和 t 都表示代码，但大小写反映的可见性不同。",
+        "D 与 B 对应上一实验中的 .data 与 .bss，不表示十进制或二进制。"
+      ],
+      "reinforcement": "同一个符号类型字母把名称连接回上一实验观察到的代码与数据区域。"
+    },
+    {
+      "id": 5,
+      "type": "prediction",
+      "title": "迁移到函数可见性",
+      "objective": "根据类型字母大小写判断哪个函数是全局符号",
+      "instruction": "比较 compute_total 与 mix_value 的类型字母，判断哪个函数能被其他目标文件按名称引用。",
+      "completion": "answer",
+      "allowRun": false,
+      "uses": ["elf-symbol-type"],
+      "evidence": "prediction",
+      "question": {
+        "prompt": "哪个函数对应大写 T，因此是全局符号？",
+        "choices": [
+          { "id": "compute", "label": "compute_total" },
+          { "id": "mix", "label": "mix_value" },
+          { "id": "pending", "label": "pending_total" }
+        ],
+        "answer": "compute",
+        "success": "判断已记录：compute_total 的大写 T 表示全局代码符号。"
+      }
+    }
+  ],
+  "hints": [
+    {
+      "level": 1,
+      "kind": "direction",
+      "text": "先把 nm 每一行拆成地址、类型和名称，再比较目标符号的第二列。"
+    },
+    {
+      "level": 2,
+      "kind": "tool",
+      "text": "nm -n 按地址排列全部符号；grep -E 可以筛出几个目标名称。"
+    },
+    {
+      "level": 3,
+      "kind": "structure",
+      "text": "最终结构是 check <compute_total地址> <compute_total类型> <mix_value类型> <pending_total类型>；类型字母必须保留大小写。"
+    }
+  ],
+  "verification": {
+    "type": "answer",
+    "usage": "check <compute_total地址> <compute_total类型> <mix_value类型> <pending_total类型>",
+    "instruction": "按 nm 输出依次填写函数地址和三个类型字母。",
+    "placeholders": [
+      { "token": "<compute_total地址>", "meaning": "compute_total 行第一列的八位十六进制地址" },
+      { "token": "<compute_total类型>", "meaning": "compute_total 行第二列的单个类型字母" },
+      { "token": "<mix_value类型>", "meaning": "mix_value 行第二列的单个类型字母" },
+      { "token": "<pending_total类型>", "meaning": "pending_total 行第二列的单个类型字母" }
+    ],
+    "feedback": {
+      "empty": "还没有提供函数地址和三个符号类型字母。",
+      "incorrect": "回到 nm 输出，逐列核对地址、类型字母，并保留字母大小写。",
+      "success": "锁定的 nm 已从真实 ELF 重读并确认符号名称、地址、类别和可见性。"
+    }
+  },
+  "completionSummary": {
+    "solved": "通过真实 nm 把函数和数据的名称连接到地址、所在内容类别与符号可见性。",
+    "mastered": ["nm -n", "符号地址", "T/t 代码符号", "D/B 数据符号", "全局与局部符号"],
+    "next": "下一实验会用 objdump 从符号地址进入真实反汇编，观察入口函数、调用和条件跳转。"
+  }
+}

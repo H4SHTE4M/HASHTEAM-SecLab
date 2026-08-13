@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>HASHTEAM SecLab 遥测看板</title>
+  <title>HASHTEAM Security Lab 遥测看板</title>
   <link rel="stylesheet" href="./style.css">
   <script src="./dashboard.js" defer></script>
 </head>
 <body>
   <header class="topbar">
     <div class="topbar-inner">
-      <span class="brand">HASHTEAM SecLab <span class="brand-sub">遥测看板</span></span>
+      <span class="brand">HASHTEAM Security Lab <span class="brand-sub">遥测看板</span></span>
       <nav class="tabs">
         <a class="tab active" href="./index.html">数据看板</a>
         <a class="tab" href="./admin.html">管理</a>
@@ -20,6 +20,10 @@
 
   <main class="container">
     <div id="status-banner" class="banner hidden"></div>
+    <nav id="module-tabs" class="module-tabs" aria-label="Lab 数据范围">
+      <button type="button" class="module-tab active" data-module="seclab">SecLab</button>
+      <button type="button" class="module-tab" data-module="pwnhub">PwnHub</button>
+    </nav>
 
     <section class="cards" id="overview-cards"></section>
     <section class="panel">
@@ -37,7 +41,7 @@
     </section>
 
     <section class="panel">
-      <h2>关卡通关榜</h2>
+      <h2 id="completion-heading">关卡通关榜</h2>
       <div id="level-leaderboard"></div>
     </section>
 

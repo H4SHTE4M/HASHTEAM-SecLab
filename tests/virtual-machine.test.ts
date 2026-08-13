@@ -7,6 +7,11 @@ const telemetryMocks = vi.hoisted(() => ({
   trackCheckResult: vi.fn(),
   trackHint: vi.fn(),
   trackReset: vi.fn(),
+  trackActivityComplete: vi.fn(),
+  trackActivityCheck: vi.fn(),
+  trackActivityHint: vi.fn(),
+  trackActivityReset: vi.fn(),
+  trackVmBoot: vi.fn(),
   flush: vi.fn(async () => undefined),
   dispose: vi.fn(async () => undefined),
 }))
@@ -51,6 +56,19 @@ function levelReadyLine(level: number, key: Buffer = SESSION_KEY_BYTES): string 
   return protocolLine({ type: 'level-ready', level, sig: sign(`level-ready:${level}`, key) })
 }
 
+function labReadyLine(labId: string, key: Buffer = SESSION_KEY_BYTES): string {
+  return protocolLine({ type: 'lab-ready', labId, sig: sign(`lab-ready:${labId}`, key) })
+}
+
+function labPassedLine(labId: string, key: Buffer = SESSION_KEY_BYTES): string {
+  return protocolLine({
+    type: 'lab-result',
+    labId,
+    status: 'passed',
+    sig: sign(`lab-result:${labId}:passed`, key),
+  })
+}
+
 class FakeController implements VirtualMachineController {
   readonly serialCallbacks = new Set<(data: string) => void>()
   readonly sent: string[] = []
@@ -78,6 +96,10 @@ class FakeController implements VirtualMachineController {
 
   async restoreLevel(level: number): Promise<void> {
     this.sent.push(`goto:${level}`)
+  }
+
+  async restoreLab(labId: string): Promise<void> {
+    this.sent.push(`goto-lab:${labId}`)
   }
 
   sendSerial(input: string): void {
@@ -526,6 +548,49 @@ describe('评分协议防伪与解锁门控', () => {
     controllers[1].emit(passedLine(1, nextKey))
     await vm.waitForProtocolIdle()
     expect(progress.state.completedLevels).toContain(1)
+    await vm.dispose()
+  })
+
+  it('稳定实验临时解锁同步前置状态并接受验签 ready', async () => {
+    const { vm, controllers } = createTrackedVm()
+    const progress = useLabProgress()
+
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+
+    vm.temporarilyUnlockLab('memory-addresses-01')
+    vm.gotoLab('memory-addresses-01')
+    expect(controllers[0].sent).not.toContain('hashteamctl mark-completed 10\n')
+    expect(controllers[0].sent).toContain('goto-lab:memory-addresses-01')
+
+    progress.setLevel(1)
+    controllers[0].emit(labReadyLine('memory-addresses-01'))
+    await vm.waitForProtocolIdle()
+    expect(progress.state.currentLabId).toBe('memory-addresses-01')
+    await vm.dispose()
+  })
+
+  it('稳定实验只采信当前 labId 的有效签名通关结果', async () => {
+    const { vm, controllers } = createTrackedVm()
+    const progress = useLabProgress()
+    const attackerKey = Buffer.alloc(32, 31)
+
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+    vm.temporarilyUnlockLab('memory-addresses-01')
+    vm.gotoLab('memory-addresses-01')
+    controllers[0].emit(labReadyLine('memory-addresses-01'))
+    await vm.waitForProtocolIdle()
+
+    controllers[0].emit(labPassedLine('memory-addresses-01', attackerKey))
+    await vm.waitForProtocolIdle()
+    expect(progress.state.completedLabIds).not.toContain('memory-addresses-01')
+
+    controllers[0].emit(labPassedLine('memory-addresses-01'))
+    await vm.waitForProtocolIdle()
+    expect(progress.state.completedLabIds).toContain('memory-addresses-01')
     await vm.dispose()
   })
 })

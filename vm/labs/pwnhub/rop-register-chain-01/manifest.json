@@ -1,0 +1,129 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "rop-basics",
+  "labId": "rop-register-chain-01",
+  "title": "两个 gadget 两条链",
+  "summary": "用 pop eax; ret 与 pop edx; ret 两条短链准备两个寄存器，再进入统一检查目标。",
+  "goals": ["解释前一个 gadget 的 ret 如何取走下一个 gadget 地址", "按栈槽顺序为 EAX 和 EDX 各放一个值", "通过真实 stdin 重放无害双寄存器检查"],
+  "prerequisites": ["能够构造单 gadget 链", "能够用 objdump/nm 观察固定 ELF 地址"],
+  "kind": "pwn",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 30, "max": 60 },
+  "unlockAfter": ["rop-gadget-stack-01"],
+  "artifacts": [{
+    "path": "/opt/pwnhub/labs/rop-register-chain-01/rop-register-chain",
+    "architecture": "i386",
+    "sha256": "4c35a71d070be92dfb8fb4f7be56161dcb37acaf88059fe5bea1099f940e5eeb",
+    "purpose": "固定、离线的双 gadget 寄存器准备样本",
+    "downloadable": true
+  }],
+  "concepts": [
+    { "id": "gadget-sequence", "term": "两条 gadget 链", "explanation": "前一个 gadget 的 ret 取出下一个 gadget 的地址；链条按栈槽顺序执行，每个 pop 各从栈顶取走一个寄存器值。" },
+    { "id": "register-preparation", "term": "寄存器准备", "explanation": "目标函数用寄存器状态判断是否成功；进入目标前先由链式 pop 依次设置 EAX 与 EDX。" },
+    { "id": "gadget-observation", "term": "从 objdump 找 gadget", "explanation": "pop eax; ret、pop edx; ret 与 check_registers 都是固定 ELF 中的真实地址，可用 nm/objdump 逐一核对。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "concept",
+      "title": "拆开两条链",
+      "objective": "把两个 gadget 的栈消耗排成连续槽位",
+      "instruction": "第一个 gadget 的 ret 取走第二个 gadget 的地址；pop eax 和 pop edx 各消耗一个值槽。check_registers 同时检查两个寄存器，链条必须先经过两个 pop 再进入它。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [{ "id": "gadget-sequence", "term": "两条 gadget 链", "explanation": "前一个 gadget 的 ret 取出下一个 gadget 的地址；链条按栈槽顺序执行，每个 pop 各从栈顶取走一个寄存器值。" }],
+      "uses": ["gadget-sequence"],
+      "evidence": "observation",
+      "tool": "gdb",
+      "initialTab": "stack",
+      "workbench": { "stack": { "entries": [
+        { "address": 134529424, "value": 134516768, "label": "保存返回地址 · pop eax; ret", "kind": "payload" },
+        { "address": 134529428, "value": 286335522, "label": "pop eax · EAX", "kind": "payload" },
+        { "address": 134529432, "value": 134516773, "label": "ret · pop edx; ret", "kind": "payload" },
+        { "address": 134529436, "value": 858997828, "label": "pop edx · EDX", "kind": "payload" },
+        { "address": 134529440, "value": 134516778, "label": "ret · check_registers", "kind": "payload" }
+      ] } }
+    },
+    {
+      "id": 2,
+      "type": "prediction",
+      "title": "预测第二个 ret 的去向",
+      "objective": "理解第二条链的 ret 取走的是地址而不是值",
+      "instruction": "pop edx 已经取走 EDX 的值后，pop edx; ret 的 ret 会把哪个槽加载到 EIP？",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [{ "id": "register-preparation", "term": "寄存器准备", "explanation": "目标函数用寄存器状态判断是否成功；进入目标前先由链式 pop 依次设置 EAX 与 EDX。" }],
+      "uses": ["gadget-sequence", "register-preparation"],
+      "evidence": "prediction",
+      "tool": "gdb",
+      "question": {
+        "prompt": "pop edx; ret 完成后，控制权会交给哪个槽？",
+        "choices": [
+          { "id": "target", "label": "EDX 值槽之后的 check_registers 地址" },
+          { "id": "edx-value", "label": "刚装入 EDX 的值 0x33334444" },
+          { "id": "first-gadget", "label": "重新执行 pop eax; ret" }
+        ],
+        "answer": "target",
+        "success": "预测已记录：每条链的 ret 都取下一个地址槽，pop 值永远不是跳转目标。"
+      }
+    },
+    {
+      "id": 3,
+      "type": "payload-builder",
+      "title": "组装双寄存器链",
+      "objective": "把五段链写成确定性字节",
+      "instruction": "使用 padding 68、pop_eax_ret 0x08049020、EAX 值 0x11112222、pop_edx_ret 0x08049025、EDX 值 0x33334444 和 check_registers 0x0804902a。",
+      "completion": "confirm",
+      "allowRun": false,
+      "introduces": [{ "id": "gadget-observation", "term": "从 objdump 找 gadget", "explanation": "pop eax; ret、pop edx; ret 与 check_registers 都是固定 ELF 中的真实地址，可用 nm/objdump 逐一核对。" }],
+      "uses": ["gadget-sequence", "register-preparation", "gadget-observation"],
+      "evidence": "payload-replay",
+      "payload": {
+        "outputPath": "rop-register-chain-01/payload.bin",
+        "maxBytes": 512,
+        "segments": [
+          { "id": "padding", "label": "padding", "kind": "padding", "byte": 65, "length": 68 },
+          { "id": "pop-eax", "label": "pop eax; ret", "kind": "p32", "value": "0x08049020" },
+          { "id": "eax-value", "label": "EAX 值", "kind": "p32", "value": "0x11112222" },
+          { "id": "pop-edx", "label": "pop edx; ret", "kind": "p32", "value": "0x08049025" },
+          { "id": "edx-value", "label": "EDX 值", "kind": "p32", "value": "0x33334444" },
+          { "id": "target", "label": "check_registers", "kind": "p32", "value": "0x0804902a" }
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "type": "terminal",
+      "title": "真实重放双寄存器链",
+      "objective": "让官方 ELF 验证两个寄存器都准备正确",
+      "instruction": "把 payload.bin 写入实验目录后运行 check；判题重放真实 ELF，只接受完整无害完成标记。",
+      "completion": "confirm",
+      "allowRun": false,
+      "evidence": "payload-replay",
+      "tool": "shell"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "把每条链的 pop 值槽和 ret 地址槽分开数。" },
+    { "level": 2, "kind": "tool", "text": "用 objdump -d -M intel 核对两个 pop; ret 的真实地址，再用 GDB 的 x/8wx $esp 复核栈槽。" },
+    { "level": 3, "kind": "structure", "text": "payload = padding + p32(pop_eax_ret) + p32(EAX值) + p32(pop_edx_ret) + p32(EDX值) + p32(check_registers)。" }
+  ],
+  "verification": {
+    "type": "payload-replay",
+    "usage": "check",
+    "instruction": "把双寄存器链 payload.bin 放入指定目录后运行 check。",
+    "placeholders": [],
+    "feedback": {
+      "empty": "还没有 payload.bin。",
+      "incorrect": "目标函数没有看到两个正确寄存器，请逐槽检查 pop 值和 ret 地址。",
+      "success": "真实 ELF 重放确认了 EAX 与 EDX 的双寄存器准备。"
+    }
+  },
+  "completionSummary": {
+    "solved": "通过真实重放验证了两条 pop; ret 链依次准备 EAX、EDX 并进入检查目标。",
+    "mastered": ["双 gadget 链条", "寄存器准备", "固定地址观察"],
+    "next": "下一实验不再使用 pop，改用 ret 依次链接三个普通函数，观察阶段状态如何跨函数传递。"
+  }
+}

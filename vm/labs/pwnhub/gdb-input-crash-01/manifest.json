@@ -1,0 +1,130 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "gdb-pwndbg",
+  "labId": "gdb-input-crash-01",
+  "title": "稳定复现并定位崩溃",
+  "summary": "用输入文件重定向重放同一运行条件，再从 SIGSEGV、当前指令、调用栈和非法目标地址建立崩溃证据链。",
+  "goals": ["用固定 stdin 文件复现同一次崩溃", "区分崩溃信号、当前指令与非法访问地址", "用 backtrace 定位触发崩溃的函数路径"],
+  "prerequisites": ["能够读取 GDB 调用栈与当前栈帧", "理解 rwx 与无效内存地址"],
+  "kind": "gdb",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 35, "max": 60 },
+  "unlockAfter": ["gdb-stack-frames-01"],
+  "artifacts": [{
+    "path": "/opt/pwnhub/labs/gdb-input-crash-01/gdb-runtime",
+    "architecture": "i386",
+    "sha256": "b5560fdf2ab16ffa5b3004ceeb3eaec0363b7c99bb3142927a9feb3df33b66e4",
+    "purpose": "固定、离线、仅含受控非法写入路径的原生 GDB 崩溃定位样本",
+    "downloadable": true
+  }],
+  "concepts": [
+    { "id": "gdb-input-redirection", "term": "输入重定向重放", "explanation": "run 参数 < 文件让每次运行读取完全相同的标准输入，便于比较和复现。" },
+    { "id": "gdb-crash-signal", "term": "崩溃信号", "explanation": "SIGSEGV 表示进程进行了不允许的内存访问；信号描述结果，不自动说明根因。" },
+    { "id": "gdb-crash-triad", "term": "崩溃三点证据", "explanation": "当前指令说明正在做什么，非法地址说明访问了哪里，调用栈说明怎样走到这里。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "prediction",
+      "title": "先固定运行输入",
+      "objective": "理解可复现调试为何需要相同 stdin",
+      "instruction": "每次手工输入都可能不同。选择能够让 GDB 每次读取同一字节文件的运行形式。",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [{ "id": "gdb-input-redirection", "term": "输入重定向重放", "explanation": "run 参数 < 文件让每次运行读取完全相同的标准输入，便于比较和复现。" }],
+      "uses": ["gdb-input-redirection"],
+      "evidence": "prediction",
+      "tool": "gdb",
+      "question": {
+        "prompt": "哪种形式会把 crash.txt 作为样本的标准输入？",
+        "choices": [
+          { "id": "redirect", "label": "run crash < crash.txt" },
+          { "id": "print", "label": "print crash.txt" },
+          { "id": "frame", "label": "frame crash.txt" }
+        ],
+        "answer": "redirect",
+        "success": "预测已记录：输入文件让运行条件可重复。"
+      }
+    },
+    {
+      "id": 2,
+      "type": "terminal",
+      "title": "自动重放受控崩溃",
+      "objective": "从同一次崩溃收集三类证据",
+      "instruction": "自动输出会报告信号、EIP 当前指令、backtrace 和当前帧的 invalid_address。先分别记录，不要把 EIP 与非法目标地址当成同一个值。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "autoRun": true,
+      "introduces": [
+        { "id": "gdb-crash-signal", "term": "崩溃信号", "explanation": "SIGSEGV 表示进程进行了不允许的内存访问；信号描述结果，不自动说明根因。" },
+        { "id": "gdb-crash-triad", "term": "崩溃三点证据", "explanation": "当前指令说明正在做什么，非法地址说明访问了哪里，调用栈说明怎样走到这里。" }
+      ],
+      "uses": ["gdb-input-redirection", "gdb-crash-signal", "gdb-crash-triad"],
+      "evidence": "observation",
+      "tool": "gdb",
+      "observation": "SIGSEGV 停在 crash_from_input 的写内存指令；invalid_address 是该指令尝试写入的目标。"
+    },
+    {
+      "id": 3,
+      "type": "prediction",
+      "title": "区分 EIP 与非法目标地址",
+      "objective": "避免把执行地址误当成被访问地址",
+      "instruction": "EIP 指向造成异常的机器指令；该指令还会使用另一个地址作为写入目标。选择正确关系。",
+      "completion": "answer",
+      "allowRun": false,
+      "uses": ["gdb-crash-triad"],
+      "evidence": "prediction",
+      "tool": "gdb",
+      "question": {
+        "prompt": "崩溃时 EIP 与 invalid_address 的含义相同吗？",
+        "choices": [
+          { "id": "different", "label": "不同：指令位置与访问目标" },
+          { "id": "same", "label": "相同：都是当前指令" },
+          { "id": "unknown", "label": "GDB 无法区分" }
+        ],
+        "answer": "different",
+        "success": "判断已记录：当前指令地址与非法内存目标是两项证据。"
+      }
+    },
+    {
+      "id": 4,
+      "type": "terminal",
+      "title": "修改输入并进行对照重放",
+      "objective": "验证崩溃依赖输入而不是随机发生",
+      "instruction": "运行 gdb -q ./gdb-runtime -x session.gdb。退出后把 crash.txt 改成其他短文本，再重新进入并比较是否仍收到 SIGSEGV；最后用 reset-level 恢复实验。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "uses": ["gdb-input-redirection", "gdb-crash-signal", "gdb-crash-triad"],
+      "evidence": "observation",
+      "tool": "gdb",
+      "observation": "固定触发输入稳定产生同一崩溃，其他短文本走正常退出路径。"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "先分别找 Program received signal、#0 调用栈行和 print/x invalid_address 的结果。" },
+    { "level": 2, "kind": "tool", "text": "x/i $eip 解释当前指令；backtrace 定位函数；frame 0 后 print/x invalid_address 读取目标地址。" },
+    { "level": 3, "kind": "structure", "text": "最终结构是 check <信号名> <#0函数> <非法目标地址>；不要把 EIP 填到第三项。" }
+  ],
+  "verification": {
+    "type": "answer",
+    "usage": "check <信号名> <#0函数> <非法目标地址>",
+    "instruction": "填写固定输入真实重放得到的崩溃信号、#0 函数和 invalid_address。",
+    "placeholders": [
+      { "token": "<信号名>", "meaning": "Program received signal 后的 SIG 开头名称" },
+      { "token": "<#0函数>", "meaning": "backtrace 第 0 帧中的函数名称" },
+      { "token": "<非法目标地址>", "meaning": "frame 0 中 print/x invalid_address 显示的地址" }
+    ],
+    "feedback": {
+      "empty": "还没有提供崩溃定位证据。",
+      "incorrect": "重新重放固定输入，分开核对信号、当前函数和非法目标地址。",
+      "success": "锁定 GDB 已用固定 stdin 重放并确认完整崩溃证据链。"
+    }
+  },
+  "completionSummary": {
+    "solved": "用固定 stdin 重放稳定复现了 SIGSEGV，并从指令、非法地址和调用栈定位了原因。",
+    "mastered": ["输入重定向", "SIGSEGV", "x/i $eip", "崩溃 backtrace", "非法访问地址"],
+    "next": "外部静态逆向章会从文件本身寻找同一类函数和控制流事实，再与这里的动态证据互相校验。"
+  }
+}

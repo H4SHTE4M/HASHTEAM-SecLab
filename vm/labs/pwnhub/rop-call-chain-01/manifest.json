@@ -1,0 +1,125 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "rop-basics",
+  "labId": "rop-call-chain-01",
+  "title": "ret 链接的三个函数",
+  "summary": "用 ret 依次链接 step_one、step_two、finish 三个固定函数，观察阶段状态跨函数传递。",
+  "goals": ["解释每个函数返回后控制权如何落入下一个栈槽", "按调用顺序排列三个符号地址", "通过真实 stdin 重放无害阶段目标"],
+  "prerequisites": ["能够构造双 gadget 寄存器链", "能够用 nm 读取固定 ELF 符号地址"],
+  "kind": "pwn",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 30, "max": 60 },
+  "unlockAfter": ["rop-register-chain-01"],
+  "artifacts": [{
+    "path": "/opt/pwnhub/labs/rop-call-chain-01/rop-call-chain",
+    "architecture": "i386",
+    "sha256": "4c07a9d5ffe1440ce43423780ab2b94744e9fd044bb8d60a4cf86201154e69eb",
+    "purpose": "固定、离线的三函数 ret 调用链样本",
+    "downloadable": true
+  }],
+  "concepts": [
+    { "id": "ret-chained-calls", "term": "ret 链接的调用链", "explanation": "每个函数结束时用 ret 从栈顶取下一个地址；把函数地址按顺序放进栈槽，就能连续调用多个函数。" },
+    { "id": "chained-stage-state", "term": "跨函数阶段状态", "explanation": "step_one 先写入阶段状态，step_two 检查后再推进，finish 最终验收；链条顺序决定状态是否到达目标。" },
+    { "id": "symbol-address-chain", "term": "符号地址链", "explanation": "nm 提供 step_one、step_two、finish 的固定地址，链条只需按调用顺序排列这些地址。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "concept",
+      "title": "把三个函数排成链",
+      "objective": "理解每个 ret 怎样把控制权交给下一个函数",
+      "instruction": "vulnerable 的 ret 弹出 step_one；step_one 执行后自己的 ret 弹出 step_two；step_two 的 ret 再弹出 finish。每个栈槽都是下一个函数的固定地址。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [{ "id": "ret-chained-calls", "term": "ret 链接的调用链", "explanation": "每个函数结束时用 ret 从栈顶取下一个地址；把函数地址按顺序放进栈槽，就能连续调用多个函数。" }],
+      "uses": ["ret-chained-calls"],
+      "evidence": "observation",
+      "tool": "gdb",
+      "initialTab": "stack",
+      "workbench": { "stack": { "entries": [
+        { "address": 134529424, "value": 134516768, "label": "保存返回地址 · step_one", "kind": "payload" },
+        { "address": 134529428, "value": 134516784, "label": "step_one 的 ret · step_two", "kind": "payload" },
+        { "address": 134529432, "value": 134516810, "label": "step_two 的 ret · finish", "kind": "payload" }
+      ] } }
+    },
+    {
+      "id": 2,
+      "type": "prediction",
+      "title": "预测 step_two 之后的控制权",
+      "objective": "理解阶段状态按链条顺序推进",
+      "instruction": "step_one 写入阶段 1、step_two 把它推进到阶段 2 之后，step_two 的 ret 会进入哪个函数？",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [{ "id": "chained-stage-state", "term": "跨函数阶段状态", "explanation": "step_one 先写入阶段状态，step_two 检查后再推进，finish 最终验收；链条顺序决定状态是否到达目标。" }],
+      "uses": ["ret-chained-calls", "chained-stage-state"],
+      "evidence": "prediction",
+      "tool": "gdb",
+      "question": {
+        "prompt": "step_two 返回后，控制权会交给谁？",
+        "choices": [
+          { "id": "finish", "label": "栈上紧接其后的 finish 地址" },
+          { "id": "step-one", "label": "重新回到 step_one" },
+          { "id": "exit", "label": "直接退出进程" }
+        ],
+        "answer": "finish",
+        "success": "预测已记录：每个普通函数返回时都从栈顶取下一个地址，finish 是链条终点。"
+      }
+    },
+    {
+      "id": 3,
+      "type": "payload-builder",
+      "title": "组装三函数链",
+      "objective": "把三个符号地址写成确定性字节",
+      "instruction": "使用 padding 68、step_one 0x08049020、step_two 0x08049030 和 finish 0x0804904a。",
+      "completion": "confirm",
+      "allowRun": false,
+      "introduces": [{ "id": "symbol-address-chain", "term": "符号地址链", "explanation": "nm 提供 step_one、step_two、finish 的固定地址，链条只需按调用顺序排列这些地址。" }],
+      "uses": ["ret-chained-calls", "chained-stage-state", "symbol-address-chain"],
+      "evidence": "payload-replay",
+      "payload": {
+        "outputPath": "rop-call-chain-01/payload.bin",
+        "maxBytes": 512,
+        "segments": [
+          { "id": "padding", "label": "padding", "kind": "padding", "byte": 65, "length": 68 },
+          { "id": "step-one", "label": "step_one", "kind": "p32", "value": "0x08049020" },
+          { "id": "step-two", "label": "step_two", "kind": "p32", "value": "0x08049030" },
+          { "id": "finish", "label": "finish", "kind": "p32", "value": "0x0804904a" }
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "type": "terminal",
+      "title": "真实重放三函数链",
+      "objective": "让官方 ELF 验证阶段状态按顺序到达目标",
+      "instruction": "把 payload.bin 写入实验目录后运行 check；判题重放真实 ELF，只接受完整无害完成标记。",
+      "completion": "confirm",
+      "allowRun": false,
+      "evidence": "payload-replay",
+      "tool": "shell"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "先核对三个函数的调用顺序，再逐个解释 ret 取走哪个栈槽。" },
+    { "level": 2, "kind": "tool", "text": "用 nm -n 读取三个符号地址，再用 GDB 的 x/4wx $esp 复核链条槽位。" },
+    { "level": 3, "kind": "structure", "text": "payload = padding + p32(step_one) + p32(step_two) + p32(finish)。" }
+  ],
+  "verification": {
+    "type": "payload-replay",
+    "usage": "check",
+    "instruction": "把三函数链 payload.bin 放入指定目录后运行 check。",
+    "placeholders": [],
+    "feedback": {
+      "empty": "还没有 payload.bin。",
+      "incorrect": "阶段状态没有按顺序到达目标，请核对函数顺序与地址槽。",
+      "success": "真实 ELF 重放确认了 step_one → step_two → finish 的调用链。"
+    }
+  },
+  "completionSummary": {
+    "solved": "通过真实重放验证了 ret 依次链接三个函数并让阶段状态到达目标。",
+    "mastered": ["ret 调用链", "跨函数阶段状态", "符号地址排序"],
+    "next": "基础 ROP 章到此结束；复习时可用原生 GDB 逐槽复盘每条链的栈消耗。"
+  }
+}

@@ -1,0 +1,24 @@
+#!/bin/sh
+set -eu
+
+[ "$#" -eq 1 ] || { echo '用法：p32 <0x十六进制或十进制整数>' >&2; exit 2; }
+value=$1
+case "$value" in
+    0x[0-9a-fA-F]*)
+        hex=${value#0x}
+        [ -n "$hex" ] && [ "${#hex}" -le 8 ] || { echo '数值必须在 0 到 0xffffffff 之间。' >&2; exit 2; }
+        case "$hex" in *[!0-9a-fA-F]*) echo '十六进制数值格式不正确。' >&2; exit 2 ;; esac
+        hex="$(printf '%08s' "$hex" | tr ' ' 0 | tr 'A-F' 'a-f')"
+        ;;
+    *[!0-9]*|'') echo '数值必须是十进制或 0x 开头的十六进制整数。' >&2; exit 2 ;;
+    *)
+        [ "${#value}" -le 10 ] || { echo '数值必须在 0 到 0xffffffff 之间。' >&2; exit 2; }
+        hex="$(awk -v value="$value" 'BEGIN {
+            if (value + 0 > 4294967295) exit 2
+            for (i = 0; i < 4; i++) { byte[i] = value % 256; value = int(value / 256) }
+            printf "%02x%02x%02x%02x", byte[3], byte[2], byte[1], byte[0]
+        }')" || { echo '数值必须在 0 到 0xffffffff 之间。' >&2; exit 2; }
+        ;;
+esac
+
+printf '%s' "$hex" | sed 's/^\(..\)\(..\)\(..\)\(..\)$/\4\3\2\1/' | xxd -r -p
