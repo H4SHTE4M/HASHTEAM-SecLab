@@ -85,9 +85,12 @@ pnpm test:vm
 echo "==> 8/11 离线 i386 binary profile smoke test"
 pnpm test:binary-profile
 
-echo "==> 9/11 部署锁租约与后端部署脚本检查"
+echo "==> 9/11 部署租约、发布脚本与后端运维检查"
 bash scripts/test-deploy-lock.sh
+bash scripts/test-deploy-release.sh
 bash scripts/test-backend-ops.sh
+bash -n scripts/deploy-release.sh
+bash -n scripts/verify-edgeone-production.sh
 bash -n backend/deploy.sh
 bash -n backend/set-admin-password.sh
 
