@@ -207,6 +207,8 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
           log('protocol', `忽略未通过验签的 level-result（第 ${message.level} 关）`, 'warn')
           break
         }
+        // 每次验证通过的 check 都计入正确率（与首次通关统计独立，不去重）
+        telemetry.trackCheckResult(message.level, true)
         const mode = getMode()
         const requiredSteps = getLevel(message.level)?.steps.map((step) => step.id) ?? []
         const completedSteps = new Set(progress.completedStepsFor(message.level))
@@ -247,10 +249,15 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
       case 'progress':
         // 预留：细粒度进度消息
         break
-      case 'error':
+      case 'error': {
+        // htcheck 对未通过的 check 发 "level N check failed"；计入正确率分母。
+        // 该消息未签名，与 telemetry-command 同属尽力而为统计（威胁模型已接受）。
+        const failed = /^level (\d+) check failed$/.exec(message.message)
+        if (failed !== null) telemetry.trackCheckResult(Number.parseInt(failed[1], 10), false)
         // 虚拟机内检查失败等信息已在终端中给出人类可读反馈
         console.warn('[hashteam] vm error:', message.message)
         break
+      }
     }
   }
 

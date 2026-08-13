@@ -520,6 +520,7 @@ table.data tbody tr:hover {
   height: 200px;
   display: block;
   overflow: visible;
+  cursor: crosshair;
 }
 
 .ts-line {
@@ -561,4 +562,63 @@ table.data tbody tr:hover {
   stroke: var(--border);
   stroke-width: 0.5;
   opacity: 0.4;
+}
+/* ---- 图表悬停提示 ---- */
+
+.ts-col:hover {
+  background: var(--panel-2);
+}
+
+.ts-hover-line {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  opacity: 0.5;
+}
+
+.ts-hover-capture {
+  pointer-events: all;
+}
+
+.ts-line-dot.ts-dot-active {
+  r: 4.5;
+  stroke: var(--bg);
+  stroke-width: 1.5;
+}
+
+.chart-tooltip {
+  position: fixed;
+  z-index: 100;
+  pointer-events: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.7;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+.chart-tooltip-title {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.chart-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.chart-tooltip-row .ts-legend-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+}
+
+.chart-tooltip-value {
+  margin-left: 10px;
+  font-family: var(--mono);
+  text-align: right;
 }

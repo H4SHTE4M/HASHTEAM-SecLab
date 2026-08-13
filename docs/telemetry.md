@@ -53,18 +53,18 @@ Vite 构建时将 `edge-functions/` 原样输出到 `dist/edge-functions/`，`ve
   "events": [
     { "type": "command", "command": "find" },
     { "type": "level_complete", "level": 5, "path": "challenge" },
+    { "type": "check_result", "level": 5, "passed": false },
     { "type": "hint", "level": 3 },
     { "type": "reset", "level": 2 }
   ]
 }
 ```
 
-### 事件类型
-
 | type             | 维度                     | 说明                         |
 |------------------|--------------------------|------------------------------|
 | `command`        | `command` (allowlist)    | 某命令实际执行一次           |
 | `level_complete` | `level`, `path`          | 关卡首次完成（guided/mixed/challenge） |
+| `check_result`   | `level`, `passed`        | 每次 check 评分结果（通过/未通过，不去重） |
 | `hint`           | `level`                  | 提示使用                     |
 | `reset`          | `level`                  | 关卡重置                     |
 
@@ -78,8 +78,6 @@ Vite 构建时将 `edge-functions/` 原样输出到 `dist/edge-functions/`，`ve
 aggregates(module, metric, dimension, count)
 ```
 
-示例数据：
-
 ```
 seclab | command       | find                 | 271
 seclab | command       | grep                 | 184
@@ -87,6 +85,8 @@ seclab | complete      | level-5              | 42
 seclab | complete_path | level-5:challenge    | 18
 seclab | complete_path | level-5:guided       | 15
 seclab | complete_path | level-5:mixed        | 9
+seclab | check_pass    | level-5              | 45
+seclab | check_fail    | level-5              | 9
 seclab | hint          | level-3              | 67
 seclab | reset         | level-2              | 23
 ```
@@ -140,6 +140,7 @@ find grep chmod ls cat cd pwd whoami check help su
 
 - 受支持命令的执行次数（命令名，不含参数）
 - 每关成功完成次数（含通关路径 guided/mixed/challenge）
+- 每次 check 的评分结果（通过/未通过，按关聚合为正确率）
 - 提示使用次数
 - 关卡重置次数
 - 事件时间序列（按天聚合的 session 创建数 + 各事件类型计数，保留 90 天明细）
@@ -193,6 +194,15 @@ find() { command find "$@"; local rc=$?; _ht_telemetry_emit find; return $rc; }
 - `progress.complete()` 幂等（防重复 check / 协议重放）
 - 后端每 session 每 level 最多一次 `level_complete`（防 session 内重复）
 - 页面刷新后 session 重建，但前端 `complete()` 已记录该关完成，不会重复触发
+
+## check 正确率统计
+
+每次 check 执行都产生一个 `check_result` 事件（不去重），正确率 = `check_pass / (check_pass + check_fail)`：
+
+- **通过**：htcheck 签发的 `level-result` + `status: passed` 通过前端 HMAC 验签后上报 `check_result { passed: true }`，可信（签名不可伪造）
+- **未通过**：htcheck 对未通过的 check 发出 `error` 协议消息（`level N check failed`），前端识别后上报 `check_result { passed: false }`。该消息未签名，与 `telemetry-command` 同属尽力而为统计——学生可从 VM 伪造失败事件压低正确率，但无法伪造通过（威胁模型已接受此类低价值污染）
+
+聚合维度：`check_pass` / `check_fail` metric，dimension `level-N`。数据看板新增「check 正确率」面板与总览卡片。
 
 ## 发送与可靠性
 

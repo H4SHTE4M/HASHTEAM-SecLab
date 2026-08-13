@@ -228,6 +228,54 @@ function renderSessionsTable(recent) {
  * 渲染近 30 天活动趋势堆叠柱状图。
  * timeseries: [{ day, session_create, command, level_complete, hint, reset }]
  */
+// ---- 悬停提示 ----
+
+let tooltipEl = null
+
+/** 页面级单一悬停提示元素（fixed 定位，跟随鼠标） */
+function getTooltip() {
+  if (!tooltipEl) {
+    tooltipEl = document.createElement('div')
+    tooltipEl.className = 'chart-tooltip hidden'
+    document.body.appendChild(tooltipEl)
+  }
+  return tooltipEl
+}
+
+/** 提示行：色点 + 名称 + 数值 */
+function tooltipRow(dotClass, label, value) {
+  const row = document.createElement('div')
+  row.className = 'chart-tooltip-row'
+  const dot = document.createElement('span')
+  dot.className = `ts-legend-dot ${dotClass}`
+  const name = document.createElement('span')
+  name.textContent = label
+  const val = document.createElement('span')
+  val.className = 'chart-tooltip-value'
+  val.textContent = fmtNum(value)
+  row.append(dot, name, val)
+  return row
+}
+
+/** 在鼠标附近显示提示；接近右/下边缘时翻转方向避免出屏 */
+function showTooltip(clientX, clientY, build) {
+  const el = getTooltip()
+  el.textContent = ''
+  build(el)
+  el.classList.remove('hidden')
+  const rect = el.getBoundingClientRect()
+  let x = clientX + 14
+  let y = clientY + 14
+  if (x + rect.width > window.innerWidth - 8) x = clientX - rect.width - 14
+  if (y + rect.height > window.innerHeight - 8) y = clientY - rect.height - 14
+  el.style.left = `${Math.max(8, x)}px`
+  el.style.top = `${Math.max(8, y)}px`
+}
+
+function hideTooltip() {
+  if (tooltipEl) tooltipEl.classList.add('hidden')
+}
+
 function renderTimeseries(timeseries) {
   const container = els.timeseriesChart
   if (!container) return
@@ -272,7 +320,20 @@ function renderTimeseries(timeseries) {
     const d = timeseries[i]
     const col = document.createElement('div')
     col.className = 'ts-col'
-    col.title = `${new Date(d.day).toLocaleDateString('zh-CN')} 会话${d.session_create} 命令${d.command} 通关${d.level_complete} 提示${d.hint} 重置${d.reset}`
+    col.addEventListener('mousemove', (e) => {
+      showTooltip(e.clientX, e.clientY, (el) => {
+        const title = document.createElement('div')
+        title.className = 'chart-tooltip-title'
+        title.textContent = new Date(d.day).toLocaleDateString('zh-CN')
+        el.appendChild(title)
+        el.appendChild(tooltipRow('ts-seg-session', '会话', d.session_create))
+        el.appendChild(tooltipRow('ts-seg-command', '命令', d.command))
+        el.appendChild(tooltipRow('ts-seg-complete', '通关', d.level_complete))
+        el.appendChild(tooltipRow('ts-seg-hint', '提示', d.hint))
+        el.appendChild(tooltipRow('ts-seg-reset', '重置', d.reset))
+      })
+    })
+    col.addEventListener('mouseleave', hideTooltip)
 
     const segs = [
       ['session', d.session_create],
@@ -389,6 +450,15 @@ function renderHourly(hourly) {
   commandLine.setAttribute('points', pts('command'))
   svg.appendChild(commandLine)
 
+  // 悬停参考线（初始隐藏）
+  const hoverLine = document.createElementNS('http://www.w3.org/2000/svg', 'line')
+  hoverLine.setAttribute('class', 'ts-hover-line hidden')
+  hoverLine.setAttribute('y1', padT)
+  hoverLine.setAttribute('y2', padT + plotH)
+  svg.appendChild(hoverLine)
+
+  // 数据点（按索引保存引用，悬停时高亮）
+  const dots = hourly.map(() => ({ session: null, command: null }))
   for (let i = 0; i < n; i++) {
     for (const [key, cls] of [['session_create', 'ts-line-dot-session'], ['command', 'ts-line-dot-command']]) {
       const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
@@ -396,8 +466,58 @@ function renderHourly(hourly) {
       dot.setAttribute('cx', xOf(i))
       dot.setAttribute('cy', yOf(hourly[i][key]))
       svg.appendChild(dot)
+      dots[i][key === 'session_create' ? 'session' : 'command'] = dot
     }
   }
+
+  // 透明捕获层 + 悬停交互：mousemove 定位最近数据点并显示提示
+  let hoverIdx = -1
+  function setHover(idx) {
+    if (idx === hoverIdx) return
+    if (hoverIdx >= 0) {
+      dots[hoverIdx].session.classList.remove('ts-dot-active')
+      dots[hoverIdx].command.classList.remove('ts-dot-active')
+    }
+    hoverIdx = idx
+    if (idx < 0) {
+      hoverLine.classList.add('hidden')
+      return
+    }
+    hoverLine.setAttribute('x1', xOf(idx))
+    hoverLine.setAttribute('x2', xOf(idx))
+    hoverLine.classList.remove('hidden')
+    dots[idx].session.classList.add('ts-dot-active')
+    dots[idx].command.classList.add('ts-dot-active')
+  }
+
+  const capture = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+  capture.setAttribute('class', 'ts-hover-capture')
+  capture.setAttribute('x', 0)
+  capture.setAttribute('y', 0)
+  capture.setAttribute('width', W)
+  capture.setAttribute('height', H)
+  capture.setAttribute('fill', 'transparent')
+  svg.appendChild(capture)
+
+  svg.addEventListener('mousemove', (e) => {
+    const rect = svg.getBoundingClientRect()
+    const xView = ((e.clientX - rect.left) / Math.max(rect.width, 1)) * W
+    const idx = Math.min(n - 1, Math.max(0, Math.round((xView - padL) / (xStep || 1))))
+    setHover(idx)
+    const d = hourly[idx]
+    showTooltip(e.clientX, e.clientY, (el) => {
+      const title = document.createElement('div')
+      title.className = 'chart-tooltip-title'
+      title.textContent = new Date(d.hour).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+      el.appendChild(title)
+      el.appendChild(tooltipRow('ts-seg-session', '会话', d.session_create))
+      el.appendChild(tooltipRow('ts-seg-command', '命令', d.command))
+    })
+  })
+  svg.addEventListener('mouseleave', () => {
+    setHover(-1)
+    hideTooltip()
+  })
 
   container.appendChild(svg)
 
