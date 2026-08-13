@@ -6,7 +6,7 @@
 #   sudo bash deploy.sh
 #
 # - Node.js >= 20 与 pnpm 10 已安装
-# - 本脚本与 server.js、package.json、pnpm-lock.yaml 位于同一目录
+# - 从完整仓库执行；脚本需要同级 backend 文件与 ../vm/profiles/production.json
 set -euo pipefail
 
 INSTALL_DIR="/opt/hashteam-telemetry"
@@ -30,6 +30,13 @@ mkdir -p "$INSTALL_DIR"
 cp "$SCRIPT_DIR/server.js" "$INSTALL_DIR/"
 cp "$SCRIPT_DIR/package.json" "$SCRIPT_DIR/pnpm-lock.yaml" "$INSTALL_DIR/"
 cp "$SCRIPT_DIR/set-admin-password.sh" "$INSTALL_DIR/"
+# 遥测 activity 白名单与前端/rootfs 共用同一 production profile。
+PROFILE_FILE="$SCRIPT_DIR/../vm/profiles/production.json"
+[ -f "$PROFILE_FILE" ] || {
+    echo "ERROR: 缺少 $PROFILE_FILE；请从完整仓库 checkout 执行部署" >&2
+    exit 1
+}
+cp "$PROFILE_FILE" "$INSTALL_DIR/production.json"
 # Dashboard 静态资源（公开数据页 + 管理页）
 rm -rf "$INSTALL_DIR/public"
 cp -r "$SCRIPT_DIR/public" "$INSTALL_DIR/public"

@@ -15,9 +15,13 @@ const els = {
   loginBtn: document.getElementById('login-btn'),
   loginError: document.getElementById('login-error'),
   logoutBtn: document.getElementById('logout-btn'),
+  moduleTabs: document.getElementById('admin-module-tabs'),
   serviceCards: document.getElementById('service-cards'),
   commandTable: document.getElementById('command-table'),
   matrixTable: document.getElementById('matrix-table'),
+  matrixHeading: document.getElementById('matrix-heading'),
+  matrixActivityHeading: document.getElementById('matrix-activity-heading'),
+  hintActivityHeading: document.getElementById('hint-activity-heading'),
   hintResetTable: document.getElementById('hint-reset-table'),
   sessionsTable: document.getElementById('sessions-table'),
   updatedAt: document.getElementById('updated-at'),
@@ -25,6 +29,8 @@ const els = {
   hourlyChart: document.getElementById('hourly-chart'),
   refreshHint: document.getElementById('refresh-hint'),
 }
+
+let activeModule = 'seclab'
 
 function fmtNum(n) {
   return n.toLocaleString('zh-CN')
@@ -57,6 +63,24 @@ function levelSortKey(dimension) {
 function metricEntries(metric) {
   if (!metric || typeof metric !== 'object') return []
   return Object.entries(metric).filter(([, v]) => typeof v === 'number')
+}
+
+function sumMetric(metric) {
+  return metricEntries(metric).reduce((sum, [, count]) => sum + count, 0)
+}
+
+const VM_BOOT_DURATION_ORDER = ['<3s', '3-5s', '5-10s', '10-20s', '>=20s']
+
+function percentileBucket(metric, percentile) {
+  const total = sumMetric(metric)
+  if (total === 0) return '—'
+  const target = Math.ceil(total * percentile)
+  let cumulative = 0
+  for (const bucket of VM_BOOT_DURATION_ORDER) {
+    cumulative += typeof metric?.[bucket] === 'number' ? metric[bucket] : 0
+    if (cumulative >= target) return bucket
+  }
+  return '—'
 }
 
 function td(text, isNum) {
@@ -106,17 +130,47 @@ function showAdmin() {
 
 // ---- 渲染 ----
 
-function renderServiceCards(data) {
+function renderServiceCards(data, moduleStats, moduleId) {
   const svc = data.service || {}
   const sessions = data.sessions || {}
   const completions = data.completions || {}
+  const activityLabel = moduleId === 'pwnhub' ? '实验' : '关卡'
+  const checkPass = metricEntries(moduleStats.check_pass).reduce((sum, [, count]) => sum + count, 0)
+  const checkFail = metricEntries(moduleStats.check_fail).reduce((sum, [, count]) => sum + count, 0)
+  const checkTotal = checkPass + checkFail
   const cards = [
     { label: '运行时长', value: fmtUptime(svc.uptimeSec || 0), sub: `启动于 ${svc.startedAt ? fmtTime(svc.startedAt) : '未知'}` },
-    { label: 'Node 版本', value: svc.nodeVersion || '-', sub: `模块:${(svc.modules || []).join(', ') || '-'}` },
+    { label: 'Node 版本', value: svc.nodeVersion || '-', sub: `当前模块:${moduleId}` },
     { label: '数据库大小', value: fmtBytes(svc.dbSizeBytes || 0), sub: 'SQLite WAL' },
-    { label: '活跃 / 累计会话', value: `${fmtNum(sessions.active || 0)} / ${fmtNum(sessions.total || 0)}`, sub: '匿名 session,30 分钟过期' },
-    { label: '通关记录', value: fmtNum(completions.total || 0), sub: `独立会话 ${fmtNum(completions.uniqueTokens || 0)} 个` },
+    { label: '活跃 / 累计会话', value: `${fmtNum(sessions.active || 0)} / ${fmtNum(sessions.total || 0)}`, sub: `${moduleId} 匿名 session` },
+    { label: `${activityLabel}完成记录`, value: fmtNum(completions.total || 0), sub: `独立会话 ${fmtNum(completions.uniqueTokens || 0)} 个` },
+    { label: 'check 正确率', value: checkTotal > 0 ? `${((checkPass / checkTotal) * 100).toFixed(1)}%` : '—', sub: `${fmtNum(checkPass)} 通过 / ${fmtNum(checkTotal)} 次` },
   ]
+  if (moduleId === 'pwnhub') {
+    const outcomes = moduleStats.vm_boot_outcome || {}
+    const cache = moduleStats.vm_boot_cache || {}
+    const bootTotal = sumMetric(outcomes)
+    const ready = typeof outcomes.ready === 'number' ? outcomes.ready : 0
+    const failed = Math.max(0, bootTotal - ready)
+    const p75 = percentileBucket(moduleStats.vm_boot_duration, 0.75)
+    cards.push(
+      {
+        label: 'VM 启动成功率',
+        value: bootTotal > 0 ? `${((ready / bootTotal) * 100).toFixed(1)}%` : '—',
+        sub: `${fmtNum(ready)} 成功 / ${fmtNum(failed)} 失败${bootTotal > 0 && failed / bootTotal > 0.02 ? ' · 超过 2% 阈值' : ''}`,
+      },
+      {
+        label: 'VM 启动 p75',
+        value: p75,
+        sub: p75 === '10-20s' || p75 === '>=20s' ? '已进入拆分评估区间' : '按匿名耗时区间估算',
+      },
+      {
+        label: 'VM 缓存样本',
+        value: `${fmtNum(cache.cold || 0)} / ${fmtNum(cache.warm || 0)}`,
+        sub: `冷 / 热；未知 ${fmtNum(cache.unknown || 0)}`,
+      },
+    )
+  }
   els.serviceCards.textContent = ''
   for (const { label, value, sub } of cards) {
     const card = document.createElement('div')
@@ -153,25 +207,27 @@ function renderCommandTable(commandMetric) {
 }
 
 function renderMatrixTable(completeMetric, completePathMetric) {
-  // 汇总所有出现过的 level
-  const levels = new Set()
-  for (const [dim] of metricEntries(completeMetric)) levels.add(dim)
-  for (const [dim] of metricEntries(completePathMetric)) {
-    const m = /^(level-\d+):/.exec(dim)
-    if (m) levels.add(m[1])
+  const activities = new Set()
+  for (const [dimension] of metricEntries(completeMetric)) activities.add(dimension)
+  for (const [dimension] of metricEntries(completePathMetric)) {
+    const separator = dimension.lastIndexOf(':')
+    if (separator > 0) activities.add(dimension.slice(0, separator))
   }
-  const sorted = [...levels].sort((a, b) => levelSortKey(a) - levelSortKey(b))
+  const sorted = [...activities].sort((a, b) => {
+    const levelDelta = levelSortKey(a) - levelSortKey(b)
+    return levelDelta === 0 ? a.localeCompare(b) : levelDelta
+  })
 
   els.matrixTable.textContent = ''
   if (sorted.length === 0) return emptyRow(5, els.matrixTable)
 
-  for (const level of sorted) {
-    const guided = (completePathMetric || {})[`${level}:guided`] || 0
-    const mixed = (completePathMetric || {})[`${level}:mixed`] || 0
-    const challenge = (completePathMetric || {})[`${level}:challenge`] || 0
+  for (const activity of sorted) {
+    const guided = (completePathMetric || {})[`${activity}:guided`] || 0
+    const mixed = (completePathMetric || {})[`${activity}:mixed`] || 0
+    const challenge = (completePathMetric || {})[`${activity}:challenge`] || 0
     const row = document.createElement('tr')
     row.append(
-      tdMono(level),
+      tdMono(activity),
       td(fmtNum(guided), true),
       td(fmtNum(mixed), true),
       td(fmtNum(challenge), true),
@@ -182,20 +238,23 @@ function renderMatrixTable(completeMetric, completePathMetric) {
 }
 
 function renderHintResetTable(hintMetric, resetMetric) {
-  const levels = new Set()
-  for (const [dim] of metricEntries(hintMetric)) levels.add(dim)
-  for (const [dim] of metricEntries(resetMetric)) levels.add(dim)
-  const sorted = [...levels].sort((a, b) => levelSortKey(a) - levelSortKey(b))
+  const activities = new Set()
+  for (const [dimension] of metricEntries(hintMetric)) activities.add(dimension)
+  for (const [dimension] of metricEntries(resetMetric)) activities.add(dimension)
+  const sorted = [...activities].sort((a, b) => {
+    const levelDelta = levelSortKey(a) - levelSortKey(b)
+    return levelDelta === 0 ? a.localeCompare(b) : levelDelta
+  })
 
   els.hintResetTable.textContent = ''
   if (sorted.length === 0) return emptyRow(3, els.hintResetTable)
 
-  for (const level of sorted) {
+  for (const activity of sorted) {
     const row = document.createElement('tr')
     row.append(
-      tdMono(level),
-      td(fmtNum((hintMetric || {})[level] || 0), true),
-      td(fmtNum((resetMetric || {})[level] || 0), true),
+      tdMono(activity),
+      td(fmtNum((hintMetric || {})[activity] || 0), true),
+      td(fmtNum((resetMetric || {})[activity] || 0), true),
     )
     els.hintResetTable.appendChild(row)
   }
@@ -537,14 +596,18 @@ function renderHourly(hourly) {
 
 function render(data) {
   const modules = (data && typeof data.modules === 'object' && data.modules) || {}
-  const seclab = modules.seclab || {}
-  renderServiceCards(data)
-  renderCommandTable(seclab.command)
-  renderMatrixTable(seclab.complete, seclab.complete_path)
-  renderHintResetTable(seclab.hint, seclab.reset)
+  const moduleStats = modules[activeModule] || {}
+  const activityLabel = activeModule === 'pwnhub' ? '实验' : '关卡'
+  renderServiceCards(data, moduleStats, activeModule)
+  renderCommandTable(moduleStats.command)
+  renderMatrixTable(moduleStats.complete, moduleStats.complete_path)
+  renderHintResetTable(moduleStats.hint, moduleStats.reset)
   renderSessionsTable(data.sessions && data.sessions.recent)
   renderTimeseries(data.timeseries)
   renderHourly(data.hourly)
+  els.matrixHeading.textContent = `${activityLabel}完成矩阵`
+  els.matrixActivityHeading.textContent = activityLabel
+  els.hintActivityHeading.textContent = activityLabel
   els.updatedAt.textContent = `数据更新时间:${fmtTime(data.generatedAt || Date.now())}`
 }
 
@@ -554,7 +617,9 @@ let refreshTimer = null
 
 async function loadOverview() {
   try {
-    const response = await fetch('../api/admin/overview', { headers: { Accept: 'application/json' } })
+    const response = await fetch(`../api/admin/overview?module=${encodeURIComponent(activeModule)}`, {
+      headers: { Accept: 'application/json' },
+    })
     if (response.status === 401) {
       showLogin()
       if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null }
@@ -625,6 +690,17 @@ els.passwordInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') login()
 })
 els.logoutBtn.addEventListener('click', logout)
+if (els.moduleTabs) {
+  els.moduleTabs.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-module]')
+    if (!button || button.dataset.module === activeModule) return
+    activeModule = button.dataset.module
+    for (const tab of els.moduleTabs.querySelectorAll('[data-module]')) {
+      tab.classList.toggle('active', tab.dataset.module === activeModule)
+    }
+    void loadOverview()
+  })
+}
 
 // 初始:尝试加载 overview,401 时自动落到登录视图
 loadOverview()

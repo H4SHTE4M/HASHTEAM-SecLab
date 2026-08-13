@@ -21,6 +21,8 @@ Linux 虚拟机、引导/挑战模式和本地进度存档。
   两种模式共用同一套环境与最终状态判题，并可随时无损切换。
 - 虚拟机内的检查脚本通过串口协议（`@@HASHTEAM:{...}`）与前端通信，
   前端据此更新任务面板、提示系统和进度存档（LocalStorage）。
+- 两个 Lab 都具备模块隔离的阻断异常检测：进度证据损坏、评分密钥缺失或
+  WebCrypto 不可用时，当前工作台提供重置/重启、挑战模式出口和 v2 现场日志下载。
 - 传达的理念：**CTF 是入门手段，不是终点**——结束页展示实验室在
   漏洞挖掘、渗透攻防、安全开发、校园安全运维四个方向的真实工作。
 
@@ -187,9 +189,10 @@ pnpm verify:dist        # 校验 VM、companion、发布实验下载物与法律
 `./vm/build.sh --skip-kernel` 重打包。
 
 PwnHub 实验位于 `vm/labs/pwnhub/<labId>/`，使用稳定字符串 `labId` 和
-`manifest.json`。`vm/profiles/production.json` 是唯一生产发布清单；只有其中
-列出的实验会进入 initramfs、前端课程和 `dist/artifacts/`。修改二进制实验时还需
-运行 `pnpm validate:binary-profile` 与 `pnpm test:binary-profile`。
+`manifest.json`。`vm/profiles/production.json` 是前端课程、production
+initramfs、下载产物和 telemetry backend activity 白名单的唯一发布清单。
+修改二进制实验时还需运行 `pnpm validate:binary-profile` 与
+`pnpm test:binary-profile`。
 
 完整字段说明、最小模板和脚本约定见
 [关卡开发指南](docs/challenges.md)。

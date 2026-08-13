@@ -1,126 +1,201 @@
-import type { LabMode, LabProgress, LevelDef } from '../types/lab'
+import type { CourseLabDef, LabMode, LabProgress, LevelDef } from '../types/lab'
+import type { ModuleId } from '../telemetry/schema'
+
+interface ManifestMismatch {
+  unknownStepIds: number[]
+  manifestStepCount: number
+}
+
+interface GuideAnomalyDetail {
+  guideStep: number
+  /** manifest 范围内缺失完成证据的步骤 id（有界，不含 manifest 外的 id） */
+  missingPrefixSteps: number[]
+  /** guide 越过 manifest 最后一步时为 true：缺失列表只覆盖 manifest 范围 */
+  truncated: boolean
+  /** 进度档与当前 manifest 不匹配（仅诊断，不单独触发弹窗） */
+  manifestMismatch?: ManifestMismatch
+}
 
 /**
  * 「阻断通关」类异常：进度档自相矛盾或判题密钥缺失，学生无法靠自己推进。
- * 检测到后由 anomaly-center 汇总，弹窗引导重置修复 + 下载日志反馈。
+ * 每条异常都携带 module，避免两个工作台共享 singleton 时串台。
  */
 export type BlockingAnomaly =
-  | {
-      kind: 'guide-ahead-of-evidence'
-      level: number
-      /** 进度档中的 guide 索引（0 基）；超出 manifest 范围时为原始值，配合 truncated 阅读 */
-      guideStep: number
-      /** manifest 范围内缺失完成证据的步骤 id（有界，不含 manifest 外的 id） */
-      missingPrefixSteps: number[]
-      /** guide 越过 manifest 最后一步时为 true：缺失列表只覆盖 manifest 范围 */
-      truncated: boolean
-      /** B 类线索：进度档与当前 manifest 不匹配（仅诊断，不单独触发弹窗） */
-      manifestMismatch?: { unknownStepIds: number[]; manifestStepCount: number }
-    }
-  | { kind: 'missing-session-key'; keyPresent: boolean }
-  | { kind: 'crypto-unavailable'; isSecureContext: boolean }
+  | ({ kind: 'guide-ahead-of-evidence'; module: 'seclab'; level: number } & GuideAnomalyDetail)
+  | ({ kind: 'lab-guide-ahead-of-evidence'; module: 'pwnhub'; labId: string } & GuideAnomalyDetail)
+  | { kind: 'missing-session-key'; module: ModuleId; keyPresent: boolean }
+  | { kind: 'crypto-unavailable'; module: ModuleId; isSecureContext: boolean }
 
-/** 不进弹窗、只写启动日志的进度档异常线索（如 B-only manifest 错配）。 */
+/** 不进弹窗、只写启动日志的进度档异常线索。 */
 export interface ProgressDiagnostic {
   kind: 'manifest-mismatch' | 'invalid-guide-step'
-  level: number
+  module: ModuleId
+  level?: number
+  labId?: string
   detail: string
 }
 
 export interface DetectInput {
   progress: LabProgress
   levels: readonly LevelDef[]
-  /** 当前学习模式；非 guided 时 A 类（步骤软锁）不阻断通关，不触发 */
+  mode: LabMode | null
+}
+
+export interface DetectLabInput {
+  progress: LabProgress
+  labs: readonly CourseLabDef[]
   mode: LabMode | null
 }
 
 export interface DetectResult {
-  /** 需要弹窗的阻断类异常；实现只产出 0 或 1 条（只检测 currentLevel） */
+  /** 实现只产出 0 或 1 条，只检测当前关卡或实验。 */
   blocking: BlockingAnomaly[]
-  /** 仅日志的诊断线索，保持本函数纯净，由接入层写 boot-logger */
   diagnostics: ProgressDiagnostic[]
 }
 
-/** unknownStepIds 诊断截断上限：手改档可能塞入大量 id，日志与报告都不需要全量 */
 const UNKNOWN_STEP_IDS_CAP = 20
 
-/**
- * 进度档阻断异常检测（纯函数）。
- *
- * 只看 currentLevel：completedLevels 被 isValidProgress 强制连续前缀，
- * currentLevel 即最小未完成关，也是 resetLevel 修复动作的目标关。
- * 不变量：正常 UI 流程恒有 guideSteps[level] <= completedSteps 覆盖的最长前缀
- * （推进门控要求当前步已留证据，且证据与 guide 同步持久化）；
- * guide 越过前缀 = 进度档曾被外部写坏，引导模式软锁。
- *
- * 数值防线：guideSteps 可能被人为塞入超大/非法值，
- * 所有遍历与数组构造都限制在 manifest 步骤范围内，绝不按不可信 guide 构造无界数组。
- */
-export function detectBlockingAnomalies(input: DetectInput): DetectResult {
-  const { progress, levels, mode } = input
-  const blocking: BlockingAnomaly[] = []
-  const diagnostics: ProgressDiagnostic[] = []
+interface GuideEvidence {
+  guideValid: boolean
+  rawGuide: number
+  guide: number
+  prefix: number
+  missingPrefixSteps: number[]
+  guideBeyondManifest: boolean
+  manifestMismatch?: ManifestMismatch
+}
 
-  const level = progress.currentLevel
-  // 全部通关后 currentLevel 本身也在 completedLevels 中，无可阻断
-  if (progress.completedLevels.includes(level)) return { blocking, diagnostics }
-  const levelDef = levels.find((item) => item.id === level)
-  if (levelDef === undefined) return { blocking, diagnostics }
-
-  const stepCount = levelDef.steps.length
-  const rawGuide = progress.guideSteps[level] ?? 0
+function inspectGuideEvidence(
+  rawGuide: number,
+  completed: readonly number[],
+  stepCount: number,
+): GuideEvidence {
   const guideValid = Number.isSafeInteger(rawGuide) && rawGuide >= 0
-  if (!guideValid) {
-    diagnostics.push({
-      kind: 'invalid-guide-step',
-      level,
-      detail: `第 ${level} 关 guideSteps 值非法（${String(rawGuide)}），按 0 处理`,
-    })
-  }
   const guide = guideValid ? rawGuide : 0
-
-  const completed = progress.completedSteps[level] ?? []
   const completedSet = new Set(completed)
-
-  // manifest 范围内的最长连续完成前缀（步骤 id 从 1 连续编号）
   let prefix = 0
   while (prefix < stepCount && completedSet.has(prefix + 1)) prefix += 1
 
-  // B 类线索：与当前 manifest 不匹配（manifest 更新遗留或手改档）
-  const unknownStepIds = completed.filter((id) => id > stepCount).slice(0, UNKNOWN_STEP_IDS_CAP)
-  const guideBeyondManifest = guideValid && guide > stepCount - 1
+  const unknownStepIds = completed
+    .filter((id) => id > stepCount)
+    .slice(0, UNKNOWN_STEP_IDS_CAP)
+  const guideBeyondManifest = guideValid && guide > Math.max(0, stepCount - 1)
   const manifestMismatch =
     unknownStepIds.length > 0 || guideBeyondManifest
       ? { unknownStepIds, manifestStepCount: stepCount }
       : undefined
+  const upperBound = Math.min(guide, stepCount)
+  const missingPrefixSteps: number[] = []
+  for (let id = prefix + 1; id <= upperBound; id += 1) {
+    if (!completedSet.has(id)) missingPrefixSteps.push(id)
+  }
+  return {
+    guideValid,
+    rawGuide,
+    guide,
+    prefix,
+    missingPrefixSteps,
+    guideBeyondManifest,
+    ...(manifestMismatch === undefined ? {} : { manifestMismatch }),
+  }
+}
 
-  // A 类判定：guide 越过完成前缀。挑战模式只凭 check 通关，不构成阻断。
-  if (mode === 'guided' && guide > prefix) {
-    // 缺失步只枚举 manifest 范围；(prefix, guide] 内的空洞
-    const upperBound = Math.min(guide, stepCount)
-    const missingPrefixSteps: number[] = []
-    for (let id = prefix + 1; id <= upperBound; id += 1) {
-      if (!completedSet.has(id)) missingPrefixSteps.push(id)
-    }
-    blocking.push({
-      kind: 'guide-ahead-of-evidence',
-      level,
-      guideStep: rawGuide,
-      missingPrefixSteps,
-      truncated: guideBeyondManifest,
-      ...(manifestMismatch === undefined ? {} : { manifestMismatch }),
-    })
-  } else if (manifestMismatch !== undefined) {
-    // B-only：学生可正常通关，只留日志线索
+/** SecLab 数字关卡异常检测。 */
+export function detectBlockingAnomalies(input: DetectInput): DetectResult {
+  const { progress, levels, mode } = input
+  const blocking: BlockingAnomaly[] = []
+  const diagnostics: ProgressDiagnostic[] = []
+  const level = progress.currentLevel
+  if (progress.completedLevels.includes(level)) return { blocking, diagnostics }
+  const levelDef = levels.find((item) => item.id === level)
+  if (levelDef === undefined) return { blocking, diagnostics }
+
+  const evidence = inspectGuideEvidence(
+    progress.guideSteps[level] ?? 0,
+    progress.completedSteps[level] ?? [],
+    levelDef.steps.length,
+  )
+  if (!evidence.guideValid) {
     diagnostics.push({
-      kind: 'manifest-mismatch',
+      kind: 'invalid-guide-step',
+      module: 'seclab',
       level,
-      detail:
-        `第 ${level} 关进度档与当前 manifest（${stepCount} 步）不匹配：` +
-        `超界步骤 id [${unknownStepIds.join(', ')}]` +
-        `${guideBeyondManifest ? `，guide 索引越界（${guide} > ${stepCount - 1}）` : ''}`,
+      detail: `第 ${level} 关 guideSteps 值非法（${String(evidence.rawGuide)}），按 0 处理`,
     })
   }
+  if (mode === 'guided' && evidence.guide > evidence.prefix) {
+    blocking.push({
+      kind: 'guide-ahead-of-evidence',
+      module: 'seclab',
+      level,
+      guideStep: evidence.rawGuide,
+      missingPrefixSteps: evidence.missingPrefixSteps,
+      truncated: evidence.guideBeyondManifest,
+      ...(evidence.manifestMismatch === undefined
+        ? {}
+        : { manifestMismatch: evidence.manifestMismatch }),
+    })
+  } else if (evidence.manifestMismatch !== undefined) {
+    const { unknownStepIds, manifestStepCount } = evidence.manifestMismatch
+    diagnostics.push({
+      kind: 'manifest-mismatch',
+      module: 'seclab',
+      level,
+      detail:
+        `第 ${level} 关进度档与当前 manifest（${manifestStepCount} 步）不匹配：` +
+        `超界步骤 id [${unknownStepIds.join(', ')}]` +
+        `${evidence.guideBeyondManifest ? `，guide 索引越界（${evidence.guide} > ${Math.max(0, manifestStepCount - 1)}）` : ''}`,
+    })
+  }
+  return { blocking, diagnostics }
+}
 
+/** PwnHub 稳定 labId 实验异常检测。 */
+export function detectLabBlockingAnomalies(input: DetectLabInput): DetectResult {
+  const { progress, labs, mode } = input
+  const blocking: BlockingAnomaly[] = []
+  const diagnostics: ProgressDiagnostic[] = []
+  const labId = progress.currentLabId
+  if (progress.completedLabIds.includes(labId)) return { blocking, diagnostics }
+  const lab = labs.find((item) => item.labId === labId && item.legacyLevel === undefined)
+  if (lab === undefined) return { blocking, diagnostics }
+
+  const evidence = inspectGuideEvidence(
+    progress.labGuideSteps[labId] ?? 0,
+    progress.labCompletedSteps[labId] ?? [],
+    lab.steps.length,
+  )
+  if (!evidence.guideValid) {
+    diagnostics.push({
+      kind: 'invalid-guide-step',
+      module: 'pwnhub',
+      labId,
+      detail: `实验 ${labId} 的 labGuideSteps 值非法（${String(evidence.rawGuide)}），按 0 处理`,
+    })
+  }
+  if (mode === 'guided' && evidence.guide > evidence.prefix) {
+    blocking.push({
+      kind: 'lab-guide-ahead-of-evidence',
+      module: 'pwnhub',
+      labId,
+      guideStep: evidence.rawGuide,
+      missingPrefixSteps: evidence.missingPrefixSteps,
+      truncated: evidence.guideBeyondManifest,
+      ...(evidence.manifestMismatch === undefined
+        ? {}
+        : { manifestMismatch: evidence.manifestMismatch }),
+    })
+  } else if (evidence.manifestMismatch !== undefined) {
+    const { unknownStepIds, manifestStepCount } = evidence.manifestMismatch
+    diagnostics.push({
+      kind: 'manifest-mismatch',
+      module: 'pwnhub',
+      labId,
+      detail:
+        `实验 ${labId} 的进度档与当前 manifest（${manifestStepCount} 步）不匹配：` +
+        `超界步骤 id [${unknownStepIds.join(', ')}]` +
+        `${evidence.guideBeyondManifest ? `，guide 索引越界（${evidence.guide} > ${Math.max(0, manifestStepCount - 1)}）` : ''}`,
+    })
+  }
   return { blocking, diagnostics }
 }

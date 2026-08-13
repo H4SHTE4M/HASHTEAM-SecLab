@@ -1,10 +1,15 @@
 import { computed, reactive, ref, watch } from 'vue'
 import type { LabProgress } from '../types/lab'
 import { LEVELS, TOTAL_LEVELS } from '../data/levels'
-import { detectBlockingAnomalies, type ProgressDiagnostic } from '../services/progress-anomaly'
+import {
+  detectBlockingAnomalies,
+  detectLabBlockingAnomalies,
+  type ProgressDiagnostic,
+} from '../services/progress-anomaly'
 import { useAnomalyCenter } from '../services/anomaly-center'
 import { log as bootLog } from '../services/boot-logger'
 import { useLabPreferences } from './useLabPreferences'
+import { COURSE } from '../modules/pwnhub/course'
 import {
   completeLevel,
   completeLab,
@@ -43,30 +48,39 @@ const anomalyCenter = useAnomalyCenter()
 const loggedDiagnostics = new Set<string>()
 
 function logDiagnosticOnce(diagnostic: ProgressDiagnostic): void {
-  const key = `${diagnostic.kind}:${diagnostic.level}:${diagnostic.detail}`
+  const target = diagnostic.level === undefined ? diagnostic.labId : diagnostic.level
+  const key = `${diagnostic.module}:${diagnostic.kind}:${String(target)}:${diagnostic.detail}`
   if (loggedDiagnostics.has(key)) return
   loggedDiagnostics.add(key)
   bootLog('progress', diagnostic.detail, 'warn')
 }
 
-/**
- * 阻断类异常检测：加载期跑一次，之后随 currentLevel / mode 变化重检。
- * 只观察两个标量，不 deep-watch 进度档；reconcile 会撤销不再成立的
- * pending（如从引导模式切到挑战模式后，A 类弹窗自动撤下）。
- */
+/** 加载期跑一次，之后随两个模块的当前位置和学习模式变化重检。 */
 function checkBlockingAnomalies(): void {
-  const { blocking, diagnostics } = detectBlockingAnomalies({
+  const seclab = detectBlockingAnomalies({
     progress: state,
     levels: LEVELS,
     mode: preferences.state.mode,
   })
-  blocking.forEach((anomaly) => anomalyCenter.report(anomaly))
-  anomalyCenter.reconcile(blocking)
-  diagnostics.forEach(logDiagnosticOnce)
+  seclab.blocking.forEach((anomaly) => anomalyCenter.report(anomaly))
+  anomalyCenter.reconcile('seclab', seclab.blocking)
+  seclab.diagnostics.forEach(logDiagnosticOnce)
+
+  const pwnhub = detectLabBlockingAnomalies({
+    progress: state,
+    labs: COURSE.labs,
+    mode: preferences.state.mode,
+  })
+  pwnhub.blocking.forEach((anomaly) => anomalyCenter.report(anomaly))
+  anomalyCenter.reconcile('pwnhub', pwnhub.blocking)
+  pwnhub.diagnostics.forEach(logDiagnosticOnce)
 }
 
 checkBlockingAnomalies()
-watch([() => state.currentLevel, () => preferences.state.mode], checkBlockingAnomalies)
+watch(
+  [() => state.currentLevel, () => state.currentLabId, () => preferences.state.mode],
+  checkBlockingAnomalies,
+)
 
 export function useLabProgress() {
   const allCompleted = computed(() => state.completedLevels.length >= TOTAL_LEVELS)

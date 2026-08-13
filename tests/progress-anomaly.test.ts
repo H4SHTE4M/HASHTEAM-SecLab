@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { detectBlockingAnomalies } from '../src/services/progress-anomaly'
+import {
+  detectBlockingAnomalies,
+  detectLabBlockingAnomalies,
+} from '../src/services/progress-anomaly'
 import { createDefaultProgress } from '../src/services/progress-store'
 import type { LabMode, LabProgress, LearningStep, LevelDef } from '../src/types/lab'
+import { COURSE } from '../src/modules/pwnhub/course'
 
 function makeStep(id: number): LearningStep {
   return {
@@ -66,6 +70,7 @@ describe('detectBlockingAnomalies', () => {
     const anomaly = result.blocking[0]
     expect(anomaly).toMatchObject({
       kind: 'guide-ahead-of-evidence',
+      module: 'seclab',
       level: 3,
       guideStep: 7,
       missingPrefixSteps: [7],
@@ -206,5 +211,65 @@ describe('detectBlockingAnomalies', () => {
     const anomaly = result.blocking[0]
     if (anomaly.kind !== 'guide-ahead-of-evidence') throw new Error('kind 不符')
     expect(anomaly.manifestMismatch?.unknownStepIds).toHaveLength(20)
+  })
+})
+
+describe('detectLabBlockingAnomalies', () => {
+  function detectLab(
+    overrides: Partial<LabProgress>,
+    mode: LabMode | null = 'guided',
+  ) {
+    return detectLabBlockingAnomalies({
+      progress: makeProgress(overrides),
+      labs: COURSE.labs,
+      mode,
+    })
+  }
+
+  it('稳定 labId 的 guide 越过证据前缀时阻断当前实验', () => {
+    const result = detectLab({
+      currentLabId: 'memory-addresses-01',
+      labGuideSteps: { 'memory-addresses-01': 2 },
+      labCompletedSteps: { 'memory-addresses-01': [1] },
+    })
+    expect(result.blocking).toEqual([
+      {
+        kind: 'lab-guide-ahead-of-evidence',
+        module: 'pwnhub',
+        labId: 'memory-addresses-01',
+        guideStep: 2,
+        missingPrefixSteps: [2],
+        truncated: false,
+      },
+    ])
+  })
+
+  it('挑战模式或已完成实验不触发阻断', () => {
+    const state = {
+      currentLabId: 'memory-addresses-01',
+      labGuideSteps: { 'memory-addresses-01': 2 },
+      labCompletedSteps: { 'memory-addresses-01': [1] },
+    }
+    expect(detectLab(state, 'challenge').blocking).toEqual([])
+    expect(
+      detectLab({
+        ...state,
+        completedLabIds: ['memory-addresses-01'],
+      }).blocking,
+    ).toEqual([])
+  })
+
+  it('非法 guide 值只留诊断，不构造无界缺失数组', () => {
+    const result = detectLab({
+      currentLabId: 'memory-addresses-01',
+      labGuideSteps: { 'memory-addresses-01': Number.POSITIVE_INFINITY },
+      labCompletedSteps: { 'memory-addresses-01': [1] },
+    })
+    expect(result.blocking).toEqual([])
+    expect(result.diagnostics[0]).toMatchObject({
+      kind: 'invalid-guide-step',
+      module: 'pwnhub',
+      labId: 'memory-addresses-01',
+    })
   })
 })

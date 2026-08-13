@@ -18,7 +18,10 @@ const telemetryMocks = vi.hoisted(() => ({
 vi.mock('../src/telemetry', () => ({
   useTelemetry: () => telemetryMocks,
 }))
-import { createVirtualMachine } from '../src/composables/useVirtualMachine'
+import {
+  createVirtualMachine,
+  detectVmCacheState,
+} from '../src/composables/useVirtualMachine'
 import { useLabProgress } from '../src/composables/useLabProgress'
 import { useAnomalyCenter } from '../src/services/anomaly-center'
 import { getLevel } from '../src/data/levels'
@@ -124,6 +127,46 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers()
+})
+
+describe('VM cache state detection', () => {
+  function resource(
+    name: string,
+    transferSize: number,
+    decodedBodySize: number,
+  ): PerformanceResourceTiming {
+    return { name, transferSize, decodedBodySize } as PerformanceResourceTiming
+  }
+
+  it('两个关键资源有传输字节时判定 cold', () => {
+    expect(
+      detectVmCacheState([
+        resource('https://lab.test/vm/bzImage', 1024, 4096),
+        resource('https://lab.test/vm/rootfs.cpio.gz', 2048, 8192),
+      ]),
+    ).toBe('cold')
+  })
+
+  it('两个关键资源零传输且有解码体积时判定 warm', () => {
+    expect(
+      detectVmCacheState([
+        resource('https://lab.test/vm/bzImage', 0, 4096),
+        resource('https://lab.test/vm/rootfs.cpio.gz?hash=abc', 0, 8192),
+      ]),
+    ).toBe('warm')
+  })
+
+  it('资源 timing 不完整或体积被隐藏时保持 unknown', () => {
+    expect(detectVmCacheState([resource('https://lab.test/vm/bzImage', 0, 4096)])).toBe(
+      'unknown',
+    )
+    expect(
+      detectVmCacheState([
+        resource('https://lab.test/vm/bzImage', 0, 0),
+        resource('https://lab.test/vm/rootfs.cpio.gz', 0, 0),
+      ]),
+    ).toBe('unknown')
+  })
 })
 
 describe('virtual machine lifecycle', () => {
@@ -325,6 +368,29 @@ describe('virtual machine lifecycle', () => {
     await vm.waitForProtocolIdle()
 
     expect(progress.state.completionRecords[1]).toEqual({ path: 'mixed', hintsUsed: 0 })
+    await vm.dispose()
+  })
+
+  it('PwnHub ready 遥测使用真实缓存判定结果', async () => {
+    let controller: FakeController | undefined
+    const vm = createVirtualMachine({
+      module: 'pwnhub',
+      getMode: () => 'challenge',
+      getVmCacheState: () => 'warm',
+      createController: (onStageChange) => {
+        controller = new FakeController(onStageChange)
+        return controller
+      },
+    })
+
+    await vm.boot()
+    controller?.emit(readyLine())
+    await vm.waitForProtocolIdle()
+    expect(telemetryMocks.trackVmBoot).toHaveBeenCalledWith(
+      'ready',
+      expect.any(String),
+      'warm',
+    )
     await vm.dispose()
   })
 })
@@ -614,10 +680,10 @@ describe('阻断异常上报（ready 分支）', () => {
   beforeEach(() => {
     // resolve 幂等且同时清除 dismiss 记录：把单例中枢恢复到干净状态
     ;[...center.detected.value].forEach((anomaly) => center.resolve(anomaly))
-    center.resolve({ kind: 'missing-session-key', keyPresent: false })
-    center.resolve({ kind: 'missing-session-key', keyPresent: true })
-    center.resolve({ kind: 'crypto-unavailable', isSecureContext: true })
-    center.resolve({ kind: 'crypto-unavailable', isSecureContext: false })
+    center.resolve({ kind: 'missing-session-key', module: 'seclab', keyPresent: false })
+    center.resolve({ kind: 'missing-session-key', module: 'seclab', keyPresent: true })
+    center.resolve({ kind: 'crypto-unavailable', module: 'seclab', isSecureContext: true })
+    center.resolve({ kind: 'crypto-unavailable', module: 'seclab', isSecureContext: false })
   })
 
   it('ready 未携带密钥（subtle 可用）上报 missing-session-key', async () => {
@@ -626,7 +692,7 @@ describe('阻断异常上报（ready 分支）', () => {
     controllers[0].emit(readyLine(null))
     await vm.waitForProtocolIdle()
 
-    expect(center.detected.value).toContainEqual({ kind: 'missing-session-key', keyPresent: false })
+    expect(center.detected.value).toContainEqual({ kind: 'missing-session-key', module: 'seclab', keyPresent: false })
     await vm.dispose()
   })
 
@@ -638,7 +704,7 @@ describe('阻断异常上报（ready 分支）', () => {
     controllers[0].emit(readyLine(Buffer.alloc(12, 3).toString('base64')))
     await vm.waitForProtocolIdle()
 
-    expect(center.detected.value).toContainEqual({ kind: 'missing-session-key', keyPresent: true })
+    expect(center.detected.value).toContainEqual({ kind: 'missing-session-key', module: 'seclab', keyPresent: true })
     await vm.dispose()
   })
 
@@ -650,10 +716,7 @@ describe('阻断异常上报（ready 分支）', () => {
       controllers[0].emit(readyLine())
       await vm.waitForProtocolIdle()
 
-      expect(center.detected.value).toContainEqual({
-        kind: 'crypto-unavailable',
-        isSecureContext: window.isSecureContext,
-      })
+      expect(center.detected.value).toContainEqual({ kind: 'crypto-unavailable', module: 'seclab', isSecureContext: window.isSecureContext })
       expect(
         center.detected.value.filter((anomaly) => anomaly.kind === 'missing-session-key'),
       ).toEqual([])
@@ -692,10 +755,10 @@ describe('restart 生命周期', () => {
 
   beforeEach(() => {
     ;[...center.detected.value].forEach((anomaly) => center.resolve(anomaly))
-    center.resolve({ kind: 'missing-session-key', keyPresent: false })
-    center.resolve({ kind: 'missing-session-key', keyPresent: true })
-    center.resolve({ kind: 'crypto-unavailable', isSecureContext: true })
-    center.resolve({ kind: 'crypto-unavailable', isSecureContext: false })
+    center.resolve({ kind: 'missing-session-key', module: 'seclab', keyPresent: false })
+    center.resolve({ kind: 'missing-session-key', module: 'seclab', keyPresent: true })
+    center.resolve({ kind: 'crypto-unavailable', module: 'seclab', isSecureContext: true })
+    center.resolve({ kind: 'crypto-unavailable', module: 'seclab', isSecureContext: false })
   })
 
   it('E1 修复闭环：无密钥会话 restart 后判题恢复', async () => {
@@ -706,7 +769,7 @@ describe('restart 生命周期', () => {
     controllers[0].emit(readyLine(null))
     await vm.waitForProtocolIdle()
     expect(vm.stage.value).toBe('ready')
-    expect(center.detected.value).toContainEqual({ kind: 'missing-session-key', keyPresent: false })
+    expect(center.detected.value).toContainEqual({ kind: 'missing-session-key', module: 'seclab', keyPresent: false })
 
     await vm.restart()
     expect(controllers).toHaveLength(2)

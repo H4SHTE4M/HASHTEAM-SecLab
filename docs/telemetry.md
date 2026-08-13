@@ -1,6 +1,6 @@
-# HASHTEAM SecLab 遥测系统
+# HASHTEAM Security Lab 遥测系统
 
-SecLab 仅收集预定义的**匿名聚合使用统计**，不会向遥测服务发送原始终端输入、命令参数、答案内容、账号、Cookie 或设备指纹。
+SecLab 与 PwnHub 仅收集预定义的**匿名聚合使用统计**，不会向遥测服务发送原始终端输入、命令参数、答案内容、账号、Cookie 或设备指纹。
 
 ## 架构
 
@@ -22,9 +22,9 @@ aggregates 表 (module, metric, dimension, count)
 
 ### 链路说明
 
-1. **前端**（`src/telemetry/`）是独立、可复用的 service module。调用方只需 `telemetry.trackCommand()` / `trackLevelComplete()` / `trackHint()` / `trackReset()`，不关心 batching、session、HTTP、retry、seq、EdgeOne API。
-2. **Edge Function**（`edge-functions/api/telemetry/*.js`）运行在 EdgeOne 边缘节点，做基础校验后通过 HMAC 签名转发到后端。前端统一调用同源 `/api/telemetry/*`，EdgeOne 细节不暴露给业务。
-3. **后端**（`backend/server.js`）运行在腾讯云 VM 上，Node + SQLite WAL。负责 session 管理、seq 重放保护、allowlist 校验、聚合写入、stats 查询。
+1. **前端**（`src/telemetry/`）是按 module 复用的 service。SecLab 使用数字关卡 v1 事件；PwnHub 使用稳定 `activityId` v2 事件。调用方不关心 batching、session、HTTP、seq 或 EdgeOne API。
+2. **Edge Function**（`edge-functions/api/telemetry/*.js`）运行在 EdgeOne 边缘节点，做基础校验后通过 HMAC 签名转发到后端。前端统一调用同源 `/api/telemetry/*`。
+3. **后端**（`backend/server.js`）运行在腾讯云 VM 上，Node + SQLite WAL。匿名 session 在首批合法事件到达时绑定 module，此后不能跨模块复用。
 
 ### EdgeOne Makers Direct Upload 与 Edge Functions
 
@@ -71,7 +71,7 @@ PwnHub 使用 `v=2` 和稳定 `activityId`：
   "events": [
     { "type": "activity_complete", "activityId": "memory-addresses-01", "path": "guided" },
     { "type": "activity_check", "activityId": "memory-addresses-01", "passed": true },
-    { "type": "vm_boot", "outcome": "ready", "duration": "5-10s", "cache": "unknown" }
+    { "type": "vm_boot", "outcome": "ready", "duration": "5-10s", "cache": "warm" }
   ]
 }
 ```
@@ -93,6 +93,10 @@ PwnHub 使用 `v=2` 和稳定 `activityId`：
 事件携带 `module` 字段。`seclab` 固定使用 v1 与数字 `level`；`pwnhub`
 固定使用 v2 与稳定 `activityId`。后端按 module 分离事件 allowlist、命令
 allowlist、完成去重和 Dashboard 数据，不接受交叉版本或交叉事件。
+
+PwnHub 的已公开 `activityId` 唯一来源是 `vm/profiles/production.json`。前端在
+构建时直接读取该文件，backend 部署时把同一文件复制为
+`/opt/hashteam-telemetry/production.json`；配置缺失、ID 非法或重复时服务拒绝启动。
 
 ### 聚合表结构
 
@@ -135,7 +139,7 @@ pwnhub | vm_boot_duration | 5-10s                       | 19
 event_log(id, module, event_type, dimension, ts)
 ```
 
-- `module`：事件所属 module（session 创建事件为空串）
+- `module`：事件所属 module；`session_create` 在该 session 的首批合法事件到达时写入对应 module
 - `event_type`：包含 `session_create`、`command`、SecLab 的数字关卡事件、
   PwnHub 的 `activity_*` 与 `vm_boot`
 - `dimension`：命令名、`level-N`、稳定 `activityId` 或 VM 启动分桶；session 创建为空串
@@ -152,7 +156,7 @@ event_log(id, module, event_type, dimension, ts)
 ]
 ```
 
-每天的结构补零：没有事件的天也会出现，方便前端直接画趋势图。Dashboard 和管理页均渲染"近 30 天活动趋势"堆叠柱状图。
+每天的结构补零。公开 Dashboard 和管理页都按 SecLab/PwnHub 模块切换；PwnHub 的 `activity_complete` 在趋势图中归一为完成事件，但数据库仍保留原始事件类型。
 
 ### 命令 allowlist
 
@@ -160,8 +164,7 @@ VM wrapper 只上报各 module 预定义的命令名，不包含参数：
 
 ```text
 seclab: find grep chmod ls cat cd pwd whoami check help su
-pwnhub: ls cat cd pwd whoami check help file readelf nm objdump gdb p32
-        hex2bin cyclic cyclic-find payload-run
+pwnhub: ls cat cd pwd check help readelf nm objdump file hexdump strings od
 ```
 
 提示和重置使用独立事件类型，不经 command wrapper。
@@ -263,19 +266,20 @@ find() { command find "$@"; local rc=$?; _ht_telemetry_emit find; return $rc; }
 
 ### 数据看板（公开）
 
-- 近 30 天活动趋势堆叠柱状图（会话创建 / 命令 / 通关 / 提示 / 重置，按天）
-- 命令排行榜（各命令执行次数与占比）、总览卡片、关卡通关榜（含 guided/mixed/challenge 细分）、提示与重置榜
-- 数据源：`GET /api/public/stats`（返回聚合数据 + `timeseries` 时间序列，无需 HMAC）
-- 公开接口已聚合、不含任何 session 级数据；限流 30 次/分钟/IP
+- SecLab/PwnHub 模块切换，统计不混算
+- 近 30 天活动趋势和近 24 小时会话/命令趋势
+- 命令、完成路径、check 正确率、提示与重置
+- PwnHub VM 启动成功率、匿名耗时 p75 区间、冷/热/未知缓存样本
+- 数据源：`GET /api/public/stats?module=<module>`；仅返回聚合数据
 
 ### 管理页（需登录）
 
-详细数据（`GET /api/admin/overview`，需管理 cookie）：
+详细数据使用 `GET /api/admin/overview?module=<module>`：
 
-- 近 30 天活动趋势堆叠柱状图（会话创建 / 命令 / 通关 / 提示 / 重置，按天）
-- 完整聚合表、关卡 × 通关路径矩阵、提示/重置明细
-- 最近 50 个匿名 session（仅 SHA-256 哈希前 8 位、创建/过期时间、事件数、seq）
-- 通关记录总数与独立通关会话数
+- SecLab/PwnHub 独立的聚合表、完成矩阵、提示/重置和最近匿名 session
+- SecLab 从 `completions` 计数；PwnHub 从 `activity_completions` 计数
+- VM 启动失败率超过 2% 或 p75 进入 `10-20s`/`>=20s` 时明确标记
+- 近 30 天和近 24 小时趋势按 module 隔离
 
 ### 管理认证设计
 
@@ -294,8 +298,9 @@ find() { command find "$@"; local rc=$?; _ht_telemetry_emit find; return $rc; }
 | `TELEMETRY_PUBLIC_PREFIX` | `/telemetry-backend` | nginx 反代前缀，用于 `/dashboard` 尾斜杠 302 的 Location |
 | `TELEMETRY_COOKIE_PATH` | `/telemetry-backend/api/admin` | 管理 cookie 的 Path；前缀变更时同步调整 |
 | `TELEMETRY_DASHBOARD_DIR` | `<backend>/public` | 静态资源目录（启动时加载进内存） |
+| `TELEMETRY_PRODUCTION_PROFILE` | 自动发现 | 可选的 production profile 绝对路径；部署包默认使用同目录 `production.json` |
 
-修改 nginx 反代前缀时，以上三个变量需同步修改并重启服务。
+修改 nginx 反代前缀或 production profile 位置时，以上变量需同步修改并重启服务。
 
 ## EdgeOne 配置
 
@@ -325,37 +330,42 @@ find() { command find "$@"; local rc=$?; _ht_telemetry_emit find; return $rc; }
 ### 前置条件
 
 - Node.js >= 20、pnpm 10
-- `backend/` 目录下的 `server.js`、`package.json`、`pnpm-lock.yaml`、`hashteam-telemetry.service`、`deploy.sh`
+- 完整仓库中的 `backend/` 与 `vm/profiles/production.json`；部署脚本拒绝缺少发布清单的独立 backend 目录
 
 ### 部署步骤
 
 ```bash
-# 1. 将 backend/ 上传到服务器
-scp -r backend/ cn-tencent:/tmp/hashteam-telemetry/
+# 1. 保留仓库相对结构上传 backend 与唯一 production profile
+ssh cn-tencent 'rm -rf /tmp/hashteam-telemetry-release &&
+  mkdir -p /tmp/hashteam-telemetry-release/vm/profiles'
+scp -r backend cn-tencent:/tmp/hashteam-telemetry-release/
+scp vm/profiles/production.json \
+  cn-tencent:/tmp/hashteam-telemetry-release/vm/profiles/
 
-# 2. 在服务器上执行部署脚本
-ssh cn-tencent sudo bash /tmp/hashteam-telemetry/deploy.sh
+# 2. 已有生产库先做一致性备份
+ssh cn-tencent sudo sqlite3 /var/lib/hashteam-telemetry/telemetry.db \
+  '.backup /var/lib/hashteam-telemetry/telemetry.before-pwnhub.db'
 
-# 3. 部署脚本会：
-#    - 创建 hashteam-telemetry 系统用户
-#    - 安装到 /opt/hashteam-telemetry/
-#    - 生成 TELEMETRY_EDGE_SECRET（记录此密钥）
-#    - 安装 systemd unit 并启动服务
-#    - 服务监听 127.0.0.1:7841（仅本机）
+# 3. 先发布兼容 v1+v2 的 backend，再发布包含 PwnHub 的静态前端
+ssh cn-tencent sudo bash \
+  /tmp/hashteam-telemetry-release/backend/deploy.sh
 
-# 4. 为后端 HTTPS 域名配置 nginx 反代（Edge 节点无法直连 127.0.0.1）
+# 4. 脚本会把同一 production.json 安装到 /opt/hashteam-telemetry/，
+#    以加列/加表方式升级 SQLite，并保留现有 SecLab 数据。
+
+# 5. 配置 nginx 反代（7841 始终只监听 127.0.0.1）：
 #    location /telemetry-backend/ {
 #        proxy_pass http://127.0.0.1:7841/;
 #        proxy_set_header Host $host;
 #        proxy_set_header X-Real-IP $remote_addr;
 #    }
-#    使用受信任证书，仅开放 443；7841 始终只监听 127.0.0.1。
-#    无 HMAC 的直接请求会被 backend 拒绝。
 
-# 5. 在 EdgeOne 配置：
-#    TELEMETRY_BACKEND_URL=https://<后端 HTTPS 域名>/telemetry-backend
-#    TELEMETRY_EDGE_SECRET=<从受控 root 会话读取的共享密钥>
+# 6. 在 EdgeOne 配置同一 TELEMETRY_EDGE_SECRET 与 backend URL。
 ```
+
+上线顺序不可反转：旧前端只发送 v1，新 backend 同时接受 v1/v2，因此先升级 backend
+无行为变化；如果先发布新前端，旧 backend 会拒绝 PwnHub v2，客户端虽不受影响，
+但这段时间的匿名事件会静默丢失。
 
 ### Secret 配置
 
@@ -374,7 +384,9 @@ ssh cn-tencent sudo cat /etc/hashteam-telemetry/env
 ### 数据库
 
 - SQLite WAL 模式，路径 `/var/lib/hashteam-telemetry/telemetry.db`
-- 只保留聚合 counter，不保留 raw event log
+- `aggregates` 存匿名聚合；`event_log` 不含 token/IP，保留 90 天后清理
+- `sessions.module` 在首批合法事件时绑定，阻止跨 module token 复用
+- `completions` 和 `activity_completions` 分别记录 SecLab/PwnHub 首次完成去重
 - session 表自动清理过期记录（每 5 分钟）
 
 ## Threat Model

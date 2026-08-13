@@ -44,10 +44,10 @@ beforeEach(() => {
   // 清空异常中枢：resolve 幂等，未 dismiss 的 key 删除记录也无副作用
   const center = useAnomalyCenter()
   ;[...center.detected.value].forEach((anomaly) => center.resolve(anomaly))
-  center.resolve({ kind: 'missing-session-key', keyPresent: false })
-  center.resolve({ kind: 'missing-session-key', keyPresent: true })
-  center.resolve({ kind: 'crypto-unavailable', isSecureContext: true })
-  center.resolve({ kind: 'crypto-unavailable', isSecureContext: false })
+  center.resolve({ kind: 'missing-session-key', module: 'seclab', keyPresent: false })
+  center.resolve({ kind: 'missing-session-key', module: 'seclab', keyPresent: true })
+  center.resolve({ kind: 'crypto-unavailable', module: 'seclab', isSecureContext: true })
+  center.resolve({ kind: 'crypto-unavailable', module: 'seclab', isSecureContext: false })
   const preferences = useLabPreferences()
   preferences.state.mode = 'guided'
   preferences.state.onboardingComplete = true
@@ -307,7 +307,7 @@ describe('阻断异常弹窗', () => {
   it('E1 密钥异常：焦点落在主按钮上，点击后重启实验环境并关闭弹窗', async () => {
     const wrapper = mount(App, { attachTo: document.body })
     await nextTick()
-    useAnomalyCenter().report({ kind: 'missing-session-key', keyPresent: false })
+    useAnomalyCenter().report({ kind: 'missing-session-key', module: 'seclab', keyPresent: false })
     await nextTick()
     await nextTick()
 
@@ -329,7 +329,7 @@ describe('阻断异常弹窗', () => {
     ;(URL as unknown as Record<string, unknown>).createObjectURL = vi.fn(() => 'blob:mock')
     ;(URL as unknown as Record<string, unknown>).revokeObjectURL = vi.fn()
     const wrapper = mount(App, { attachTo: document.body })
-    useAnomalyCenter().report({ kind: 'missing-session-key', keyPresent: true })
+    useAnomalyCenter().report({ kind: 'missing-session-key', module: 'seclab', keyPresent: true })
     await nextTick()
 
     const download = wrapper.get<HTMLButtonElement>('.btn-download')
@@ -347,7 +347,7 @@ describe('阻断异常弹窗', () => {
     const wrapper = mount(App, { attachTo: document.body })
     await nextTick()
     const center = useAnomalyCenter()
-    center.report({ kind: 'crypto-unavailable', isSecureContext: true })
+    center.report({ kind: 'crypto-unavailable', module: 'seclab', isSecureContext: true })
     await nextTick()
     expect(wrapper.find('.report-card').exists()).toBe(true)
 
@@ -355,7 +355,7 @@ describe('阻断异常弹窗', () => {
     await nextTick()
     expect(wrapper.find('.report-card').exists()).toBe(false)
 
-    center.report({ kind: 'crypto-unavailable', isSecureContext: true })
+    center.report({ kind: 'crypto-unavailable', module: 'seclab', isSecureContext: true })
     await nextTick()
     expect(wrapper.find('.report-card').exists()).toBe(false)
     wrapper.unmount()

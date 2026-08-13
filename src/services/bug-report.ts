@@ -17,12 +17,21 @@ import type { LabMode } from '../types/lab'
  * collectBugReportInput 集中全部副作用（浏览器/存储/日志快照）。
  */
 
-/** 进度档当前的响应式状态快照（诊断当下）；progressRaw 是持久化证据，两者不互替 */
-export interface LabStateSnapshot {
-  currentLevel: number
-  mode: LabMode | null
-  completedLevels: number[]
-}
+/** 进度档当前的响应式状态快照；按 module 保留可直接检索的关键字段。 */
+export type LabStateSnapshot =
+  | {
+      module: 'seclab'
+      currentLevel: number
+      mode: LabMode | null
+      completedLevels: number[]
+    }
+  | {
+      module: 'pwnhub'
+      currentLabId: string
+      currentChapterId: string
+      mode: LabMode | null
+      completedLabIds: string[]
+    }
 
 export interface BugReportInput {
   trigger: BlockingAnomaly
@@ -38,7 +47,7 @@ export interface BugReportInput {
 
 export interface BugReport {
   kind: 'hashteam-bug-report'
-  reportVersion: 1
+  reportVersion: 2
   generatedAt: string
   trigger: BlockingAnomaly
   build: BugReportInput['build']
@@ -75,7 +84,7 @@ export function buildBugReport(input: BugReportInput): BugReport {
   const uiPreferences = capUtf8(input.uiPreferencesRaw)
   return {
     kind: 'hashteam-bug-report',
-    reportVersion: 1,
+    reportVersion: 2,
     generatedAt: input.generatedAt,
     trigger: input.trigger,
     build: input.build,
@@ -109,11 +118,21 @@ export function collectBugReportInput(
       language: window.navigator.language,
       isSecureContext: window.isSecureContext,
     },
-    labState: {
-      currentLevel: labState.currentLevel,
-      mode: labState.mode,
-      completedLevels: [...labState.completedLevels],
-    },
+    labState:
+      labState.module === 'seclab'
+        ? {
+            module: 'seclab',
+            currentLevel: labState.currentLevel,
+            mode: labState.mode,
+            completedLevels: [...labState.completedLevels],
+          }
+        : {
+            module: 'pwnhub',
+            currentLabId: labState.currentLabId,
+            currentChapterId: labState.currentChapterId,
+            mode: labState.mode,
+            completedLabIds: [...labState.completedLabIds],
+          },
     progressRaw: storage.getItem(PROGRESS_STORAGE_KEY),
     uiPreferencesRaw: storage.getItem(UI_PREFERENCES_STORAGE_KEY),
     storageDegraded: isStorageDegraded(),

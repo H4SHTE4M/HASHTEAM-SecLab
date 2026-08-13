@@ -166,6 +166,40 @@ def main() -> int:
         sorted(privileged) == ["bin/busybox-suid", "usr/local/bin/htcheck"],
         f"initramfs 出现未授权的 SUID/SGID 文件：{privileged}",
     )
+    pwnhub_entries = {
+        name: entry
+        for name, entry in entries.items()
+        if name.startswith("opt/pwnhub/labs/")
+    }
+    require(pwnhub_entries, "initramfs 缺少 production profile 的 PwnHub 实验")
+    for name, entry in pwnhub_entries.items():
+        require(
+            (entry.uid, entry.gid) == (0, 0),
+            f"PwnHub 实验条目必须由 root 持有：{name} {describe(entry)}",
+        )
+        require(
+            stat.S_IMODE(entry.mode) & 0o022 == 0,
+            f"PwnHub 实验条目不得由 guest/group 写入：{name} {describe(entry)}",
+        )
+        if name.endswith(("/init.sh", "/reset.sh", "/check.sh", "/inspect.sh")):
+            require(
+                stat.S_IFMT(entry.mode) == stat.S_IFREG
+                and stat.S_IMODE(entry.mode) == 0o755,
+                f"PwnHub 评分脚本权限必须为 0755：{name} {describe(entry)}",
+            )
+
+    production_profile = json.loads(
+        (repository / "vm" / "profiles" / "production.json").read_text(encoding="utf-8")
+    )
+    for tool in production_profile["binaryTools"]:
+        tool_entry = entries.get(f"usr/local/bin/{tool}")
+        require(tool_entry is not None, f"initramfs 缺少 production binary tool：{tool}")
+        require(
+            stat.S_IFMT(tool_entry.mode) == stat.S_IFREG
+            and stat.S_IMODE(tool_entry.mode) == 0o755
+            and (tool_entry.uid, tool_entry.gid) == (0, 0),
+            f"production binary tool 权限错误：{tool} {describe(tool_entry)}",
+        )
     require(
         b"ln -sf /bin/busybox-suid /bin/su" in init.data
         and b"busybox-suid /bin/passwd" not in init.data,

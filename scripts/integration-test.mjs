@@ -225,6 +225,16 @@ async function main() {
     goToLab('memory-layout-01')
     await waitFor(/这个实验尚未解锁，请先完成前置实验/)
 
+    send(
+      "mkdir -p /tmp/fake-labs/memory-addresses-01 && " +
+      "printf '#!/bin/sh\\nexit 0\\n' > /tmp/fake-labs/memory-addresses-01/check.sh && " +
+      "chmod +x /tmp/fake-labs/memory-addresses-01/check.sh && " +
+      'PWNHUB_LABS_DIR=/tmp/fake-labs check wrong',
+    )
+    await waitFor(
+      /@@HASHTEAM:\{"type":"error","message":"lab memory-addresses-01 check failed"\}/,
+    )
+
     send('check 0x0804b140 0xdec0de42 0x0804b140 -42')
     const passed = await waitFor(
       /@@HASHTEAM:\{"type":"lab-result","labId":"memory-addresses-01","status":"passed","sig":"([0-9a-f]{64})"\}/,
