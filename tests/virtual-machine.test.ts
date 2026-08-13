@@ -1,15 +1,17 @@
 // @vitest-environment jsdom
 import { createHmac, webcrypto } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+const telemetryMocks = vi.hoisted(() => ({
+  trackCommand: vi.fn(),
+  trackLevelComplete: vi.fn(),
+  trackCheckResult: vi.fn(),
+  trackHint: vi.fn(),
+  trackReset: vi.fn(),
+  flush: vi.fn(async () => undefined),
+  dispose: vi.fn(async () => undefined),
+}))
 vi.mock('../src/telemetry', () => ({
-  useTelemetry: () => ({
-    trackCommand: vi.fn(),
-    trackLevelComplete: vi.fn(),
-    trackHint: vi.fn(),
-    trackReset: vi.fn(),
-    flush: vi.fn(async () => undefined),
-    dispose: vi.fn(async () => undefined),
-  }),
+  useTelemetry: () => telemetryMocks,
 }))
 import { createVirtualMachine } from '../src/composables/useVirtualMachine'
 import { useLabProgress } from '../src/composables/useLabProgress'
@@ -93,6 +95,7 @@ class FakeController implements VirtualMachineController {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks()
   window.localStorage.clear()
   useLabProgress().resetAll()
 })
@@ -335,6 +338,58 @@ describe('评分协议防伪与解锁门控', () => {
     await vm.waitForProtocolIdle()
     expect(progress.state.completedLevels).toContain(1)
     await vm.dispose()
+  })
+
+  it('验签通过的 check 上报 check_result passed，重复通过也每次都计数', async () => {
+    const { vm, controllers } = createTrackedVm()
+
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+    controllers[0].emit(passedLine(1))
+    controllers[0].emit(passedLine(1))
+    await vm.waitForProtocolIdle()
+
+    expect(telemetryMocks.trackCheckResult).toHaveBeenCalledTimes(2)
+    expect(telemetryMocks.trackCheckResult).toHaveBeenCalledWith(1, true)
+  })
+
+  it('未通过验签的 level-result 不上报 check_result', async () => {
+    const { vm, controllers } = createTrackedVm()
+
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+    controllers[0].emit(passedLine(1, Buffer.alloc(32, 8)))
+    controllers[0].emit(protocolLine({ type: 'level-result', level: 1, status: 'passed' }))
+    await vm.waitForProtocolIdle()
+
+    expect(telemetryMocks.trackCheckResult).not.toHaveBeenCalled()
+  })
+
+  it('check 失败的 error 协议消息上报 check_result failed', async () => {
+    const { vm, controllers } = createTrackedVm()
+
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+    controllers[0].emit(protocolLine({ type: 'error', message: 'level 3 check failed' }))
+    await vm.waitForProtocolIdle()
+
+    expect(telemetryMocks.trackCheckResult).toHaveBeenCalledTimes(1)
+    expect(telemetryMocks.trackCheckResult).toHaveBeenCalledWith(3, false)
+  })
+
+  it('与 check 无关的 error 消息不上报 check_result', async () => {
+    const { vm, controllers } = createTrackedVm()
+
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+    controllers[0].emit(protocolLine({ type: 'error', message: 'grading signer unavailable' }))
+    await vm.waitForProtocolIdle()
+
+    expect(telemetryMocks.trackCheckResult).not.toHaveBeenCalled()
   })
 
   it('ready 未携带会话密钥时整局评分结果被拒绝', async () => {

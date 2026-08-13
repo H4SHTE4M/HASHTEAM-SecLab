@@ -44,6 +44,7 @@ export type CompletionPathDimension = 'guided' | 'mixed' | 'challenge'
 export type TelemetryEvent =
   | { type: 'command'; command: TrackedCommand }
   | { type: 'level_complete'; level: number; path: CompletionPathDimension }
+  | { type: 'check_result'; level: number; passed: boolean }
   | { type: 'hint'; level: number }
   | { type: 'reset'; level: number }
 
@@ -56,7 +57,7 @@ export type TelemetryEventType = TelemetryEvent['type']
  */
 export const MODULES: Record<ModuleId, { events: readonly TelemetryEventType[] }> = {
   seclab: {
-    events: ['command', 'level_complete', 'hint', 'reset'],
+    events: ['command', 'level_complete', 'check_result', 'hint', 'reset'],
   },
 }
 

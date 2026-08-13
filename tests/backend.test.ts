@@ -193,6 +193,35 @@ describe('Telemetry Backend', () => {
     expect(requireBody(r2)['processed']).toBe(0)
   })
 
+  it('check_result 通过/失败均计数（不去重），正确率可由聚合推导', async () => {
+    const token = randomToken()
+    await createSession(token)
+
+    const result = await sendEvents(token, 1, [
+      { type: 'check_result', level: 1, passed: true },
+      { type: 'check_result', level: 1, passed: false },
+      { type: 'check_result', level: 1, passed: false },
+      { type: 'check_result', level: 2, passed: true },
+    ])
+    expect(result.status).toBe(200)
+    expect(requireBody(result)['processed']).toBe(4)
+
+    const statsSig = hmac(SECRET, 'stats:')
+    const stats = await httpFetch('/stats', { headers: { 'X-Telemetry-Sig': statsSig } })
+    const seclab = requireBody(stats)['seclab'] as Record<string, Record<string, number>>
+    expect(seclab['check_pass']).toEqual({ 'level-1': 1, 'level-2': 1 })
+    expect(seclab['check_fail']).toEqual({ 'level-1': 2 })
+  })
+
+  it('非法 check_result（越界关卡 / 非布尔 passed / 多余字段）被拒绝', async () => {
+    const token = randomToken()
+    await createSession(token)
+
+    expect((await sendEvents(token, 1, [{ type: 'check_result', level: 11, passed: true }])).status).toBe(400)
+    expect((await sendEvents(token, 2, [{ type: 'check_result', level: 1, passed: 'yes' }])).status).toBe(400)
+    expect((await sendEvents(token, 3, [{ type: 'check_result', level: 1, passed: true, extra: 1 }])).status).toBe(400)
+  })
+
   it('非 allowlist 命令被拒绝', async () => {
     const token = randomToken()
     await createSession(token)

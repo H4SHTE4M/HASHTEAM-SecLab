@@ -72,7 +72,7 @@ const EVENT_LOG_RETENTION_DAYS = 90
 
 const MODULES = {
   seclab: {
-    events: ['command', 'level_complete', 'hint', 'reset'],
+    events: ['command', 'level_complete', 'check_result', 'hint', 'reset'],
     levels: 10,
   },
 }
@@ -303,6 +303,10 @@ function validateEvent(mod, event) {
         isValidLevel(mod, event.level) &&
         typeof event.path === 'string' &&
         COMPLETION_PATHS.has(event.path)
+    case 'check_result':
+      return hasOnlyKeys(event, ['type', 'level', 'passed']) &&
+        isValidLevel(mod, event.level) &&
+        typeof event.passed === 'boolean'
     case 'hint':
     case 'reset':
       return hasOnlyKeys(event, ['type', 'level']) && isValidLevel(mod, event.level)
@@ -317,6 +321,11 @@ function processEvent(mod, event, tokenHash) {
     case 'command':
       stmtUpsertAggregate.run(mod, 'command', event.command, 1)
       stmtInsertEventLog.run(mod, 'command', event.command, now)
+      return true
+    case 'check_result':
+      // 每次 check 执行都计数（不去重），正确率 = check_pass / (check_pass + check_fail)
+      stmtUpsertAggregate.run(mod, event.passed ? 'check_pass' : 'check_fail', `level-${event.level}`, 1)
+      stmtInsertEventLog.run(mod, 'check_result', `level-${event.level}:${event.passed ? 'passed' : 'failed'}`, now)
       return true
     case 'level_complete': {
       // 每 session 每 module 每 level 最多统计一次完成

@@ -129,6 +129,11 @@ export class TelemetryClient {
     this.enqueue({ type: 'level_complete', level, path })
   }
 
+  /** 统计一次 check 评分结果（通过/未通过，每次执行都计数，不去重）。 */
+  trackCheckResult(level: number, passed: boolean): void {
+    this.enqueue({ type: 'check_result', level, passed })
+  }
+
   /** 统计一次提示使用。 */
   trackHint(level: number): void {
     this.enqueue({ type: 'hint', level })

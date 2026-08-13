@@ -72,6 +72,19 @@ describe('TelemetryClient', () => {
     expect(client.pendingCount).toBe(3)
   })
 
+  it('trackCheckResult 加入队列并携带 level 与 passed', async () => {
+    const client = createClient(transport)
+    client.trackCheckResult(3, true)
+    client.trackCheckResult(3, false)
+    await client.flush()
+
+    expect(transport.sendCalls).toHaveLength(1)
+    expect(transport.sendCalls[0].events).toEqual([
+      { type: 'check_result', level: 3, passed: true },
+      { type: 'check_result', level: 3, passed: false },
+    ])
+  })
+
   it('flush 时通过 transport 发送批量事件', async () => {
     const client = createClient(transport)
     client.trackCommand('find')
