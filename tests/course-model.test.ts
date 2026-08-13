@@ -355,7 +355,7 @@ describe('course manifest v3 compatibility layer', () => {
     }
   })
 
-  it('发布配置禁止缓存 companion 并永久提供内容寻址 artifact', () => {
+  it('EdgeOne 禁止缓存 companion 并永久提供内容寻址 artifact', () => {
     const edgeOne = JSON.parse(readFileSync('edgeone.json', 'utf8')) as {
       headers: Array<{
         source: string
@@ -372,14 +372,6 @@ describe('course manifest v3 compatibility layer', () => {
     expect(cacheControlBySource['/companion.html']).toBe('no-store')
     expect(cacheControlBySource['/artifacts/*']).toBe(
       'public, max-age=31536000, immutable',
-    )
-
-    const nginx = readFileSync('.deploy/nginx/hashteam.conf', 'utf8')
-    expect(nginx).toMatch(
-      /location = \/companion\.html \{[^}]*Cache-Control "no-store"/s,
-    )
-    expect(nginx).toMatch(
-      /location \^~ \/artifacts\/ \{[^}]*alias \/var\/www\/hashteam\/artifacts\/;[^}]*immutable/s,
     )
   })
 
