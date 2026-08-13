@@ -114,16 +114,21 @@ Environment 必须在 GitHub 仓库设置中配置 deployment branch rule，只�
    `/var/www/hashteam/.transfer-cache/`。每条流失败自动重试
    `DEPLOY_UPLOAD_RETRIES`（默认 3）次、间隔 `DEPLOY_UPLOAD_RETRY_WAIT`（默认
    10）秒，且带 300 秒 I/O 超时。缓存按 `--checksum` 去重：同一内容只在首次
-   发布时跨链路传输一次，之后只传差异。随后服务器本地组装新 release、比对文件
-   集与 manifest 完全一致，原子切换 `current`，逐字节验收；失败自动切回上一
-   release。缓存由每次发布自动 GC（超过 7 天且不属于当前 manifest 的文件与
-   空目录被回收；旧 release 是完整副本，不引用缓存，回收安全）。注意严禁为
-   并行 rsync 配置 SSH ControlMaster 复用连接——那会把多条流并回一条被跨境
-   限速的连接，抵消全部并行收益。多个 PR 连续触发时后到的发布覆盖先前的实验
-   环境，这是预期行为：staging 永远承载「最近一次通过 verify 的 PR 内容」。
-   companion 入口由前端附带完整 Git source ID 查询参数；staging 按该版本化 URL
-   逐字节验收，不依赖工作站私有的 Nginx 配置。EdgeOne production 仍额外返回
-   `Cache-Control: no-store`。
+   发布时跨链路传输一次，之后只传差异。VM 资产与下载样本分别保存在持久的
+   `/var/www/hashteam/vm-assets/` 和 `/var/www/hashteam/artifacts/`；每个 release
+   在服务器本机优先用硬链接建立全部历史下载样本的普通文件快照，跨文件系统时
+   退化为 reflink/复制。因此没有专用 `/artifacts` location 的 Nginx 也能从
+   `current` 站点根目录提供所有旧 SHA-256 URL，且不依赖符号链接策略。随后服务器
+   本地组装新 release、比对核心普通文件集与 manifest 完全一致，原子切换
+   `current`，逐字节验收；失败自动切回上一 release。传输缓存由每次发布自动 GC
+   （超过 7 天且不属于当前 manifest 的文件与空目录被回收；release 不引用传输
+   缓存，回收安全）。
+   注意严禁为并行 rsync 配置 SSH ControlMaster 复用连接——那会把多条流并回一条
+   被跨境限速的连接，抵消全部并行收益。多个 PR 连续触发时后到的发布覆盖先前的
+   实验环境，这是预期行为：staging 永远承载「最近一次通过 verify 的 PR 内容」。
+   companion 入口附带完整 Git source ID，下载样本路径附带内容 SHA-256；staging
+   逐字节验收这些版本化 URL，不依赖工作站私有的 Nginx location 或缓存头。
+   EdgeOne production 仍分别强制 `no-store` 与 `immutable`。
 6. EO job（仅 main）先通过 China Makers API 精确查询项目，名称、ID 或
    Direct Upload 类型任一不符即 fail closed。CLI 进程还加载
    `scripts/guard-edgeone-project.mjs`，禁止 `CreatePagesProject` 和 Global API

@@ -17,6 +17,7 @@ EXPECTED_REMOTE_USER="${DEPLOY_EXPECTED_USER:-hashteam-deploy}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOCK_HELPER="$SCRIPT_DIR/remote-deploy-lock.sh"
+ARTIFACT_SNAPSHOT_HELPER="$SCRIPT_DIR/remote-artifact-snapshot.sh"
 LOCK_HEARTBEAT_SECONDS="${DEPLOY_LOCK_HEARTBEAT_SECONDS:-30}"
 LOCK_STALE_SECONDS="${DEPLOY_LOCK_STALE_SECONDS:-180}"
 LOCK_WAIT_SECONDS="${DEPLOY_LOCK_WAIT_SECONDS:-300}"
@@ -77,6 +78,10 @@ DEPLOY_UPLOAD_RETRY_WAIT="${DEPLOY_UPLOAD_RETRY_WAIT:-10}"
   }
 [[ -r "$LOCK_HELPER" ]] || {
   echo "ERROR: 缺少远端发布锁助手：$LOCK_HELPER" >&2
+  exit 1
+}
+[[ -r "$ARTIFACT_SNAPSHOT_HELPER" ]] || {
+  echo "ERROR: 缺少远端 artifact 快照助手：$ARTIFACT_SNAPSHOT_HELPER" >&2
   exit 1
 }
 
@@ -367,9 +372,9 @@ assert_deploy_lock_heartbeat
 rm -rf "$work_dir"
 
 echo "==> [5/6] 组装 release、校验文件集、GC 缓存并原子切换 current"
-ssh "$HOST" bash -s -- \
-  "$REMOTE_PATH" "$RELEASE_ID" "$VM_HASH" "$DEPLOY_TOKEN" \
-  "$cache_dir/.manifest-$RELEASE_ID" <<'REMOTE'
+{
+  cat "$ARTIFACT_SNAPSHOT_HELPER"
+  cat <<'REMOTE'
 set -euo pipefail
 root="$1"
 release="$2"
@@ -396,8 +401,10 @@ if [[ "$assembled" != "$expected" ]]; then
   exit 1
 fi
 
+snapshot_release_artifacts "$root/artifacts" "$upload/artifacts"
+
 # 缓存 GC：删除超过 7 天且不属于当前 manifest 的文件，随后清空目录。
-# 旧 release 是完整副本（非硬链接），缓存只是传输缓存，可安全回收。
+# release 普通文件不引用缓存；共享内容寻址目录独立持久化，因此缓存回收安全。
 find "$cache" -type f -mtime +7 -printf '%P\n' |
   LC_ALL=C sort -u |
   LC_ALL=C comm -23 - <(LC_ALL=C sort -u "$manifest") |
@@ -423,6 +430,9 @@ test ! -L "$next_link"
 ln -s "releases/$release" "$next_link"
 mv -Tf "$next_link" "$root/current"
 REMOTE
+} | ssh "$HOST" bash -s -- \
+  "$REMOTE_PATH" "$RELEASE_ID" "$VM_HASH" "$DEPLOY_TOKEN" \
+  "$cache_dir/.manifest-$RELEASE_ID"
 
 
 rollback() {
@@ -588,18 +598,6 @@ while IFS= read -r relative; do
   if ! curl -fsS --max-time 60 "${DEPLOY_URL}/${relative}" |
     cmp - "dist/${relative}"; then
     echo "ERROR: 线上 artifact 与本次构建不一致：${relative}" >&2
-    rollback
-    exit 1
-  fi
-  if ! ARTIFACT_HEADERS="$(curl -fsSI --max-time 20 "${DEPLOY_URL}/${relative}")"; then
-    echo "ERROR: 线上 artifact 响应头不可访问：${relative}" >&2
-    rollback
-    exit 1
-  fi
-  if ! grep -Eqi \
-    '^cache-control:[[:space:]]*public, max-age=31536000, immutable[[:space:]]*$' \
-    <<<"$ARTIFACT_HEADERS"; then
-    echo "ERROR: 线上 artifact 缺少 immutable 缓存契约：${relative}" >&2
     rollback
     exit 1
   fi
