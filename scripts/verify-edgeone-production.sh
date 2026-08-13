@@ -18,7 +18,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
   exit 2
 }
 for required_command in \
-  curl cmp node awk grep tail find unlink rmdir mktemp seq sleep wc; do
+  curl cmp node awk grep tail find unlink rmdir mktemp seq sleep wc sha256sum; do
   command -v "$required_command" >/dev/null || {
     echo "ERROR: 缺少 EdgeOne 验收命令：${required_command}" >&2
     exit 1
@@ -64,6 +64,7 @@ fetch_and_compare() {
   local local_file="$2"
   local timeout="${3:-30}"
   local output_file="$temporary_dir/download"
+  local expected_sha="${4:-}"
   curl -fsS --max-time "$timeout" \
     -H 'Cache-Control: no-cache' \
     "${DEPLOY_URL}${request_path}" \
@@ -71,6 +72,14 @@ fetch_and_compare() {
   if ! cmp "$output_file" "$local_file"; then
     echo "ERROR: EdgeOne 线上文件与 release 不一致：${request_path}" >&2
     return 1
+  fi
+  if [[ -n "$expected_sha" ]]; then
+    local actual_sha
+    actual_sha="$(sha256sum "$output_file" | awk '{print $1}')"
+    if [[ "$actual_sha" != "$expected_sha" ]]; then
+      echo "ERROR: EdgeOne 线上 artifact SHA-256 不匹配：${request_path}" >&2
+      return 1
+    fi
   fi
 }
 
@@ -138,9 +147,10 @@ if [[ "$release_ready" -ne 1 ]]; then
   exit 1
 fi
 
-echo "==> 逐字节核对首页、清单、法律声明和六个 VM 文件"
+echo "==> 逐字节核对首页、伴侣页、清单、法律声明、VM 文件与可下载样本"
 fetch_and_compare "/?release=${SOURCE_ID}" dist/index.html
 fetch_and_compare "/index.html?release=${SOURCE_ID}" dist/index.html
+fetch_and_compare "/companion.html?release=${SOURCE_ID}" dist/companion.html
 fetch_and_compare "/vm-assets.json?release=${SOURCE_ID}" dist/vm-assets.json
 for legal_file in SOURCE_CODE.md THIRD_PARTY_NOTICES.md; do
   fetch_and_compare \
@@ -170,7 +180,7 @@ grep -Eq '^HTTP/[0-9.]+ 200([[:space:]]|$)' "$root_headers" || {
 require_security_headers "$root_headers"
 require_header "$root_headers" Cache-Control no-store
 
-for no_store_path in index.html vm-assets.json legal/SOURCE_CODE.md legal/THIRD_PARTY_NOTICES.md; do
+for no_store_path in index.html companion.html vm-assets.json legal/SOURCE_CODE.md legal/THIRD_PARTY_NOTICES.md; do
   no_store_headers="$temporary_dir/no-store.headers"
   curl -fsSI --max-time 20 "${DEPLOY_URL}/${no_store_path}" \
     -o "$no_store_headers"
@@ -190,6 +200,39 @@ app_headers="$temporary_dir/app.headers"
 curl -fsSI --max-time 20 "${DEPLOY_URL}/${app_asset}" -o "$app_headers"
 require_header "$app_headers" Cache-Control \
   'public, max-age=31536000, immutable'
+
+artifact_manifest="$temporary_dir/artifacts.tsv"
+node --input-type=module -e "
+  import { readFileSync } from 'node:fs'
+  import path from 'node:path'
+  const profile = JSON.parse(readFileSync('vm/profiles/production.json', 'utf8'))
+  for (const labId of profile.pwnhubLabs) {
+    const lab = JSON.parse(
+      readFileSync(path.join('vm/labs/pwnhub', labId, 'manifest.json'), 'utf8'),
+    )
+    for (const artifact of lab.artifacts ?? []) {
+      if (artifact.downloadable !== true) continue
+      const name = path.posix.basename(artifact.path)
+      process.stdout.write(
+        \`/artifacts/\${artifact.sha256}/\${name}\\t\${artifact.sha256}\\n\`,
+      )
+    }
+  }
+" > "$artifact_manifest"
+[[ -s "$artifact_manifest" ]] || {
+  echo "ERROR: production profile 没有可验收的 downloadable artifact" >&2
+  exit 1
+}
+while IFS=$'\t' read -r artifact_url artifact_sha; do
+  [[ "$artifact_url" =~ ^/artifacts/[a-f0-9]{64}/[A-Za-z0-9][A-Za-z0-9._-]*$ ]]
+  [[ "$artifact_sha" =~ ^[a-f0-9]{64}$ ]]
+  fetch_and_compare "$artifact_url" "dist${artifact_url}" 60 "$artifact_sha"
+  artifact_headers="$temporary_dir/artifact.headers"
+  curl -fsSI --max-time 20 "${DEPLOY_URL}${artifact_url}" -o "$artifact_headers"
+  require_security_headers "$artifact_headers"
+  require_header "$artifact_headers" Cache-Control \
+    'public, max-age=31536000, immutable'
+done < "$artifact_manifest"
 
 wasm_path="/vm-assets/${VM_HASH}/v86/v86.wasm"
 wasm_headers="$temporary_dir/wasm.headers"

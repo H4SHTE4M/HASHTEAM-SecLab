@@ -139,8 +139,10 @@ if command -v sudo >/dev/null && sudo -n true >/dev/null 2>&1; then
   echo "ERROR: 部署账号不应拥有免交互 sudo 权限" >&2
   exit 1
 fi
-for path in "$root" "$root/releases" "$root/vm-assets"; do
-  [ -d "$path" ] && [ -r "$path" ] && [ -w "$path" ] && [ -x "$path" ] || {
+mkdir -p "$root/artifacts"
+for path in "$root" "$root/releases" "$root/vm-assets" "$root/artifacts"; do
+  [ -d "$path" ] && [ ! -L "$path" ] &&
+    [ -r "$path" ] && [ -w "$path" ] && [ -x "$path" ] || {
     echo "ERROR: 部署账号缺少目录权限：$path" >&2
     exit 1
   }
@@ -255,7 +257,7 @@ PREVIOUS_TARGET="$(
 set -euo pipefail
 root="$1"
 token="$2"
-mkdir -p "$root/releases" "$root/vm-assets"
+mkdir -p "$root/releases" "$root/vm-assets" "$root/artifacts"
 test "$(cat "$root/.deploy-lock/owner")" = "$token"
 if [ -L "$root/current" ]; then
   readlink "$root/current"
@@ -267,14 +269,18 @@ case "$PREVIOUS_TARGET" in
   *) echo "ERROR: 远端 current 指向异常位置：$PREVIOUS_TARGET"; exit 1 ;;
 esac
 
-echo "==> [3/6] 同步共享 VM 资产组 ${VM_HASH}"
+echo "==> [3/6] 同步共享 VM 资产组 ${VM_HASH} 与内容寻址下载样本"
 # Shared content-addressed files may have been created by an earlier manual
 # deployment account. Copy content and structure without attempting to set
 # arbitrary historical mtimes, which Linux reserves for the file owner.
-echo "    资产体积 $(du -sh ./dist/vm-assets | cut -f1)；--checksum 去重后只传差异"
+echo "    VM 资产体积 $(du -sh ./dist/vm-assets | cut -f1)；--checksum 去重后只传差异"
 rsync -rlzh --checksum --info=progress2,name \
   ./dist/vm-assets/ \
   "${HOST}:${REMOTE_PATH}/vm-assets/"
+echo "    下载样本体积 $(du -sh ./dist/artifacts | cut -f1)；旧 SHA-256 目录永久保留"
+rsync -rlzh --checksum --info=progress2,name \
+  ./dist/artifacts/ \
+  "${HOST}:${REMOTE_PATH}/artifacts/"
 assert_deploy_lock_heartbeat
 
 echo "==> [4/6] 分片并行上传 release ${RELEASE_ID} 至持久传输缓存"
@@ -289,6 +295,7 @@ mkdir -p "$chunk_dir"
 
 find ./dist -type f \
   ! -path './dist/vm-assets/*' \
+  ! -path './dist/artifacts/*' \
   ! -name '.DS_Store' \
   ! -name '*.log' \
   -printf '%P\n' |
@@ -302,6 +309,7 @@ chunk_count="$DEPLOY_PARALLELISM"
 # 按体积贪心分片，让各流负载接近
 find ./dist -type f \
   ! -path './dist/vm-assets/*' \
+  ! -path './dist/artifacts/*' \
   ! -name '.DS_Store' \
   ! -name '*.log' \
   -printf '%s\t%P\n' |
@@ -322,7 +330,7 @@ cache_dir="$REMOTE_PATH/.transfer-cache"
 ssh "$HOST" mkdir -p "$cache_dir"
 scp "$manifest_file" "$HOST:$cache_dir/.manifest-$RELEASE_ID"
 
-echo "    release 共 ${total_files} 个文件、$(du -sh --exclude=vm-assets ./dist | cut -f1)；"
+echo "    release 共 ${total_files} 个文件、$(du -sh --exclude=vm-assets --exclude=artifacts ./dist | cut -f1)；"
 echo "    ${chunk_count} 条并行流；单流最多重试 ${DEPLOY_UPLOAD_RETRIES} 次、间隔 ${DEPLOY_UPLOAD_RETRY_WAIT}s"
 
 upload_chunk() {
@@ -519,6 +527,30 @@ if ! curl -fsS --max-time 20 \
   exit 1
 fi
 
+if ! COMPANION_HEADERS="$(
+  curl -fsSI --max-time 20 \
+    -H 'Cache-Control: no-cache' \
+    "${DEPLOY_URL}/companion.html"
+)"; then
+  echo "ERROR: 线上 companion.html 不可访问" >&2
+  rollback
+  exit 1
+fi
+if ! grep -Eqi '^cache-control:[[:space:]]*no-store[[:space:]]*$' \
+  <<<"$COMPANION_HEADERS"; then
+  echo "ERROR: 线上 companion.html 没有禁止缓存" >&2
+  rollback
+  exit 1
+fi
+if ! curl -fsS --max-time 20 \
+  -H 'Cache-Control: no-cache' \
+  "${DEPLOY_URL}/companion.html?release=${RELEASE_ID}" |
+  cmp - dist/companion.html; then
+  echo "ERROR: 线上 companion.html 不是本次 release 的入口" >&2
+  rollback
+  exit 1
+fi
+
 if ! curl -fsS --max-time 20 \
   -H 'Cache-Control: no-cache' \
   "${DEPLOY_URL}/vm-assets.json?release=${RELEASE_ID}" |
@@ -554,6 +586,39 @@ for relative in \
     exit 1
   fi
 done
+
+while IFS= read -r relative; do
+  if [[ ! "$relative" =~ ^artifacts/[a-f0-9]{64}/[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+    echo "ERROR: 本次构建包含非内容寻址 artifact：${relative}" >&2
+    rollback
+    exit 1
+  fi
+  artifact_sha="${relative#artifacts/}"
+  artifact_sha="${artifact_sha%%/*}"
+  if [[ "$(sha256sum "dist/${relative}" | cut -d ' ' -f1)" != "$artifact_sha" ]]; then
+    echo "ERROR: 本次构建 artifact 路径与内容 SHA-256 不一致：${relative}" >&2
+    rollback
+    exit 1
+  fi
+  if ! curl -fsS --max-time 60 "${DEPLOY_URL}/${relative}" |
+    cmp - "dist/${relative}"; then
+    echo "ERROR: 线上 artifact 与本次构建不一致：${relative}" >&2
+    rollback
+    exit 1
+  fi
+  if ! ARTIFACT_HEADERS="$(curl -fsSI --max-time 20 "${DEPLOY_URL}/${relative}")"; then
+    echo "ERROR: 线上 artifact 响应头不可访问：${relative}" >&2
+    rollback
+    exit 1
+  fi
+  if ! grep -Eqi \
+    '^cache-control:[[:space:]]*public, max-age=31536000, immutable[[:space:]]*$' \
+    <<<"$ARTIFACT_HEADERS"; then
+    echo "ERROR: 线上 artifact 缺少 immutable 缓存契约：${relative}" >&2
+    rollback
+    exit 1
+  fi
+done < <(find dist/artifacts -type f -printf 'artifacts/%P\n' | LC_ALL=C sort)
 assert_deploy_lock_heartbeat
 
 echo "==> 发布完成：${DEPLOY_URL}/"

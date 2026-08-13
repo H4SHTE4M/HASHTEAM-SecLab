@@ -4,11 +4,24 @@ import crypto from 'node:crypto'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { rmSync } from 'node:fs'
 import path from 'node:path'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const BACKEND_DIR = path.resolve(__dirname, '..', 'backend')
 const DB_PATH = path.join(__dirname, '.tmp-telemetry-test.db')
+
+interface TestSqliteDatabase {
+  exec(sql: string): void
+  prepare(sql: string): {
+    run(...params: Array<string | number>): unknown
+  }
+  close(): void
+}
+
+const TestDatabase = createRequire(path.join(BACKEND_DIR, 'package.json'))('better-sqlite3') as new (
+  filename: string,
+) => TestSqliteDatabase
 
 // 后端使用 better-sqlite3（原生模块），用子进程方式启动后端、通过 HTTP 测试。
 // 测试用独立的临时数据库和端口。此文件已从主 vitest 运行中排除（vite.config.ts
@@ -30,9 +43,12 @@ function hmac(key: string, message: string): string {
 }
 
 let serverProcess: ChildProcess | null = null
+let serverStderr = ''
+
 
 async function startServer(): Promise<ChildProcess> {
   return new Promise<ChildProcess>((resolve, reject) => {
+    serverStderr = ''
     const env = {
       ...process.env,
       TELEMETRY_PORT: String(TEST_PORT),
@@ -52,11 +68,29 @@ async function startServer(): Promise<ChildProcess> {
     })
     proc.stderr.on('data', (data) => {
       const msg = data.toString()
+      serverStderr += msg
       if (msg.includes('FATAL')) reject(new Error(msg))
     })
     proc.on('error', reject)
     setTimeout(() => reject(new Error('server start timeout')), 5000)
   })
+}
+function nextServerStderr(): Promise<string> {
+  const stderr = serverProcess?.stderr
+  if (!stderr) return Promise.reject(new Error('server stderr is unavailable'))
+  return new Promise<string>((resolve) => {
+    stderr.once('data', (data) => resolve(data.toString()))
+  })
+}
+
+
+async function stopServer(): Promise<void> {
+  if (!serverProcess) return
+  const proc = serverProcess
+  serverProcess = null
+  if (proc.exitCode !== null || proc.signalCode !== null) return
+  proc.kill('SIGTERM')
+  await new Promise<void>((resolve) => proc.once('exit', () => resolve()))
 }
 
 interface FetchResult {
@@ -67,7 +101,12 @@ interface FetchResult {
 }
 
 async function httpFetch(pathname: string, options: RequestInit = {}): Promise<FetchResult> {
-  const response = await fetch(`http://127.0.0.1:${TEST_PORT}${pathname}`, options)
+  const headers = new Headers(options.headers)
+  headers.set('Connection', 'close')
+  const response = await fetch(
+    `http://127.0.0.1:${TEST_PORT}${pathname}`,
+    { ...options, headers },
+  )
   const text = await response.text()
   let body: Record<string, unknown> | null = null
   try {
@@ -81,6 +120,26 @@ async function httpFetch(pathname: string, options: RequestInit = {}): Promise<F
 function cleanDb(): void {
   for (const suffix of ['', '-wal', '-shm']) {
     rmSync(`${DB_PATH}${suffix}`, { force: true })
+  }
+}
+
+function seedLegacyEventLog(events: Array<{ eventType: string; timestamp: number }>): void {
+  const database = new TestDatabase(DB_PATH)
+  try {
+    database.exec(`
+      CREATE TABLE event_log (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_type TEXT NOT NULL,
+        dimension  TEXT NOT NULL DEFAULT '',
+        ts         INTEGER NOT NULL
+      )
+    `)
+    const insert = database.prepare(
+      'INSERT INTO event_log (event_type, dimension, ts) VALUES (?, ?, ?)',
+    )
+    for (const event of events) insert.run(event.eventType, '', event.timestamp)
+  } finally {
+    database.close()
   }
 }
 
@@ -127,11 +186,7 @@ describe('Telemetry Backend', () => {
   })
 
   afterEach(async () => {
-    if (serverProcess) {
-      serverProcess.kill('SIGTERM')
-      await new Promise<void>((r) => serverProcess?.on('exit', r))
-      serverProcess = null
-    }
+    await stopServer()
     cleanDb()
   })
 
@@ -369,6 +424,109 @@ describe('Telemetry Backend', () => {
     expect(pwnhub['vm_boot_cache']).toEqual({ cold: 1 })
   })
 
+  it('无 module 列旧库迁移到 SecLab，PwnHub 趋势严格隔离且重复启动幂等', async () => {
+    await stopServer()
+    cleanDb()
+    const timestamp = Date.now()
+    seedLegacyEventLog([
+      { eventType: 'session_create', timestamp },
+      { eventType: 'command', timestamp },
+      { eventType: 'level_complete', timestamp },
+    ])
+    serverProcess = await startServer()
+
+    const token = randomToken()
+    await createSession(token)
+    await sendEvents(token, 1, [
+      { type: 'command', command: 'readelf' },
+      {
+        type: 'activity_complete',
+        activityId: 'memory-addresses-01',
+        path: 'guided',
+      },
+    ], 'pwnhub')
+
+    const seclabResult = await httpFetch('/api/public/stats?module=seclab')
+    const seclabTrend = (
+      requireBody(seclabResult)['timeseries'] as Array<Record<string, number>>
+    ).at(-1)
+    expect(seclabTrend).toMatchObject({
+      session_create: 1,
+      command: 1,
+      level_complete: 1,
+    })
+
+    const pwnhubResult = await httpFetch('/api/public/stats?module=pwnhub')
+    const pwnhubTrend = (
+      requireBody(pwnhubResult)['timeseries'] as Array<Record<string, number>>
+    ).at(-1)
+    expect(pwnhubTrend).toMatchObject({
+      session_create: 1,
+      command: 1,
+      level_complete: 1,
+    })
+
+    await stopServer()
+    serverProcess = await startServer()
+    const restartedResult = await httpFetch('/api/public/stats?module=seclab')
+    const restartedTrend = (
+      requireBody(restartedResult)['timeseries'] as Array<Record<string, number>>
+    ).at(-1)
+    expect(restartedTrend).toMatchObject({
+      session_create: 1,
+      command: 1,
+      level_complete: 1,
+    })
+  })
+
+  it('无 module 总趋势按同日事件累加，等于 SecLab 与 PwnHub 趋势之和', async () => {
+    const seclabToken = randomToken()
+    await createSession(seclabToken)
+    await sendEvents(seclabToken, 1, [
+      { type: 'command', command: 'find' },
+      { type: 'level_complete', level: 1, path: 'guided' },
+      { type: 'hint', level: 1 },
+      { type: 'reset', level: 1 },
+    ])
+
+    const pwnhubToken = randomToken()
+    await createSession(pwnhubToken)
+    await sendEvents(pwnhubToken, 1, [
+      { type: 'command', command: 'readelf' },
+      {
+        type: 'activity_complete',
+        activityId: 'memory-addresses-01',
+        path: 'guided',
+      },
+      { type: 'activity_hint', activityId: 'memory-addresses-01' },
+      { type: 'activity_reset', activityId: 'memory-addresses-01' },
+    ], 'pwnhub')
+
+    const totalResult = await httpFetch('/api/public/stats')
+    const seclabResult = await httpFetch('/api/public/stats?module=seclab')
+    const pwnhubResult = await httpFetch('/api/public/stats?module=pwnhub')
+    const total = (
+      requireBody(totalResult)['timeseries'] as Array<Record<string, number>>
+    ).at(-1) as Record<string, number>
+    const seclab = (
+      requireBody(seclabResult)['timeseries'] as Array<Record<string, number>>
+    ).at(-1) as Record<string, number>
+    const pwnhub = (
+      requireBody(pwnhubResult)['timeseries'] as Array<Record<string, number>>
+    ).at(-1) as Record<string, number>
+
+    for (const metric of ['session_create', 'command', 'level_complete', 'hint', 'reset']) {
+      expect(total[metric]).toBe(seclab[metric] + pwnhub[metric])
+    }
+    expect(total).toMatchObject({
+      session_create: 2,
+      command: 2,
+      level_complete: 2,
+      hint: 2,
+      reset: 2,
+    })
+  })
+
   it('严格校验 module 协议版本、命令 allowlist 与 activityId', async () => {
     const token = randomToken()
     await createSession(token)
@@ -578,6 +736,25 @@ describe('Telemetry Backend', () => {
       expect(cookie).toContain('SameSite=Strict')
       expect(cookie).toContain('Path=/api/admin')
     })
+    it('失败管理员登录日志不持久化原始 IP', async () => {
+      const rawIp = '203.0.113.42'
+      const logPromise = nextServerStderr()
+      const result = await httpFetch('/api/admin/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Real-IP': rawIp,
+        },
+        body: JSON.stringify({ password: 'wrong-password' }),
+      })
+
+      expect(result.status).toBe(401)
+      const log = await logPromise
+      expect(log).toContain('管理登录失败')
+      expect(log).not.toContain(rawIp)
+      expect(serverStderr).not.toContain(rawIp)
+    })
+
 
     it('overview 未认证 401,认证后返回详细数据,logout 后会话失效', async () => {
       const token = randomToken()

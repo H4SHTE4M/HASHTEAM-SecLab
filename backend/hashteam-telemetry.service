@@ -6,8 +6,8 @@ After=network.target
 Type=simple
 User=hashteam-telemetry
 Group=hashteam-telemetry
-WorkingDirectory=/opt/hashteam-telemetry
-ExecStart=/usr/bin/node server.js
+WorkingDirectory=/opt/hashteam-telemetry/current
+ExecStart=/usr/bin/node /opt/hashteam-telemetry/current/server.js
 Restart=on-failure
 RestartSec=5
 

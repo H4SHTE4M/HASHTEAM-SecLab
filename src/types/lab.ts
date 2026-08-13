@@ -390,6 +390,9 @@ export type BootStage =
   | 'ready'
   | 'error'
 
+/** 共享 VM 单例的工作台所有者；每个工作台实例使用唯一 symbol 完成生命周期交接。 */
+export type VirtualMachineOwner = symbol
+
 /** 虚拟机控制器统一接口（便于后续替换为快照恢复等实现） */
 export interface VirtualMachineController {
   start(): Promise<void>

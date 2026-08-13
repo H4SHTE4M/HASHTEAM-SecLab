@@ -87,7 +87,9 @@ pnpm test:binary-profile
 
 echo "==> 9/11 部署锁租约与后端部署脚本检查"
 bash scripts/test-deploy-lock.sh
+bash scripts/test-backend-ops.sh
 bash -n backend/deploy.sh
+bash -n backend/set-admin-password.sh
 
 echo "==> 10/11 端到端集成测试（Node 无头启动真实虚拟机）"
 node scripts/integration-test.mjs

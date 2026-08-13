@@ -4,10 +4,13 @@ import { log } from './boot-logger'
 /** v86 模拟器的最小类型声明（libv86.js 无官方 d.ts，仅声明我们用到的 API） */
 export interface V86Emulator {
   add_listener(event: 'serial0-output-byte', callback: (byte: number) => void): void
+  add_listener(event: 'emulator-ready', callback: () => void): void
   remove_listener(event: 'serial0-output-byte', callback: (byte: number) => void): void
+  remove_listener(event: 'emulator-ready', callback: () => void): void
   serial0_send(data: string): void
-  run(): void
-  stop(): void
+  run(): Promise<void>
+  stop(): Promise<void>
+  destroy(): Promise<void>
   restart(): void
   is_running(): boolean
 }
@@ -47,6 +50,7 @@ let scriptLoadingPromise: Promise<void> | null = null
 let scriptLoadingElement: HTMLScriptElement | null = null
 let rejectScriptLoading: ((reason: Error) => void) | null = null
 const MAX_SERIAL_LOG_LINE_LENGTH = 4096
+const EMULATOR_DESTROY_READY_TIMEOUT_MS = 1_000
 const READY_PROTOCOL_PATTERN = /^@@HASHTEAM:.*"type"\s*:\s*"ready"/
 const PROTOCOL_KEY_PATTERN = /("key"\s*:\s*")[^"]*(")/
 
@@ -141,6 +145,11 @@ export class V86Controller implements VirtualMachineController {
   private serialLogLineTruncated = false
   private stopRequested = false
   private startAbortController: AbortController | null = null
+  /** 当前 start/stop 任务身份；stop 会等待已取消的 start 收口，start 会等待完整销毁。 */
+  private startPromise: Promise<void> | null = null
+  private stopPromise: Promise<void> | null = null
+  /** V86.destroy() 只有在内部 v86 收到 emulator-ready 后才可安全调用。 */
+  private emulatorReadyPromise: Promise<void> | null = null
   private readonly byteHandler = (byte: number): void => {
     const text = this.decoder.decode(new Uint8Array([byte]), { stream: true })
     if (text === '') return
@@ -181,7 +190,20 @@ export class V86Controller implements VirtualMachineController {
   ) {}
 
   async start(): Promise<void> {
+    if (this.stopPromise !== null) await this.stopPromise
     if (this.emulator !== null) return
+    if (this.startPromise !== null) return this.startPromise
+
+    const task = this.startInternal()
+    this.startPromise = task
+    try {
+      await task
+    } finally {
+      if (this.startPromise === task) this.startPromise = null
+    }
+  }
+
+  private async startInternal(): Promise<void> {
     this.stopRequested = false
     const startAbortController = new AbortController()
     this.startAbortController = startAbortController
@@ -212,7 +234,7 @@ export class V86Controller implements VirtualMachineController {
       if (V86 === undefined) throw new Error('V86 构造器不可用')
 
       this.onStageChange('starting-linux')
-      this.emulator = new V86({
+      const emulator = new V86({
         wasm_path: this.assets.wasmUrl,
         memory_size: this.assets.memorySize,
         vga_memory_size: 2 * 1024 * 1024,
@@ -233,7 +255,17 @@ export class V86Controller implements VirtualMachineController {
         // 且 Promise reject 被静默吞掉，导致 VM 永不运行、串口零输出。
         autostart: true,
       })
-      this.emulator.add_listener('serial0-output-byte', this.byteHandler)
+      this.emulator = emulator
+      let resolveReady!: () => void
+      this.emulatorReadyPromise = new Promise<void>((resolve) => {
+        resolveReady = resolve
+      })
+      const handleReady = (): void => {
+        emulator.remove_listener('emulator-ready', handleReady)
+        resolveReady()
+      }
+      emulator.add_listener('emulator-ready', handleReady)
+      emulator.add_listener('serial0-output-byte', this.byteHandler)
       log('boot', 'v86 已构造（autostart），等待 Linux 内核引导与 init 发出 ready 协议…')
       this.onStageChange('preparing-env')
     } finally {
@@ -284,13 +316,70 @@ export class V86Controller implements VirtualMachineController {
     this.startAbortController = null
     cancelLibV86Load()
     this.serialCallbacks.clear()
-    if (this.emulator === null) return
-    this.emulator.remove_listener('serial0-output-byte', this.byteHandler)
-    this.emulator.stop()
+    if (this.stopPromise !== null) return this.stopPromise
+
+    const task = this.stopInternal()
+    this.stopPromise = task
+    try {
+      await task
+    } finally {
+      if (this.stopPromise === task) this.stopPromise = null
+    }
+  }
+
+  private async stopInternal(): Promise<void> {
+    const pendingStart = this.startPromise
+    if (pendingStart !== null) {
+      try {
+        await pendingStart
+      } catch {
+        // stop 已主动取消 start；原 start 调用方仍会收到其异常，这里只等待收口。
+      }
+    }
+
+    const emulator = this.emulator
+    const emulatorReady = this.emulatorReadyPromise
     this.emulator = null
-    this.serialLogLine = ''
-    this.serialLogLineTruncated = false
-    this.onStageChange('idle')
+    this.emulatorReadyPromise = null
+    try {
+      if (emulator === null) return
+      emulator.remove_listener('serial0-output-byte', this.byteHandler)
+      if (emulatorReady !== null) {
+        let resolveTimeout!: (ready: boolean) => void
+        const timeout = new Promise<boolean>((resolve) => {
+          resolveTimeout = resolve
+        })
+        const timer = window.setTimeout(
+          () => resolveTimeout(false),
+          EMULATOR_DESTROY_READY_TIMEOUT_MS,
+        )
+        const readyBeforeDeadline = await Promise.race([
+          emulatorReady.then(() => true),
+          timeout,
+        ])
+        window.clearTimeout(timer)
+        if (!readyBeforeDeadline) {
+          // libv86 没有公开取消内部 wasm/镜像初始化的 API。此时直接 destroy 会访问
+          // 尚不存在的 this.v86 并抛错；让 stop 有界收口，同时保留 ready 后的一次性销毁。
+          log('boot', 'v86 初始化未及时完成，已安排就绪后延迟销毁', 'warn')
+          void emulatorReady
+            .then(() => emulator.destroy())
+            .catch((error) => {
+              log(
+                'boot',
+                `延迟销毁 v86 失败：${error instanceof Error ? error.message : String(error)}`,
+                'warn',
+              )
+            })
+          return
+        }
+      }
+      await emulator.destroy()
+    } finally {
+      this.serialLogLine = ''
+      this.serialLogLineTruncated = false
+      this.onStageChange('idle')
+    }
   }
 
   private assertStartActive(): void {

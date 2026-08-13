@@ -11,6 +11,7 @@ import { log as bootLog } from '../services/boot-logger'
 import { useLabPreferences } from './useLabPreferences'
 import { COURSE } from '../modules/pwnhub/course'
 import {
+  applyProgressSnapshot,
   completeLevel,
   completeLab,
   consumeProgressResetNotice,
@@ -19,6 +20,7 @@ import {
   advanceLabGuideStep,
   completeLearningStep,
   completeLabLearningStep,
+  parseProgressSnapshot,
   loadProgress,
   markGuidedAssistance,
   markLabGuidedAssistance,
@@ -27,6 +29,7 @@ import {
   resetLevelAttempt,
   resetLabAttempt,
   resetAllProgress,
+  PROGRESS_STORAGE_KEY,
   setCurrentLevel,
   setCurrentLab,
 } from '../services/progress-store'
@@ -40,6 +43,21 @@ const storage = createSafeStorage()
 const initial = loadProgress(storage, TOTAL_LEVELS)
 const state = reactive<LabProgress>(initial)
 const progressResetNotice = ref(consumeProgressResetNotice(storage))
+
+function syncExternalProgress(event: StorageEvent): void {
+  if (event.key !== PROGRESS_STORAGE_KEY) return
+  // 事件入队后本标签可能已完成了更新；始终读取此刻最新存储，避免旧事件反向覆盖。
+  const latestRaw = storage.getItem(PROGRESS_STORAGE_KEY)
+  if (latestRaw === null) return
+  const external = parseProgressSnapshot(latestRaw, TOTAL_LEVELS)
+  if (external === null) return
+  // storage 事件只更新内存单例；不持久化，避免标签页间回写循环。
+  applyProgressSnapshot(state, external)
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', syncExternalProgress)
+}
 
 const preferences = useLabPreferences()
 const anomalyCenter = useAnomalyCenter()
@@ -118,25 +136,7 @@ export function useLabProgress() {
 
   /** 重新开始：清空全部进度 */
   function resetAll(): void {
-    const fresh = resetAllProgress(storage)
-    state.schemaVersion = fresh.schemaVersion
-    state.currentLevel = fresh.currentLevel
-    state.currentLabId = fresh.currentLabId
-    state.completedLevels = fresh.completedLevels
-    state.completedLabIds = fresh.completedLabIds
-    state.chapterProgress = fresh.chapterProgress
-    state.labHintsUsed = fresh.labHintsUsed
-    state.labGuideSteps = fresh.labGuideSteps
-    state.labCompletedSteps = fresh.labCompletedSteps
-    state.guidedAssistanceLabIds = fresh.guidedAssistanceLabIds
-    state.labCompletionRecords = fresh.labCompletionRecords
-    state.hintsUsed = fresh.hintsUsed
-    state.guideSteps = fresh.guideSteps
-    state.completedSteps = fresh.completedSteps
-    state.guidedAssistanceLevels = fresh.guidedAssistanceLevels
-    state.completionRecords = fresh.completionRecords
-    state.startedAt = fresh.startedAt
-    state.updatedAt = fresh.updatedAt
+    applyProgressSnapshot(state, resetAllProgress(storage))
   }
 
   function hintsUsedFor(level: number): number {

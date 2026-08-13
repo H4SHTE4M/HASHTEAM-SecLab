@@ -238,7 +238,7 @@ PwnHub 内容与 SecLab 数字关卡并存，但不复用 `level-N` 编号：
   initramfs、下载产物和 telemetry backend activity 白名单。
 - 未列出的实验和 GDB/ROP 工具不进入生产 initramfs 或 `dist/artifacts/`。
 - `downloadable: true` 的发布实验素材会输出到
-  `dist/artifacts/<labId>/<filename>`，`verify:dist` 逐一核对 SHA-256。
+  `dist/artifacts/<sha256>/<filename>`，`verify:dist` 逐一核对 SHA-256。
 - 引导进度使用 `labGuideSteps`/`labCompletedSteps`；证据前缀损坏时 PwnHub
   与 SecLab 一样弹出模块隔离的恢复与现场日志入口。
 - 二进制样本、工具链锁或实验脚本变更后，运行

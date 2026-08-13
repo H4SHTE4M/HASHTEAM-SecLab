@@ -203,6 +203,13 @@ const sessionColumns = db.prepare('PRAGMA table_info(sessions)').all()
 if (!sessionColumns.some((column) => column.name === 'module')) {
   db.exec("ALTER TABLE sessions ADD COLUMN module TEXT NOT NULL DEFAULT ''")
 }
+// v1 event_log 没有 module；v2 增列后，已有明细仍以空字符串表示旧 SecLab 数据。
+// 两步均可安全重复执行：列只补一次，回填在后续启动时不会再次命中。
+const eventLogColumns = db.prepare('PRAGMA table_info(event_log)').all()
+if (!eventLogColumns.some((column) => column.name === 'module')) {
+  db.exec("ALTER TABLE event_log ADD COLUMN module TEXT NOT NULL DEFAULT ''")
+}
+db.exec("UPDATE event_log SET module = 'seclab' WHERE module = ''")
 
 // ---- 预编译语句 ----
 
@@ -269,7 +276,7 @@ const stmtTimeseriesDailyByModule = db.prepare(`
     event_type,
     COUNT(*) AS count
   FROM event_log
-  WHERE ts >= ? AND (module = ? OR module = '')
+  WHERE ts >= ? AND module = ?
   GROUP BY day_bucket, event_type
   ORDER BY day_bucket ASC, event_type ASC
 `)
@@ -290,7 +297,7 @@ const stmtTimeseriesHourlyByModule = db.prepare(`
     event_type,
     COUNT(*) AS count
   FROM event_log
-  WHERE ts >= ? AND (module = ? OR module = '')
+  WHERE ts >= ? AND module = ?
     AND event_type IN ('session_create', 'command')
   GROUP BY hour_bucket, event_type
   ORDER BY hour_bucket ASC, event_type ASC
@@ -618,7 +625,7 @@ function getTimeseries(days = 30, mod) {
       : row.event_type.startsWith('activity_')
         ? row.event_type.slice('activity_'.length)
         : row.event_type
-    if (eventType in entry) entry[eventType] = row.count
+    if (eventType in entry) entry[eventType] += row.count
   }
 
   return [...buckets.values()]
@@ -978,7 +985,7 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 400, { error: 'invalid request' }, API_HEADERS)
       }
       if (!verifyAdminPassword(payload.password)) {
-        console.warn(`[telemetry] 管理登录失败 (ip=${ip})`)
+        console.warn('[telemetry] 管理登录失败')
         return sendJson(res, 401, { error: 'invalid credentials' }, API_HEADERS)
       }
       const token = crypto.randomBytes(32).toString('base64url')

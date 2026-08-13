@@ -5,6 +5,7 @@ import type {
   LabMode,
   ProtocolMessage,
   VirtualMachineController,
+  VirtualMachineOwner,
 } from '../types/lab'
 import { V86Controller } from '../services/vm-controller'
 import {
@@ -100,7 +101,11 @@ function isKnownLab(labId: string): boolean {
 export function createVirtualMachine(options: VirtualMachineOptions = {}) {
   const stage = ref<BootStage>('idle')
   const errorMessage = ref<string | null>(null)
-  const displayCallbacks = new Set<(data: string) => void>()
+  const defaultOwner: VirtualMachineOwner = Symbol('default-vm-owner')
+  const displayCallbacks = new Map<
+    VirtualMachineOwner,
+    Set<(data: string) => void>
+  >()
   const progress = useLabProgress()
   const anomalyCenter = useAnomalyCenter()
   let activeModule: ModuleId = options.module ?? 'seclab'
@@ -118,20 +123,46 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
   let controller: VirtualMachineController | null = null
   let protocol: SerialProtocol | null = null
   let readyTimer: number | null = null
-  let bootPromise: Promise<void> | null = null
+  let bootTask: {
+    generation: number
+    owner: VirtualMachineOwner
+    ownerGeneration: number
+    promise: Promise<void>
+  } | null = null
   let generation = 0
+  let releaseBarrier: Promise<void> = Promise.resolve()
+  let releasePendingCount = 0
+  let activeOwner: VirtualMachineOwner | null = defaultOwner
+  let ownerGeneration = 0
   /** 本次启动的评分会话密钥（来自首个 ready；换 VM 即失效） */
   let sessionKey: CryptoKey | null = null
   /** 首个 ready 一到即钉住（即使密钥缺失/非法，后续 ready 也不得补换密钥） */
   let readySeen = false
-  /** dispose 代际：dispose 不禁止显式重 boot（注释承诺过），但能让在途的
-   *  boot/restart continuation 发现代际已变、放弃复活虚拟机。 */
-  let disposeGeneration = 0
   /** 协议消息按到达顺序串行处理（验签是异步的） */
   let messageChain: Promise<void> = Promise.resolve()
   /** 当前页面会话临时放行的实验；不进入进度存储，也不参与完成判定。 */
   const temporarilyUnlockedLabIds = new Set<string>()
   let bootStartedAt = 0
+
+  function isActiveOwner(owner: VirtualMachineOwner, seenOwnerGeneration?: number): boolean {
+    return (
+      activeOwner === owner &&
+      (seenOwnerGeneration === undefined || ownerGeneration === seenOwnerGeneration)
+    )
+  }
+
+  function activateDefaultOwner(owner: VirtualMachineOwner): boolean {
+    if (activeOwner === null && owner === defaultOwner) {
+      activeOwner = owner
+      ownerGeneration += 1
+    }
+    return activeOwner === owner
+  }
+
+  function emitDisplay(data: string): void {
+    if (activeOwner === null) return
+    displayCallbacks.get(activeOwner)?.forEach((callback) => callback(data))
+  }
 
   function isTemporarilyUnlocked(labId: string): boolean {
     return temporarilyUnlockedLabIds.has(labId)
@@ -163,8 +194,8 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
   }
 
   /**
-   * 释放当前会话。先使 generation 失效，再解除协议监听和停止控制器，
-   * 防止旧控制器的迟到回调覆盖新会话状态。
+   * 释放当前会话。控制器先从当前代际摘除，再把 stop 串到释放屏障；
+   * 后续 boot 必须等所有旧 stop 完成，避免连续 restart 遗留并行 v86。
    */
   async function releaseCurrentVm(): Promise<void> {
     generation += 1
@@ -175,21 +206,32 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     const currentProtocol = protocol
     const currentController = controller
     const pendingMessages = messageChain
+    const previousRelease = releaseBarrier
     protocol = null
     controller = null
     // 新会话使用独立队列；旧队列会在 generation 检查处失效，并在释放完成前排空。
     messageChain = Promise.resolve()
-
     currentProtocol?.dispose()
-    if (currentController !== null) {
+
+    releasePendingCount += 1
+    const task = (async () => {
       try {
-        await currentController.stop()
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        log('boot', `释放旧虚拟机失败：${message}`, 'warn')
+        await previousRelease
+        if (currentController !== null) {
+          try {
+            await currentController.stop()
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            log('boot', `释放旧虚拟机失败：${message}`, 'warn')
+          }
+        }
+        await pendingMessages
+      } finally {
+        releasePendingCount -= 1
       }
-    }
-    await pendingMessages
+    })()
+    releaseBarrier = task
+    await task
   }
 
   async function failCurrentBoot(message: string, failedGeneration: number): Promise<void> {
@@ -203,7 +245,10 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
           : 'linux_error'
       getTelemetry().trackVmBoot(outcome, vmBootDuration(Date.now() - bootStartedAt), getVmCacheState())
     }
-    await releaseCurrentVm()
+    const release = releaseCurrentVm()
+    const releasedGeneration = generation
+    await release
+    if (generation !== releasedGeneration) return
     stage.value = 'error'
     errorMessage.value = message
   }
@@ -346,7 +391,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
           const notice =
             '\r\n\x1b[33m环境结果已经正确，但还需要完成右侧当前教学步骤，' +
             '确认你观察过关键输出后再运行一次 check。\x1b[0m\r\n'
-          displayCallbacks.forEach((callback) => callback(notice))
+          emitDisplay(notice)
         }
         break
       }
@@ -405,7 +450,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
           const notice =
             '\r\n\x1b[33m环境结果已经正确，但还需要完成右侧当前教学步骤，' +
             '确认你观察过关键输出后再运行一次 check。\x1b[0m\r\n'
-          displayCallbacks.forEach((callback) => callback(notice))
+          emitDisplay(notice)
         }
         break
       }
@@ -442,11 +487,19 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     }
   }
 
-  async function bootInternal(): Promise<void> {
-    const seenDisposeGeneration = disposeGeneration
-    if (controller !== null) await releaseCurrentVm()
-    // 释放期间页面被 dispose：放弃本次启动，不重建控制器
-    if (disposeGeneration !== seenDisposeGeneration) return
+  async function bootInternal(
+    owner: VirtualMachineOwner,
+    seenOwnerGeneration: number,
+    requestedGeneration: number,
+  ): Promise<void> {
+    if (releasePendingCount > 0) await releaseBarrier
+    if (
+      generation !== requestedGeneration ||
+      !isActiveOwner(owner, seenOwnerGeneration) ||
+      controller !== null
+    ) {
+      return
+    }
 
     errorMessage.value = null
     clearBootLog()
@@ -463,7 +516,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     controller = nextController
     protocol = useSerialProtocol(nextController)
     protocol.onDisplay((data) => {
-      displayCallbacks.forEach((callback) => callback(data))
+      if (generation === currentGeneration) emitDisplay(data)
     })
     // 验签是异步的：消息按到达顺序入队串行处理，保持 ready → level-ready 的时序
     protocol.onMessage((message) => {
@@ -484,9 +537,14 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
       '请检查网络和启动日志后重试。'
     let startTimer: number | null = null
     try {
+      let rejectStartTimeout!: (reason: Error) => void
       const startTimeout = new Promise<never>((_resolve, reject) => {
-        startTimer = window.setTimeout(() => reject(new Error(timeoutMessage)), readyTimeoutMs)
+        rejectStartTimeout = reject
       })
+      startTimer = window.setTimeout(
+        () => rejectStartTimeout(new Error(timeoutMessage)),
+        readyTimeoutMs,
+      )
       try {
         await Promise.race([nextController.start(), startTimeout])
       } finally {
@@ -509,24 +567,49 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     }
   }
 
-  /** 启动虚拟机；并发调用共享同一个 Promise，ready/error 状态下保持幂等。 */
-  async function boot(): Promise<void> {
-    if (bootPromise !== null) return bootPromise
+  /** 启动虚拟机；同 owner/代际的并发调用共享 Promise，释放完成前不会创建新控制器。 */
+  async function boot(owner: VirtualMachineOwner = defaultOwner): Promise<void> {
+    if (!activateDefaultOwner(owner)) return
+    const seenOwnerGeneration = ownerGeneration
+    const requestedGeneration = generation
     if (controller !== null && stage.value !== 'error') return
+    if (
+      bootTask !== null &&
+      bootTask.generation === requestedGeneration &&
+      bootTask.owner === owner &&
+      bootTask.ownerGeneration === seenOwnerGeneration
+    ) {
+      return bootTask.promise
+    }
 
-    const task = bootInternal()
-    bootPromise = task
+    const task = bootInternal(owner, seenOwnerGeneration, requestedGeneration)
+    bootTask = {
+      generation: requestedGeneration,
+      owner,
+      ownerGeneration: seenOwnerGeneration,
+      promise: task,
+    }
     try {
       await task
     } finally {
-      if (bootPromise === task) bootPromise = null
+      if (bootTask?.promise === task) bootTask = null
     }
   }
 
-  function onDisplay(callback: (data: string) => void): () => void {
-    displayCallbacks.add(callback)
+  function onDisplay(
+    callback: (data: string) => void,
+    owner: VirtualMachineOwner = defaultOwner,
+  ): () => void {
+    if (!activateDefaultOwner(owner)) return () => undefined
+    let callbacks = displayCallbacks.get(owner)
+    if (callbacks === undefined) {
+      callbacks = new Set()
+      displayCallbacks.set(owner, callbacks)
+    }
+    callbacks.add(callback)
     return () => {
-      displayCallbacks.delete(callback)
+      callbacks.delete(callback)
+      if (callbacks.size === 0) displayCallbacks.delete(owner)
     }
   }
 
@@ -615,8 +698,25 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     }
   }
 
-  function setModule(module: ModuleId): void {
+  function handoff(owner: VirtualMachineOwner, module: ModuleId): void {
+    const ownerChanged = activeOwner !== owner
+    if (ownerChanged) {
+      activeOwner = owner
+      ownerGeneration += 1
+    }
     activeModule = module
+    // 跨工作台不能复用已经 ready 的环境：新工作台需要自己的 ready 恢复流程。
+    // 先同步摘除旧 controller，随后 boot 会在 release 屏障后创建新代际。
+    if (ownerChanged && (controller !== null || protocol !== null)) {
+      void releaseCurrentVm()
+    }
+  }
+
+  function setModule(
+    module: ModuleId,
+    owner: VirtualMachineOwner = defaultOwner,
+  ): void {
+    if (activateDefaultOwner(owner)) activeModule = module
   }
 
   function runCommand(command: string): void {
@@ -630,19 +730,16 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
   }
 
   /**
-   * 无条件重启当前会话（阻断异常弹窗的修复动作）。
-   * boot() 在 ready 等非 error 状态下幂等返回，修不了「判题密钥缺失」；
-   * 这里先释放当前会话（重置 sessionKey/readySeen、代际失效），再走 boot()
-   * 的幂等协调入口——restart 期间的并发 boot() 共享同一个 Promise。
+   * 无条件重启当前 owner 的会话（阻断异常弹窗的修复动作）。
+   * release 屏障让并发 restart/boot 收敛到同一新代际，且新控制器只会在旧 stop
+   * 完整 settle 后创建。
    */
-  async function restart(): Promise<void> {
-    const seenDisposeGeneration = disposeGeneration
+  async function restart(owner: VirtualMachineOwner = defaultOwner): Promise<void> {
+    if (!activateDefaultOwner(owner)) return
+    const seenOwnerGeneration = ownerGeneration
     await releaseCurrentVm()
-    // 使在途旧 boot 的延迟 settle 不阻塞新代际；旧 finally 有 bootPromise===task
-    // 身份检查，不会误清这里即将触发的新 Promise。
-    bootPromise = null
-    if (disposeGeneration !== seenDisposeGeneration) return
-    await boot()
+    if (!isActiveOwner(owner, seenOwnerGeneration)) return
+    await boot(owner)
   }
 
   /** 等待当前会话已接收的协议消息处理完毕；用于生命周期收口与确定性测试。 */
@@ -650,13 +747,24 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     await messageChain
   }
 
-  /** 页面卸载或显式销毁时停止 VM，并解除全部外部监听。 */
-  async function dispose(): Promise<void> {
-    disposeGeneration += 1
-    // 丢弃进行中的 boot 任务引用：dispose 之后必须能重新 boot（原实现在此泄漏 bootPromise）
-    bootPromise = null
-    await releaseCurrentVm()
-    displayCallbacks.clear()
+  /** 释放指定工作台 owner；旧 owner 的延迟 dispose 只能清理自己的显示回调。 */
+  async function dispose(owner: VirtualMachineOwner = defaultOwner): Promise<void> {
+    displayCallbacks.delete(owner)
+    if (!isActiveOwner(owner)) return
+
+    activeOwner = null
+    ownerGeneration += 1
+    const disposeOwnerGeneration = ownerGeneration
+    const release = releaseCurrentVm()
+    const releasedGeneration = generation
+    await release
+    if (
+      activeOwner !== null ||
+      ownerGeneration !== disposeOwnerGeneration ||
+      generation !== releasedGeneration
+    ) {
+      return
+    }
     stage.value = 'idle'
     errorMessage.value = null
   }
@@ -672,6 +780,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     gotoLevel,
     gotoLab,
     temporarilyUnlockLab,
+    handoff,
     setModule,
     resetCurrentLevel,
     runCommand,

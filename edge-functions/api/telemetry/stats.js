@@ -1,6 +1,6 @@
 // EdgeOne Makers Edge Function: /api/telemetry/stats
 //
-// 只读聚合统计 API。支持可选 ?module=seclab 过滤。
+// 只读聚合统计 API。支持可选 ?module=seclab|pwnhub 过滤。
 // 转发到后端，后端返回预聚合的 counter 数据。
 //
 // 链路：Browser -> Edge Function -> Backend (HMAC 鉴权) -> SQLite (只读聚合查询)
@@ -15,7 +15,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 }
 
-const ALLOWED_MODULES = ['seclab']
+const ALLOWED_MODULES = ['seclab', 'pwnhub']
 
 export function onRequestOptions() {
   return new Response(null, { status: 204, headers: CORS_HEADERS })
