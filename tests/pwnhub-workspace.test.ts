@@ -78,7 +78,7 @@ describe('PwnHub workspace integration', () => {
     expect(vmMock.boot).toHaveBeenCalledOnce()
     expect(wrapper.findAll('[data-lab-id]')).toHaveLength(3)
 
-    await wrapper.get('button[aria-label="返回 Lab 选择器"]').trigger('click')
+    await wrapper.get('button[aria-label="回到主页"]').trigger('click')
     await flushPromises()
     expect(testRouter.currentRoute.value.path).toBe('/')
 

@@ -7,6 +7,7 @@ import AppIcon from './AppIcon.vue'
 const props = defineProps<{
   stage: BootStage
   errorMessage: string | null
+  moduleLabel?: string
 }>()
 
 const emit = defineEmits<{
@@ -80,11 +81,17 @@ function toggleLogs(): void {
               <span class="sub">Security Lab</span>
             </span>
           </div>
-          <span class="boot-chip" :class="{ error: stage === 'error' }">
-            <span class="boot-pulse" aria-hidden="true" />
-            <AppIcon name="server" :size="13" />
-            <span>{{ stage === 'error' ? '启动异常' : '本地 VM' }}</span>
-          </span>
+          <div class="loading-head-actions">
+            <span v-if="moduleLabel" class="module-chip" aria-label="当前 Lab">
+              <AppIcon name="layers" :size="12" />
+              <span>{{ moduleLabel }}</span>
+            </span>
+            <span class="boot-chip" :class="{ error: stage === 'error' }">
+              <span class="boot-pulse" aria-hidden="true" />
+              <AppIcon name="server" :size="13" />
+              <span>{{ stage === 'error' ? '启动异常' : '本地 VM' }}</span>
+            </span>
+          </div>
         </header>
 
         <template v-if="stage !== 'error'">
@@ -264,6 +271,29 @@ function toggleLogs(): void {
   font-size: 10px;
   font-weight: 520;
   line-height: 1;
+}
+.loading-head-actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.module-chip {
+  min-height: 28px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  color: var(--accent-cyan);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  background: var(--accent-cyan-soft);
+  border: var(--hairline) solid var(--accent-cyan-border);
+  border-radius: 6px;
+  white-space: nowrap;
 }
 
 .boot-chip {

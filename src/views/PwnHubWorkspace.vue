@@ -608,6 +608,7 @@ async function handleBugReportDownload(): Promise<void> {
         :mode="currentMode"
         :current-level="currentLabIndex + 1"
         :current-level-name="currentLevelDef.title"
+        :module-label="'二进制安全实验'"
         :theme="theme"
         :accent="preferences.state.accent"
         :custom-accent="preferences.state.customAccent"
@@ -785,6 +786,7 @@ async function handleBugReportDownload(): Promise<void> {
         v-if="showBootOverlay"
         :stage="vm.stage.value"
         :error-message="vm.errorMessage.value"
+        :module-label="'二进制安全实验'"
         @retry="vm.boot"
       />
     </Transition>

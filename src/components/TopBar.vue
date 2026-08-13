@@ -13,6 +13,7 @@ defineProps<{
   customAccent: CustomAccent
   currentLevel?: number
   currentLevelName?: string
+  moduleLabel?: string
 }>()
 
 const emit = defineEmits<{
@@ -92,6 +93,15 @@ onBeforeUnmount(() => {
           <span class="brand-sub">Security Lab</span>
         </span>
       </div>
+      <div
+        v-if="moduleLabel"
+        class="module-badge"
+        aria-label="当前 Lab"
+        :title="`当前 Lab：${moduleLabel}`"
+      >
+        <AppIcon name="layers" :size="13" />
+        <span>{{ moduleLabel }}</span>
+      </div>
 
       <Transition name="context-shift" mode="out-in">
         <div
@@ -168,17 +178,6 @@ onBeforeUnmount(() => {
               <button
                 type="button"
                 class="icon-btn"
-                aria-label="返回 Lab 选择器"
-                data-tooltip="返回 Lab 选择器"
-                data-tooltip-placement="bottom"
-                @click="emit('exit')"
-              >
-                <AppIcon name="hash" />
-                <span class="btn-label">选择 Lab</span>
-              </button>
-              <button
-                type="button"
-                class="icon-btn"
                 aria-label="操作帮助"
                 data-tooltip="操作帮助"
                 data-tooltip-placement="bottom"
@@ -226,6 +225,17 @@ onBeforeUnmount(() => {
           </nav>
 
           <div class="appearance-controls">
+            <button
+              type="button"
+              class="icon-btn home-btn"
+              aria-label="回到主页"
+              data-tooltip="回到主页"
+              data-tooltip-placement="bottom-end"
+              @click="emit('exit')"
+            >
+              <AppIcon name="home" :size="15" />
+              <span class="btn-label">回到主页</span>
+            </button>
             <button
               type="button"
               class="icon-btn theme-toggle"
@@ -312,6 +322,21 @@ onBeforeUnmount(() => {
   font-size: 14px;
   font-weight: 450;
   line-height: 1;
+}
+.module-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  color: var(--accent-cyan);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  background: var(--accent-cyan-soft);
+  border: var(--hairline) solid var(--accent-cyan-border);
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
 .workspace-context {
@@ -556,6 +581,12 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   box-shadow: var(--shadow-control);
 }
+.home-btn {
+  background: var(--floating-surface);
+  border-color: var(--border-subtle);
+  border-radius: 8px;
+  box-shadow: var(--shadow-control);
+}
 
 .appearance-controls {
   display: flex;
@@ -564,7 +595,8 @@ onBeforeUnmount(() => {
 }
 
 .tool-group .icon-btn:hover,
-.theme-toggle:hover {
+.theme-toggle:hover,
+.home-btn:hover {
   background: var(--surface-3);
   box-shadow: none;
 }
