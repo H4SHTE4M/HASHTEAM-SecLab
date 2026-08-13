@@ -44,6 +44,11 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      # 遥测后端是独立 package（backend/package.json + 独立 lockfile），
+      # verify-build 第 6 步 pnpm test:backend 需要 better-sqlite3 原生模块。
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pnpm install --frozen-lockfile
 
       - name: Install VM test dependency
         run: sudo apt-get update && sudo apt-get install --yes busybox-static
