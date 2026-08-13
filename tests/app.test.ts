@@ -96,6 +96,11 @@ describe('application release flows', () => {
 
     expect(wrapper.findAll('[aria-modal="true"]')).toHaveLength(1)
     expect(wrapper.text()).toContain('开始前操作教学')
+    expect(wrapper.get('.replay-notice').text()).toContain('无需记忆，可以直接开始')
+    expect(wrapper.get('.replay-notice').text()).toContain('这 5 步只是操作示范，不要求一次记住')
+    expect(wrapper.get('.replay-notice').text()).toContain('右上角的问号「操作帮助」')
+    expect(wrapper.get('.btn-skip').text()).toBe('跳过并开始')
+    expect(wrapper.get('.skip-support').text()).toContain('右上角问号可随时重看')
     expect(wrapper.text()).not.toContain('关于 HASHTEAM 安全实验室')
 
     wrapper.unmount()
