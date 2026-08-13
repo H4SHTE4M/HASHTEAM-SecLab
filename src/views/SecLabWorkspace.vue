@@ -554,6 +554,7 @@ async function handleBugReportDownload(): Promise<void> {
         :mode="currentMode"
         :current-level="progress.state.currentLevel"
         :current-level-name="currentLevelDef.name"
+        :module-label="'安全新手村'"
         :theme="theme"
         :accent="preferences.state.accent"
         :custom-accent="preferences.state.customAccent"
@@ -723,6 +724,7 @@ async function handleBugReportDownload(): Promise<void> {
         v-if="showBootOverlay"
         :stage="vm.stage.value"
         :error-message="vm.errorMessage.value"
+        :module-label="'安全新手村'"
         @retry="vm.boot"
       />
     </Transition>
