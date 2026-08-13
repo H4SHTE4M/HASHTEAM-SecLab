@@ -5,6 +5,7 @@ import ExternalToolCompanion from '../src/components/ExternalToolCompanion.vue'
 import {
   COMPANION_MESSAGE_PREFIX,
   buildCompanionVerificationCommand,
+  createCompanionUrl,
   createCompanionSync,
   loadCompanionDefinition,
   loadCompanionState,
@@ -85,6 +86,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe('external tool companion', () => {
@@ -167,6 +169,31 @@ describe('external tool companion', () => {
 
     sender.dispose()
     receiver.dispose()
+  })
+
+  it('使用 source ID 版本化伴侣入口，避免复用旧 HTML', async () => {
+    const sourceId = '0123456789abcdef0123456789abcdef01234567'
+    expect(
+      createCompanionUrl(
+        'https://labtest.lwzheng.tech/#/labs/pwnhub',
+        definition().labId,
+        sourceId,
+      ).href,
+    ).toBe(
+      `https://labtest.lwzheng.tech/companion.html?lab=${definition().labId}&source=${sourceId}`,
+    )
+
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+    const wrapper = mount(ExternalToolCompanion, { props: { definition: definition() } })
+    await wrapper.get('.open-companion').trigger('click')
+
+    expect(open).toHaveBeenCalledOnce()
+    const opened = new URL(String(open.mock.calls[0]?.[0]))
+    expect(opened.searchParams.get('lab')).toBe(definition().labId)
+    expect(opened.searchParams.get('source')).toMatch(
+      /^(?:[a-f0-9]{40}(?:-dirty)?|unversioned)$/,
+    )
+    wrapper.unmount()
   })
 
   it('完成目标与必填观察后才向 VM 回传归一化命令', async () => {

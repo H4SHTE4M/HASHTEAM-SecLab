@@ -121,6 +121,9 @@ Environment 必须在 GitHub 仓库设置中配置 deployment branch rule，只�
    并行 rsync 配置 SSH ControlMaster 复用连接——那会把多条流并回一条被跨境
    限速的连接，抵消全部并行收益。多个 PR 连续触发时后到的发布覆盖先前的实验
    环境，这是预期行为：staging 永远承载「最近一次通过 verify 的 PR 内容」。
+   companion 入口由前端附带完整 Git source ID 查询参数；staging 按该版本化 URL
+   逐字节验收，不依赖工作站私有的 Nginx 配置。EdgeOne production 仍额外返回
+   `Cache-Control: no-store`。
 6. EO job（仅 main）先通过 China Makers API 精确查询项目，名称、ID 或
    Direct Upload 类型任一不符即 fail closed。CLI 进程还加载
    `scripts/guard-edgeone-project.mjs`，禁止 `CreatePagesProject` 和 Global API
@@ -149,8 +152,9 @@ backend 升级保持旧 SecLab v1 兼容；顺序反转会造成 PwnHub v2 事�
 根目录 `edgeone.json` 对所有路径设置与 Nginx 相同的 CSP、HSTS、`nosniff`、
 Referrer-Policy、Permissions-Policy、X-Frame-Options、COOP 和 CORP。
 
-- `/`、`/index.html`、`/vm-assets.json`、`/legal/*`：`Cache-Control: no-store`
-- `/assets/*`、`/vm-assets/*`：
+- `/`、`/index.html`、`/companion.html`、`/vm-assets.json`、`/legal/*`：
+  `Cache-Control: no-store`
+- `/assets/*`、`/vm-assets/*`、`/artifacts/*`：
   `Cache-Control: public, max-age=31536000, immutable`
 
 `verify-dist` 同时拒绝超过 20,000 个文件、超过 25 MiB 的单文件、符号链接、

@@ -9,6 +9,7 @@ import type {
 } from '../types/companion'
 import {
   buildCompanionVerificationCommand,
+  createCompanionUrl,
   createCompanionSync,
   loadCompanionState,
   normalizeCompanionObservation,
@@ -149,8 +150,7 @@ function submitObservations(): void {
 
 function openCompanionWindow(): void {
   saveCompanionDefinition(props.definition, storage)
-  const url = new URL('companion.html', window.location.href)
-  url.searchParams.set('lab', props.definition.labId)
+  const url = createCompanionUrl(window.location.href, props.definition.labId)
   window.open(url, `pwnhub-companion-${props.definition.labId}`, 'noopener,noreferrer')
 }
 
