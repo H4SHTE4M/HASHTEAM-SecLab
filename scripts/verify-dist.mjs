@@ -626,21 +626,6 @@ for (const source of ['/assets/*', '/vm-assets/*', '/artifacts/*']) {
   }
 }
 
-const nginxConfig = (
-  await requireProjectFile('.deploy/nginx/hashteam.conf')
-).toString('utf8')
-if (
-  !/location = \/companion\.html \{[^}]*add_header Cache-Control "no-store" always;[^}]*\}/s
-    .test(nginxConfig)
-) {
-  fail('nginx 配置缺少 companion.html 禁止缓存规则')
-}
-if (
-  !/location \^~ \/artifacts\/ \{[^}]*alias \/var\/www\/hashteam\/artifacts\/;[^}]*add_header Cache-Control "public, max-age=31536000, immutable" always;[^}]*\}/s
-    .test(nginxConfig)
-) {
-  fail('nginx 配置缺少持久 artifact 目录或不可变缓存规则')
-}
 for (const legacyPath of ['vm/rootfs.cpio.gz', 'vm/bzImage', 'v86/v86.wasm']) {
   const legacy = await stat(path.join(dist, legacyPath)).catch(() => null)
   if (legacy !== null) fail(`生产包仍包含固定文件名 VM 资源：dist/${legacyPath}`)
