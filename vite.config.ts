@@ -52,6 +52,20 @@ interface PublishedArtifact {
   source: Buffer
 }
 
+export function contentAddressedArtifactPath(
+  sha256: string,
+  artifactPath: string,
+): string {
+  if (!/^[a-f0-9]{64}$/.test(sha256)) {
+    throw new Error('artifact SHA-256 必须是 64 位小写十六进制')
+  }
+  const artifactName = path.posix.basename(artifactPath)
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(artifactName)) {
+    throw new Error('artifact 文件名无法安全发布')
+  }
+  return `artifacts/${sha256}/${artifactName}`
+}
+
 function loadPublishedArtifacts(): PublishedArtifact[] {
   const profile = JSON.parse(
     readFileSync(path.resolve(process.cwd(), 'vm/profiles/production.json'), 'utf8'),
@@ -59,7 +73,7 @@ function loadPublishedArtifacts(): PublishedArtifact[] {
   if (!Array.isArray(profile.pwnhubLabs)) {
     throw new Error('production profile 缺少 pwnhubLabs')
   }
-  const artifacts: PublishedArtifact[] = []
+  const artifactsByFileName = new Map<string, PublishedArtifact>()
   for (const labId of profile.pwnhubLabs) {
     if (typeof labId !== 'string' || !/^[a-z][a-z0-9-]*$/.test(labId)) {
       throw new Error('production profile 包含非法 PwnHub labId')
@@ -83,13 +97,15 @@ function loadPublishedArtifacts(): PublishedArtifact[] {
       if (actual !== artifact.sha256) {
         throw new Error(`${labId}/${artifactName} 与 manifest SHA-256 不一致`)
       }
-      artifacts.push({
-        fileName: `artifacts/${labId}/${artifactName}`,
-        source,
-      })
+      const fileName = contentAddressedArtifactPath(artifact.sha256, artifact.path)
+      const existing = artifactsByFileName.get(fileName)
+      if (existing !== undefined && !existing.source.equals(source)) {
+        throw new Error(`内容寻址 artifact 路径冲突：${fileName}`)
+      }
+      artifactsByFileName.set(fileName, { fileName, source })
     }
   }
-  return artifacts
+  return [...artifactsByFileName.values()]
 }
 
 function resolveSourceId(): string {

@@ -39,6 +39,24 @@ async function requireProjectFile(relativePath) {
   return readFile(absolutePath)
 }
 
+function artifactRelativePath(artifact, source) {
+  if (
+    typeof artifact !== 'object' ||
+    artifact === null ||
+    Array.isArray(artifact) ||
+    typeof artifact.path !== 'string' ||
+    typeof artifact.sha256 !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(artifact.sha256)
+  ) {
+    fail(`${source} 包含无效的 downloadable artifact`)
+  }
+  const artifactName = path.posix.basename(artifact.path)
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(artifactName)) {
+    fail(`${source} 包含无法安全发布的 artifact 文件名`)
+  }
+  return `artifacts/${artifact.sha256}/${artifactName}`
+}
+
 let distFileCount = 0
 async function verifyDistTree(directory = dist) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -174,23 +192,85 @@ if (!Array.isArray(productionProfile.pwnhubLabs)) {
   fail('production profile 缺少 pwnhubLabs')
 }
 const expectedArtifactPaths = new Set()
+const publishedLabIds = new Set()
 for (const labId of productionProfile.pwnhubLabs) {
   if (typeof labId !== 'string' || !/^[a-z][a-z0-9-]*$/.test(labId)) {
     fail('production profile 包含非法 PwnHub labId')
   }
+  if (publishedLabIds.has(labId)) {
+    fail(`production profile 重复发布 PwnHub 实验：${labId}`)
+  }
+  publishedLabIds.add(labId)
   const labRoot = path.join(root, 'vm/labs/pwnhub', labId)
   const labManifest = JSON.parse(await readFile(path.join(labRoot, 'manifest.json'), 'utf8'))
   for (const artifact of labManifest.artifacts ?? []) {
     if (artifact.downloadable !== true) continue
+    const relativePath = artifactRelativePath(artifact, labId)
     const artifactName = path.posix.basename(artifact.path)
-    expectedArtifactPaths.add(`artifacts/${labId}/${artifactName}`)
-    const packaged = await requireFile(`artifacts/${labId}/${artifactName}`)
+    expectedArtifactPaths.add(relativePath)
+    const packaged = await requireFile(relativePath)
+    const source = await requireProjectFile(`vm/labs/pwnhub/${labId}/${artifactName}`)
     const actual = createHash('sha256').update(packaged).digest('hex')
-    if (actual !== artifact.sha256) {
-      fail(`生产 artifact 与 manifest SHA-256 不一致：${labId}/${artifactName}`)
+    if (actual !== artifact.sha256 || !packaged.equals(source)) {
+      fail(`生产 artifact、实验文件与 manifest 不一致：${labId}/${artifactName}`)
     }
   }
 }
+
+const pwnhubRoot = path.join(root, 'vm/labs/pwnhub')
+for (const labEntry of await readdir(pwnhubRoot, { withFileTypes: true })) {
+  if (!labEntry.isDirectory()) continue
+  const labId = labEntry.name
+  const labRoot = path.join(pwnhubRoot, labId)
+  const labManifest = JSON.parse(await readFile(path.join(labRoot, 'manifest.json'), 'utf8'))
+  const downloadableArtifacts = []
+  for (const artifact of labManifest.artifacts ?? []) {
+    if (artifact.downloadable !== true) continue
+    artifactRelativePath(artifact, labId)
+    downloadableArtifacts.push(artifact)
+  }
+  for (const step of labManifest.steps ?? []) {
+    const companion = step?.companion
+    if (typeof companion !== 'object' || companion === null || Array.isArray(companion)) {
+      continue
+    }
+    const companionArtifact = companion.artifact
+    if (
+      companion.labId !== labId ||
+      typeof companionArtifact !== 'object' ||
+      companionArtifact === null ||
+      Array.isArray(companionArtifact) ||
+      typeof companionArtifact.name !== 'string' ||
+      typeof companionArtifact.sha256 !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(companionArtifact.sha256)
+    ) {
+      fail(`${labId} 包含无效的 companion artifact`)
+    }
+    const matchingArtifact = downloadableArtifacts.find(
+      (artifact) =>
+        path.posix.basename(artifact.path) === companionArtifact.name &&
+        artifact.sha256 === companionArtifact.sha256,
+    )
+    if (matchingArtifact === undefined) {
+      fail(`${labId} companion artifact 未绑定同实验的 downloadable artifact`)
+    }
+    const relativePath = artifactRelativePath(matchingArtifact, labId)
+    if (companionArtifact.downloadUrl !== `/${relativePath}`) {
+      fail(`${labId} companion downloadUrl 未使用 manifest SHA-256 内容寻址`)
+    }
+    const source = await requireProjectFile(
+      `vm/labs/pwnhub/${labId}/${companionArtifact.name}`,
+    )
+    const actual = createHash('sha256').update(source).digest('hex')
+    if (actual !== companionArtifact.sha256) {
+      fail(`${labId} companion artifact 与 manifest SHA-256 不一致`)
+    }
+    if (publishedLabIds.has(labId) && !expectedArtifactPaths.has(relativePath)) {
+      fail(`${labId} companion artifact 未进入生产构建输出`)
+    }
+  }
+}
+
 const actualArtifactPaths = []
 async function collectPackagedArtifacts(directory = path.join(dist, 'artifacts')) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -529,12 +609,12 @@ for (const [key, value] of [
     fail(`edgeone.json 缺少全站安全头：${key}`)
   }
 }
-for (const source of ['/', '/index.html', '/vm-assets.json', '/legal/*']) {
+for (const source of ['/', '/index.html', '/companion.html', '/vm-assets.json', '/legal/*']) {
   if (!configuredHeader(source, 'Cache-Control', 'no-store')) {
     fail(`edgeone.json 缺少禁止缓存规则：${source}`)
   }
 }
-for (const source of ['/assets/*', '/vm-assets/*']) {
+for (const source of ['/assets/*', '/vm-assets/*', '/artifacts/*']) {
   if (
     !configuredHeader(
       source,
@@ -544,6 +624,22 @@ for (const source of ['/assets/*', '/vm-assets/*']) {
   ) {
     fail(`edgeone.json 缺少不可变缓存规则：${source}`)
   }
+}
+
+const nginxConfig = (
+  await requireProjectFile('.deploy/nginx/hashteam.conf')
+).toString('utf8')
+if (
+  !/location = \/companion\.html \{[^}]*add_header Cache-Control "no-store" always;[^}]*\}/s
+    .test(nginxConfig)
+) {
+  fail('nginx 配置缺少 companion.html 禁止缓存规则')
+}
+if (
+  !/location \^~ \/artifacts\/ \{[^}]*alias \/var\/www\/hashteam\/artifacts\/;[^}]*add_header Cache-Control "public, max-age=31536000, immutable" always;[^}]*\}/s
+    .test(nginxConfig)
+) {
+  fail('nginx 配置缺少持久 artifact 目录或不可变缓存规则')
 }
 for (const legacyPath of ['vm/rootfs.cpio.gz', 'vm/bzImage', 'v86/v86.wasm']) {
   const legacy = await stat(path.join(dist, legacyPath)).catch(() => null)

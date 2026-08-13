@@ -62,7 +62,8 @@ function loadPanelCollapsed(): boolean {
 
 const router = useRouter()
 const vm = useVirtualMachine()
-vm.setModule('seclab')
+const vmOwner = Symbol('SecLabWorkspace')
+vm.handoff(vmOwner, 'seclab')
 const progress = useLabProgress()
 progress.setLevel(progress.state.currentLevel)
 const preferences = useLabPreferences()
@@ -242,14 +243,17 @@ watch(
 onMounted(() => {
   if (showCompletion.value) return
   // 显示文本 -> 终端；终端输入 -> 虚拟机串口
-  unsubscribeDisplay = vm.onDisplay((data) => {
-    terminalRef.value?.write(data)
-  })
+  unsubscribeDisplay = vm.onDisplay(
+    (data) => {
+      terminalRef.value?.write(data)
+    },
+    vmOwner,
+  )
   window.addEventListener('resize', handleViewportResize)
   window.visualViewport?.addEventListener('resize', handleViewportResize)
   // 页面刷新/关闭时尽量冲刷残余遥测事件（fetch 可能来不及完成，这是可接受的）
   window.addEventListener('beforeunload', handleTelemetryFlush)
-  void vm.boot()
+  void vm.boot(vmOwner)
 })
 /** 页面卸载/组件销毁时冲刷残余遥测事件，避免队列中事件丢失 */
 function handleTelemetryFlush(): void {
@@ -267,7 +271,7 @@ onBeforeUnmount(() => {
   if (themeTransitionTimer !== null) window.clearTimeout(themeTransitionTimer)
   document.documentElement.classList.remove('theme-changing')
   void handleTelemetryFlush()
-  void vm.dispose()
+  void vm.dispose(vmOwner)
 })
 
 function applyTheme(nextTheme: ThemeName, animate: boolean): void {
@@ -414,7 +418,7 @@ function handleNextLevel(): void {
     showCompletion.value = true
     unsubscribeDisplay?.()
     unsubscribeDisplay = null
-    void vm.dispose()
+    void vm.dispose(vmOwner)
     return
   }
   vm.gotoLevel(progress.state.currentLevel + 1)
@@ -503,7 +507,7 @@ function handleBugReportPrimaryAction(): void {
   }
   // E1/E2：先 resolve 再重启；若重启后问题仍在，新的 ready 会重新上报并再次弹窗
   anomalyCenter.resolve(anomaly)
-  void vm.restart()
+  void vm.restart(vmOwner)
 }
 
 function handleBugReportSecondaryAction(): void {

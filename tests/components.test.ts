@@ -10,6 +10,7 @@ import MissionPanel from '../src/components/MissionPanel.vue'
 import OnboardingDialog from '../src/components/OnboardingDialog.vue'
 import TopBar from '../src/components/TopBar.vue'
 import { createCustomAccent } from '../src/services/accent-color'
+import { COURSE } from '../src/modules/pwnhub/course'
 import type { LevelDef } from '../src/types/lab'
 
 const customAccent = createCustomAccent('#357a50')!
@@ -565,5 +566,26 @@ describe('accessible components', () => {
     expect(wrapper.get('.record-stats').text()).toContain('1 无提示挑战')
     expect(wrapper.get('.record-list').text()).toContain('挑战通关 · 未使用提示')
     expect(wrapper.get('.record-list').text()).toContain('混合完成 · 2 层提示')
+  })
+
+  it('总结页缺完成记录的实验显示未完成而非历史完成', () => {
+    const firstLab = COURSE.labs[0]!
+    const secondLab = COURSE.labs[1]!
+    const wrapper = mount(CompletionPage, {
+      props: {
+        course: COURSE,
+        completionRecords: {},
+        labCompletionRecords: {
+          [firstLab.labId]: { path: 'guided', hintsUsed: 0 },
+        },
+      },
+    })
+
+    const list = wrapper.get('.record-list')
+    expect(list.text()).toContain('引导通关 · 未使用提示')
+    // 第二个实验无完成记录，显示「未完成」而非「历史完成」
+    expect(list.text()).toContain('未完成')
+    expect(list.text()).not.toContain('历史完成')
+    expect(list.text()).toContain(secondLab.title)
   })
 })

@@ -56,6 +56,15 @@
       ]
     },
     {
+      "source": "/companion.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
       "source": "/vm-assets.json",
       "headers": [
         {
@@ -84,6 +93,15 @@
     },
     {
       "source": "/vm-assets/*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/artifacts/*",
       "headers": [
         {
           "key": "Cache-Control",

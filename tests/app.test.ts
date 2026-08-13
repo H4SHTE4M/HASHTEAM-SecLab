@@ -11,6 +11,7 @@ const vmMock = vi.hoisted(() => ({
   restart: vi.fn(async () => undefined),
   onDisplay: vi.fn(() => () => undefined),
   sendSerial: vi.fn(),
+  handoff: vi.fn(),
   setModule: vi.fn(),
   gotoLevel: vi.fn(),
   resetCurrentLevel: vi.fn(),
@@ -68,6 +69,8 @@ describe('application release flows', () => {
     const wrapper = mount(App)
     await nextTick()
 
+    expect(vmMock.handoff).toHaveBeenCalledOnce()
+    expect(vmMock.handoff.mock.calls[0]?.[1]).toBe('seclab')
     expect(wrapper.find('.completion-page').exists()).toBe(true)
     expect(wrapper.find('.topbar').exists()).toBe(false)
     expect(wrapper.find('.loading-overlay').exists()).toBe(false)

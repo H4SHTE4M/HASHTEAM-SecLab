@@ -62,7 +62,8 @@ function loadPanelCollapsed(): boolean {
 
 const router = useRouter()
 const vm = useVirtualMachine()
-vm.setModule('pwnhub')
+const vmOwner = Symbol('PwnHubWorkspace')
+vm.handoff(vmOwner, 'pwnhub')
 const progress = useLabProgress()
 const preferences = useLabPreferences()
 const anomalyCenter = useAnomalyCenter()
@@ -286,12 +287,15 @@ watch(activeBlockingAnomaly, () => {
 onMounted(() => {
   if (showCompletion.value) return
   // 显示文本 → 终端；终端输入 → 虚拟机串口
-  unsubscribeDisplay = vm.onDisplay((data) => {
-    terminalRef.value?.write(data)
-  })
+  unsubscribeDisplay = vm.onDisplay(
+    (data) => {
+      terminalRef.value?.write(data)
+    },
+    vmOwner,
+  )
   window.addEventListener('resize', handleViewportResize)
   window.visualViewport?.addEventListener('resize', handleViewportResize)
-  void vm.boot()
+  void vm.boot(vmOwner)
 })
 
 onBeforeUnmount(() => {
@@ -303,7 +307,7 @@ onBeforeUnmount(() => {
   clearBootOverlayTimer()
   if (themeTransitionTimer !== null) window.clearTimeout(themeTransitionTimer)
   document.documentElement.classList.remove('theme-changing')
-  void vm.dispose()
+  void vm.dispose(vmOwner)
 })
 
 function applyTheme(nextTheme: ThemeName, animate: boolean): void {
@@ -447,10 +451,22 @@ function handleChangeMode(mode: LabMode): void {
 
 function handleNextLevel(): void {
   if (isLastLevel.value) {
-    showCompletion.value = true
-    unsubscribeDisplay?.()
-    unsubscribeDisplay = null
-    void vm.dispose()
+    // 最后一关完成后仍需复核：全部当前已发布 available labId 都已真实完成
+    // 才能进入总结页。五击临时解锁的实验不算真实完成证据。
+    if (hasCompletedAvailableCourse()) {
+      showCompletion.value = true
+      unsubscribeDisplay?.()
+      unsubscribeDisplay = null
+      void vm.dispose(vmOwner)
+      return
+    }
+    // 有未完成的已发布实验：转到第一个真实未完成的实验，不伪造全课程完成。
+    const nextIncomplete = availableLabs.find(
+      (lab) => !progress.state.completedLabIds.includes(lab.labId),
+    )
+    if (nextIncomplete && nextIncomplete.labId !== progress.state.currentLabId) {
+      vm.gotoLab(nextIncomplete.labId)
+    }
     return
   }
   const nextLab = availableLabs[currentLabIndex.value + 1]
@@ -557,7 +573,7 @@ function handleBugReportPrimaryAction(): void {
     return
   }
   anomalyCenter.resolve(anomaly)
-  void vm.restart()
+  void vm.restart(vmOwner)
 }
 
 function handleBugReportSecondaryAction(): void {

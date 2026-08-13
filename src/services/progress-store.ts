@@ -90,6 +90,7 @@ class ResilientStorage implements StorageLike {
 }
 
 const trackedStorages = new Set<StorageLike>()
+const storageTotalLevels = new WeakMap<StorageLike, number>()
 
 /**
  * 返回可用的持久化存储：优先 window.localStorage；若访问或写入被浏览器拒绝
@@ -316,6 +317,207 @@ function normalizeProgress(value: unknown, totalLevels: number): LabProgress | n
   return isValidProgress(candidate, totalLevels) ? candidate : null
 }
 
+interface PersistProgressOptions {
+  keepLocalSelection?: boolean
+  replace?: boolean
+  resetLevels?: readonly number[]
+  resetLabIds?: readonly string[]
+}
+
+/** 解析 storage 事件或写前快照；只接受可规范化的 v6 数据，不触发迁移或回写。 */
+export function parseProgressSnapshot(raw: string, totalLevels: number): LabProgress | null {
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      (parsed as Partial<LabProgress>).schemaVersion !== 6
+    ) {
+      return null
+    }
+    return normalizeProgress(parsed, totalLevels)
+  } catch {
+    return null
+  }
+}
+
+function readCurrentProgress(storage: StorageLike): LabProgress | null {
+  const totalLevels = storageTotalLevels.get(storage)
+  if (totalLevels === undefined) return null
+  const raw = storage.getItem(PROGRESS_STORAGE_KEY)
+  return raw === null ? null : parseProgressSnapshot(raw, totalLevels)
+}
+
+/** 用独立容器替换单例字段，既触发 Vue reactive 更新，也不共享外部快照引用。 */
+export function applyProgressSnapshot(target: LabProgress, source: LabProgress): void {
+  target.schemaVersion = source.schemaVersion
+  target.currentLevel = source.currentLevel
+  target.currentLabId = source.currentLabId
+  target.completedLevels = [...source.completedLevels]
+  target.completedLabIds = [...source.completedLabIds]
+  target.chapterProgress = Object.fromEntries(
+    Object.entries(source.chapterProgress).map(([chapterId, labIds]) => [
+      chapterId,
+      [...labIds],
+    ]),
+  )
+  target.labHintsUsed = { ...source.labHintsUsed }
+  target.labGuideSteps = { ...source.labGuideSteps }
+  target.labCompletedSteps = Object.fromEntries(
+    Object.entries(source.labCompletedSteps).map(([labId, steps]) => [labId, [...steps]]),
+  )
+  target.guidedAssistanceLabIds = [...source.guidedAssistanceLabIds]
+  target.labCompletionRecords = { ...source.labCompletionRecords }
+  target.hintsUsed = { ...source.hintsUsed }
+  target.guideSteps = { ...source.guideSteps }
+  target.completedSteps = Object.fromEntries(
+    Object.entries(source.completedSteps).map(([level, steps]) => [level, [...steps]]),
+  )
+  target.guidedAssistanceLevels = [...source.guidedAssistanceLevels]
+  target.completionRecords = { ...source.completionRecords }
+  target.startedAt = source.startedAt
+  target.updatedAt = source.updatedAt
+}
+
+function cloneProgress(progress: LabProgress): LabProgress {
+  const clone = createDefaultProgress(progress.startedAt)
+  applyProgressSnapshot(clone, progress)
+  return clone
+}
+
+function mergeNumberMaps(
+  local: Record<string, number>,
+  stored: Record<string, number>,
+): Record<string, number> {
+  const merged = { ...local }
+  for (const [key, value] of Object.entries(stored)) {
+    merged[key] = Math.max(merged[key] ?? 0, value)
+  }
+  return merged
+}
+
+function mergeStepMaps(
+  local: Record<string, number[]>,
+  stored: Record<string, number[]>,
+): Record<string, number[]> {
+  const keys = new Set([...Object.keys(stored), ...Object.keys(local)])
+  return Object.fromEntries(
+    [...keys].map((key) => [
+      key,
+      [...new Set([...(stored[key] ?? []), ...(local[key] ?? [])])].sort(
+        (left, right) => left - right,
+      ),
+    ]),
+  )
+}
+
+function mergeProgressSnapshots(
+  local: LabProgress,
+  stored: LabProgress,
+  options: PersistProgressOptions = {},
+): LabProgress {
+  const completedLevels = [...new Set([...stored.completedLevels, ...local.completedLevels])].sort(
+    (left, right) => left - right,
+  )
+  const completedLabIds = [...new Set([...stored.completedLabIds, ...local.completedLabIds])]
+  const chapterIds = new Set([
+    ...Object.keys(stored.chapterProgress),
+    ...Object.keys(local.chapterProgress),
+  ])
+  const chapterProgress = Object.fromEntries(
+    [...chapterIds].map((chapterId) => [
+      chapterId,
+      [
+        ...new Set([
+          ...(stored.chapterProgress[chapterId] ?? []),
+          ...(local.chapterProgress[chapterId] ?? []),
+        ]),
+      ],
+    ]),
+  )
+  const merged: LabProgress = {
+    schemaVersion: 6,
+    currentLevel: options.keepLocalSelection ? local.currentLevel : stored.currentLevel,
+    currentLabId: options.keepLocalSelection ? local.currentLabId : stored.currentLabId,
+    completedLevels,
+    completedLabIds,
+    chapterProgress,
+    labHintsUsed: mergeNumberMaps(local.labHintsUsed, stored.labHintsUsed),
+    labGuideSteps: mergeNumberMaps(local.labGuideSteps, stored.labGuideSteps),
+    labCompletedSteps: mergeStepMaps(local.labCompletedSteps, stored.labCompletedSteps),
+    guidedAssistanceLabIds: [
+      ...new Set([...stored.guidedAssistanceLabIds, ...local.guidedAssistanceLabIds]),
+    ],
+    // 已落盘的首次完成记录优先，迟到的旧标签不能覆盖它。
+    labCompletionRecords: { ...local.labCompletionRecords, ...stored.labCompletionRecords },
+    hintsUsed: mergeNumberMaps(
+      local.hintsUsed as Record<string, number>,
+      stored.hintsUsed as Record<string, number>,
+    ),
+    guideSteps: mergeNumberMaps(
+      local.guideSteps as Record<string, number>,
+      stored.guideSteps as Record<string, number>,
+    ),
+    completedSteps: mergeStepMaps(
+      local.completedSteps as Record<string, number[]>,
+      stored.completedSteps as Record<string, number[]>,
+    ),
+    guidedAssistanceLevels: [
+      ...new Set([...stored.guidedAssistanceLevels, ...local.guidedAssistanceLevels]),
+    ].sort((left, right) => left - right),
+    completionRecords: { ...local.completionRecords, ...stored.completionRecords },
+    startedAt: Math.min(local.startedAt, stored.startedAt),
+    updatedAt: Math.max(local.updatedAt, stored.updatedAt),
+  }
+
+  for (const level of options.resetLevels ?? []) {
+    delete merged.hintsUsed[level]
+    merged.guideSteps[level] = 0
+    merged.completedSteps[level] = []
+    merged.guidedAssistanceLevels = merged.guidedAssistanceLevels.filter(
+      (assistedLevel) => assistedLevel !== level,
+    )
+  }
+  for (const labId of options.resetLabIds ?? []) {
+    delete merged.labHintsUsed[labId]
+    merged.labGuideSteps[labId] = 0
+    merged.labCompletedSteps[labId] = []
+    merged.guidedAssistanceLabIds = merged.guidedAssistanceLabIds.filter(
+      (assistedLabId) => assistedLabId !== labId,
+    )
+  }
+  return merged
+}
+
+function syncBeforeMutation(storage: StorageLike, progress: LabProgress): void {
+  const stored = readCurrentProgress(storage)
+  if (stored === null) return
+  // 每个公开操作都会先同步、再只修改本次目标字段。较新的落盘快照必须整体优先，
+  // 否则旧标签的旧 attempt 字段会在操作其他实验时通过并集合并复活。
+  const next =
+    stored.startedAt > progress.startedAt || stored.updatedAt > progress.updatedAt
+      ? stored
+      : mergeProgressSnapshots(progress, stored)
+  applyProgressSnapshot(progress, next)
+}
+
+function persistProgress(
+  storage: StorageLike,
+  progress: LabProgress,
+  options: PersistProgressOptions = {},
+): void {
+  const stored = options.replace ? null : readCurrentProgress(storage)
+  const next =
+    stored === null
+      ? cloneProgress(progress)
+      : stored.startedAt > progress.startedAt
+        ? cloneProgress(stored)
+        : mergeProgressSnapshots(progress, stored, options)
+  next.updatedAt = Math.max(Date.now(), next.updatedAt + 1, (stored?.updatedAt ?? 0) + 1)
+  applyProgressSnapshot(progress, next)
+  storage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progress))
+}
+
 function mapLegacyRecord<T>(record: Record<number, T>): Record<string, T> {
   return Object.fromEntries(
     Object.entries(record).map(([level, item]) => [legacyLabId(Number(level)), item]),
@@ -381,6 +583,7 @@ function isValidTimestamp(value: unknown): value is number {
 
 /** 从存储中读取进度；数据缺失或损坏时返回全新进度 */
 export function loadProgress(storage: StorageLike, totalLevels: number): LabProgress {
+  storageTotalLevels.set(storage, totalLevels)
   const raw = storage.getItem(PROGRESS_STORAGE_KEY)
   if (raw === null) {
     const migratableKeys = [
@@ -401,7 +604,9 @@ export function loadProgress(storage: StorageLike, totalLevels: number): LabProg
     }
     const hasUnmigratedProgress = migratableKeys.some((key) => storage.getItem(key) !== null)
     if (hasUnmigratedProgress) storage.setItem(MIGRATION_NOTICE_STORAGE_KEY, '1')
-    return createDefaultProgress()
+    const fresh = createDefaultProgress()
+    storage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(fresh))
+    return fresh
   }
   const normalized = migrateProgress(raw, totalLevels)
   if (normalized !== null) {
@@ -411,7 +616,9 @@ export function loadProgress(storage: StorageLike, totalLevels: number): LabProg
     return normalized
   }
   storage.setItem(MIGRATION_NOTICE_STORAGE_KEY, '1')
-  return createDefaultProgress()
+  const fresh = createDefaultProgress()
+  storage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(fresh))
+  return fresh
 }
 
 /** 返回并消费一次性迁移提示，确保刷新后不会重复显示。 */
@@ -422,8 +629,7 @@ export function consumeProgressResetNotice(storage: StorageLike): boolean {
 }
 
 export function saveProgress(storage: StorageLike, progress: LabProgress): void {
-  progress.updatedAt = Date.now()
-  storage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progress))
+  persistProgress(storage, progress)
 }
 
 interface LegacyV4Progress {
@@ -438,8 +644,12 @@ interface LegacyV4Progress {
   updatedAt: number
 }
 
-function saveLevelProgress(storage: StorageLike, progress: LabProgress): void {
-  saveProgress(storage, progress)
+function saveLevelProgress(
+  storage: StorageLike,
+  progress: LabProgress,
+  options: PersistProgressOptions = {},
+): void {
+  persistProgress(storage, progress, options)
   const legacy: LegacyV4Progress = {
     currentLevel: progress.currentLevel,
     completedLevels: [...progress.completedLevels],
@@ -466,6 +676,7 @@ export function completeLevel(
   level: number,
   record: LevelCompletionRecord,
 ): boolean {
+  syncBeforeMutation(storage, progress)
   if (progress.completedLevels.includes(level)) return false
   progress.completedLevels.push(level)
   progress.completedLevels.sort((a, b) => a - b)
@@ -492,9 +703,9 @@ export function completeLab(
   chapterId: string,
   record: LevelCompletionRecord,
 ): boolean {
-  if (!isLabId(labId) || !isLabId(chapterId) || progress.completedLabIds.includes(labId)) {
-    return false
-  }
+  if (!isLabId(labId) || !isLabId(chapterId)) return false
+  syncBeforeMutation(storage, progress)
+  if (progress.completedLabIds.includes(labId)) return false
   progress.completedLabIds.push(labId)
   progress.labCompletionRecords[labId] = {
     path: record.path,
@@ -509,19 +720,21 @@ export function completeLab(
 
 /** 记录一次提示使用，返回该关卡累计使用的提示数 */
 export function recordHint(storage: StorageLike, progress: LabProgress, level: number): number {
+  syncBeforeMutation(storage, progress)
   const used = Math.min((progress.hintsUsed[level] ?? 0) + 1, 3)
   progress.hintsUsed[level] = used
   progress.labHintsUsed[legacyLabId(level)] = used
   saveLevelProgress(storage, progress)
-  return used
+  return progress.hintsUsed[level] ?? used
 }
 
 export function recordLabHint(storage: StorageLike, progress: LabProgress, labId: string): number {
   if (!isLabId(labId)) return 0
+  syncBeforeMutation(storage, progress)
   const used = Math.min((progress.labHintsUsed[labId] ?? 0) + 1, 3)
   progress.labHintsUsed[labId] = used
   saveProgress(storage, progress)
-  return used
+  return progress.labHintsUsed[labId] ?? used
 }
 
 /** 揭示下一条 guide；返回钳制后的当前步骤索引。 */
@@ -532,12 +745,13 @@ export function advanceGuideStep(
   totalSteps: number,
 ): number {
   if (totalSteps <= 0) return 0
+  syncBeforeMutation(storage, progress)
   const current = Math.min(progress.guideSteps[level] ?? 0, totalSteps - 1)
   const next = Math.min(current + 1, totalSteps - 1)
   progress.guideSteps[level] = next
   progress.labGuideSteps[legacyLabId(level)] = next
   saveLevelProgress(storage, progress)
-  return next
+  return progress.guideSteps[level] ?? next
 }
 
 export function advanceLabGuideStep(
@@ -547,11 +761,12 @@ export function advanceLabGuideStep(
   totalSteps: number,
 ): number {
   if (!isLabId(labId) || totalSteps <= 0) return 0
+  syncBeforeMutation(storage, progress)
   const current = Math.min(progress.labGuideSteps[labId] ?? 0, totalSteps - 1)
   const next = Math.min(current + 1, totalSteps - 1)
   progress.labGuideSteps[labId] = next
   saveProgress(storage, progress)
-  return next
+  return progress.labGuideSteps[labId] ?? next
 }
 
 export function resetLevelAttempt(
@@ -559,6 +774,7 @@ export function resetLevelAttempt(
   progress: LabProgress,
   level: number,
 ): void {
+  syncBeforeMutation(storage, progress)
   delete progress.hintsUsed[level]
   progress.guideSteps[level] = 0
   progress.completedSteps[level] = []
@@ -566,7 +782,8 @@ export function resetLevelAttempt(
     (assistedLevel) => assistedLevel !== level,
   )
   resetLabAttemptFields(progress, legacyLabId(level))
-  saveLevelProgress(storage, progress)
+  const labId = legacyLabId(level)
+  saveLevelProgress(storage, progress, { resetLevels: [level], resetLabIds: [labId] })
 }
 
 function resetLabAttemptFields(progress: LabProgress, labId: string): void {
@@ -584,8 +801,9 @@ export function resetLabAttempt(
   labId: string,
 ): void {
   if (!isLabId(labId)) return
+  syncBeforeMutation(storage, progress)
   resetLabAttemptFields(progress, labId)
-  saveProgress(storage, progress)
+  persistProgress(storage, progress, { resetLabIds: [labId] })
 }
 
 /** 记录本关已经展示过引导内容；重复记录不产生额外写入。 */
@@ -594,6 +812,7 @@ export function markGuidedAssistance(
   progress: LabProgress,
   level: number,
 ): boolean {
+  syncBeforeMutation(storage, progress)
   if (progress.guidedAssistanceLevels.includes(level)) return false
   progress.guidedAssistanceLevels.push(level)
   progress.guidedAssistanceLevels.sort((left, right) => left - right)
@@ -610,7 +829,9 @@ export function markLabGuidedAssistance(
   progress: LabProgress,
   labId: string,
 ): boolean {
-  if (!isLabId(labId) || progress.guidedAssistanceLabIds.includes(labId)) return false
+  if (!isLabId(labId)) return false
+  syncBeforeMutation(storage, progress)
+  if (progress.guidedAssistanceLabIds.includes(labId)) return false
   progress.guidedAssistanceLabIds.push(labId)
   saveProgress(storage, progress)
   return true
@@ -623,13 +844,14 @@ export function completeLearningStep(
   level: number,
   stepId: number,
 ): number[] {
+  syncBeforeMutation(storage, progress)
   const completed = progress.completedSteps[level] ?? []
   if (!completed.includes(stepId)) completed.push(stepId)
   completed.sort((left, right) => left - right)
   progress.completedSteps[level] = completed
   progress.labCompletedSteps[legacyLabId(level)] = [...completed]
   saveLevelProgress(storage, progress)
-  return completed
+  return progress.completedSteps[level] ?? completed
 }
 
 export function completeLabLearningStep(
@@ -639,18 +861,20 @@ export function completeLabLearningStep(
   stepId: number,
 ): number[] {
   if (!isLabId(labId) || !Number.isInteger(stepId) || stepId < 1) return []
+  syncBeforeMutation(storage, progress)
   const completed = progress.labCompletedSteps[labId] ?? []
   if (!completed.includes(stepId)) completed.push(stepId)
   completed.sort((left, right) => left - right)
   progress.labCompletedSteps[labId] = completed
   saveProgress(storage, progress)
-  return completed
+  return progress.labCompletedSteps[labId] ?? completed
 }
 
 export function setCurrentLevel(storage: StorageLike, progress: LabProgress, level: number): void {
+  syncBeforeMutation(storage, progress)
   progress.currentLevel = level
   progress.currentLabId = legacyLabId(level)
-  saveLevelProgress(storage, progress)
+  saveLevelProgress(storage, progress, { keepLocalSelection: true })
 }
 
 export function setCurrentLab(
@@ -660,14 +884,16 @@ export function setCurrentLab(
   legacyLevel?: number,
 ): void {
   if (!isLabId(labId)) return
+  syncBeforeMutation(storage, progress)
   progress.currentLabId = labId
   if (legacyLevel !== undefined) progress.currentLevel = legacyLevel
-  saveProgress(storage, progress)
+  persistProgress(storage, progress, { keepLocalSelection: true })
 }
 
 export function resetAllProgress(storage: StorageLike): LabProgress {
-  const fresh = createDefaultProgress()
-  storage.removeItem(PROGRESS_STORAGE_KEY)
-  saveLevelProgress(storage, fresh)
+  const stored = readCurrentProgress(storage)
+  const resetAt = Math.max(Date.now(), (stored?.startedAt ?? 0) + 1)
+  const fresh = createDefaultProgress(resetAt)
+  saveLevelProgress(storage, fresh, { replace: true })
   return fresh
 }

@@ -88,9 +88,14 @@ function handleTerminalKey(event: KeyboardEvent): boolean {
   return false
 }
 
-/** Chrome reserves Ctrl+Shift+C for the inspector before xterm receives it. */
+/** Chrome reserves Ctrl+Shift+C for the inspector before xterm receives it.
+ *  仅当终端容器拥有焦点时拦截，避免影响页面其他输入和快捷键。 */
 function handleCopyShortcutCapture(event: KeyboardEvent): void {
   if (!isCopyShortcut(event)) return
+  const container = containerRef.value
+  const active = document.activeElement
+  // 终端 xterm 内部的 textarea 获得焦点时才拦截；否则放行给页面和 DevTools。
+  if (container === null || (active !== null && !container.contains(active))) return
   event.preventDefault()
   event.stopImmediatePropagation()
   if (terminal?.hasSelection()) void copyTerminalSelection(terminal.getSelection())

@@ -55,7 +55,7 @@
         "title": "函数边界、重命名与控制流",
         "artifact": {
           "name": "reverse-companion",
-          "downloadUrl": "./artifacts/reverse-companion",
+          "downloadUrl": "/artifacts/a1d48129804d6eee16ddf44e8697b780dc47a9b2b088503bc5a41fe7543d66cb/reverse-companion",
           "architecture": "i386",
           "sha256": "a1d48129804d6eee16ddf44e8697b780dc47a9b2b088503bc5a41fe7543d66cb",
           "purpose": "与上一实验相同的固定静态逆向样本"

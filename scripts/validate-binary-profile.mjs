@@ -800,7 +800,8 @@ for (const definition of reverseDefinitions) {
       JSON.stringify(externalStep.companion?.tools.map(({ tool }) => tool)) !==
       JSON.stringify(['ida', 'ghidra', 'objdump']) ||
       externalStep.companion?.artifact.sha256 !== artifact.sha256 ||
-      externalStep.companion?.artifact.downloadUrl !== './artifacts/reverse-companion') {
+      externalStep.companion?.artifact.downloadUrl !==
+        `/artifacts/${artifact.sha256}/${path.posix.basename(artifact.path)}`) {
     fail(`${definition.id} companion routes or typed observations are not locked`)
   }
   requireFile(`vm/labs/pwnhub/${definition.id}/inspect.sh`, `${definition.id} inspect script`)

@@ -109,10 +109,16 @@ getent passwd "$MANUAL_DEPLOY_USER" >/dev/null || {
 }
 usermod -aG "$DEPLOY_USER" "$MANUAL_DEPLOY_USER"
 
+install -d -m 2775 \
+  -o "$MANUAL_DEPLOY_USER" \
+  -g "$DEPLOY_USER" \
+  "$DEPLOY_ROOT/artifacts"
+
 for path in \
   "$DEPLOY_ROOT" \
   "$DEPLOY_ROOT/releases" \
-  "$DEPLOY_ROOT/vm-assets"; do
+  "$DEPLOY_ROOT/vm-assets" \
+  "$DEPLOY_ROOT/artifacts"; do
   [[ -d "$path" && ! -L "$path" ]] || {
     echo "ERROR: 部署目录不存在或不是普通目录：$path" >&2
     exit 1
@@ -121,11 +127,13 @@ for path in \
   chmod 2775 "$path"
 done
 
-# Existing shared VM assets may have been created by the manual account. Grant
-# the deploy group access without touching the historical sources/ directory.
-chgrp -R "$DEPLOY_USER" "$DEPLOY_ROOT/vm-assets"
-chmod -R g+rwX "$DEPLOY_ROOT/vm-assets"
-find "$DEPLOY_ROOT/vm-assets" -type d -exec chmod g+s {} +
+# Existing shared VM assets and downloadable artifacts may have been created by
+# the manual account. Grant the deploy group access without touching sources/.
+for shared_path in "$DEPLOY_ROOT/vm-assets" "$DEPLOY_ROOT/artifacts"; do
+  chgrp -R "$DEPLOY_USER" "$shared_path"
+  chmod -R g+rwX "$shared_path"
+  find "$shared_path" -type d -exec chmod g+s {} +
+done
 
 unlink "$STAGED_PUBLIC_KEY"
 
@@ -134,6 +142,7 @@ id "$DEPLOY_USER"
 for path in \
   "$DEPLOY_ROOT" \
   "$DEPLOY_ROOT/releases" \
-  "$DEPLOY_ROOT/vm-assets"; do
+  "$DEPLOY_ROOT/vm-assets" \
+  "$DEPLOY_ROOT/artifacts"; do
   stat -c '%A %U:%G %n' "$path"
 done

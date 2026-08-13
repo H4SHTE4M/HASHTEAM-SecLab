@@ -51,7 +51,7 @@ const noHintChallenges = computed(
 )
 
 function recordLabel(record?: LevelCompletionRecord): string {
-  if (!record) return '历史完成'
+  if (!record) return '未完成'
   const path =
     record.path === 'challenge'
       ? '挑战通关'

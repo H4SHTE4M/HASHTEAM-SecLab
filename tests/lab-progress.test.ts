@@ -43,6 +43,7 @@ import {
   DEFAULT_CUSTOM_ACCENT_SOURCE,
 } from '../src/services/accent-color'
 import type { LabProgress } from '../src/types/lab'
+import { useLabProgress } from '../src/composables/useLabProgress'
 
 const TOTAL = 10
 const GUIDED_COMPLETION = { path: 'guided' as const, hintsUsed: 0 }
@@ -289,6 +290,140 @@ describe('lab-progress（基于 localStorage）', () => {
     expect(reloaded.labHintsUsed['memory-addresses-01']).toBeUndefined()
     expect(reloaded.labCompletedSteps['memory-addresses-01']).toEqual([])
     expect(reloaded.guidedAssistanceLabIds).not.toContain('memory-addresses-01')
+  })
+
+  it('两个预加载标签交错完成 SecLab 与 PwnHub 时保存完成并集和首次记录', () => {
+    const seclabTab = loadProgress(window.localStorage, TOTAL)
+    const pwnhubTab = loadProgress(window.localStorage, TOTAL)
+
+    expect(
+      completeLevel(window.localStorage, seclabTab, 1, {
+        path: 'challenge',
+        hintsUsed: 1,
+      }),
+    ).toBe(true)
+    expect(
+      completeLab(
+        window.localStorage,
+        pwnhubTab,
+        'memory-addresses-01',
+        'memory-model',
+        { path: 'guided', hintsUsed: 2 },
+      ),
+    ).toBe(true)
+    expect(completeLevel(window.localStorage, seclabTab, 2, GUIDED_COMPLETION)).toBe(true)
+
+    const stored = loadProgress(window.localStorage, TOTAL)
+    expect(stored.completedLevels).toEqual([1, 2])
+    expect(stored.completedLabIds).toEqual([
+      'foundations-terminal-01',
+      'memory-addresses-01',
+      'foundations-terminal-02',
+    ])
+    expect(stored.chapterProgress['foundations-terminal']).toEqual([
+      'foundations-terminal-01',
+      'foundations-terminal-02',
+    ])
+    expect(stored.chapterProgress['memory-model']).toEqual(['memory-addresses-01'])
+    expect(stored.completionRecords[1]).toEqual({ path: 'challenge', hintsUsed: 1 })
+    expect(stored.labCompletionRecords['memory-addresses-01']).toEqual({
+      path: 'guided',
+      hintsUsed: 2,
+    })
+  })
+
+  it('两个旧快照交错累计提示和步骤证据时不丢失另一标签的更新', () => {
+    const firstTab = loadProgress(window.localStorage, TOTAL)
+    const secondTab = loadProgress(window.localStorage, TOTAL)
+
+    expect(recordHint(window.localStorage, firstTab, 2)).toBe(1)
+    expect(recordHint(window.localStorage, secondTab, 2)).toBe(2)
+    expect(completeLearningStep(window.localStorage, firstTab, 2, 1)).toEqual([1])
+    expect(completeLearningStep(window.localStorage, secondTab, 2, 3)).toEqual([1, 3])
+
+    expect(recordLabHint(window.localStorage, firstTab, 'memory-addresses-01')).toBe(1)
+    expect(recordLabHint(window.localStorage, secondTab, 'memory-addresses-01')).toBe(2)
+    expect(
+      completeLabLearningStep(window.localStorage, firstTab, 'memory-addresses-01', 1),
+    ).toEqual([1])
+    expect(
+      completeLabLearningStep(window.localStorage, secondTab, 'memory-addresses-01', 2),
+    ).toEqual([1, 2])
+
+    const stored = loadProgress(window.localStorage, TOTAL)
+    expect(stored.hintsUsed[2]).toBe(2)
+    expect(stored.completedSteps[2]).toEqual([1, 3])
+    expect(stored.labHintsUsed['memory-addresses-01']).toBe(2)
+    expect(stored.labCompletedSteps['memory-addresses-01']).toEqual([1, 2])
+  })
+
+  it('导航和局部 reset 不被旧快照反向覆盖，resetAll 建立新代际', () => {
+    const seeded = loadProgress(window.localStorage, TOTAL)
+    completeLevel(window.localStorage, seeded, 1, GUIDED_COMPLETION)
+    recordHint(window.localStorage, seeded, 2)
+    completeLearningStep(window.localStorage, seeded, 2, 1)
+    markGuidedAssistance(window.localStorage, seeded, 2)
+    recordLabHint(window.localStorage, seeded, 'memory-addresses-01')
+    completeLabLearningStep(window.localStorage, seeded, 'memory-addresses-01', 1)
+
+    const resetTab = loadProgress(window.localStorage, TOTAL)
+    const staleTab = loadProgress(window.localStorage, TOTAL)
+    setCurrentLab(window.localStorage, resetTab, 'memory-addresses-01')
+    recordHint(window.localStorage, staleTab, 3)
+    expect(loadProgress(window.localStorage, TOTAL).currentLabId).toBe('memory-addresses-01')
+
+    resetLevelAttempt(window.localStorage, resetTab, 2)
+    completeLabLearningStep(window.localStorage, staleTab, 'memory-addresses-01', 2)
+    const afterAttemptReset = loadProgress(window.localStorage, TOTAL)
+    expect(afterAttemptReset.hintsUsed[2]).toBeUndefined()
+    expect(afterAttemptReset.completedSteps[2]).toEqual([])
+    expect(afterAttemptReset.guidedAssistanceLevels).not.toContain(2)
+    expect(afterAttemptReset.labCompletedSteps['memory-addresses-01']).toEqual([1, 2])
+
+    resetAllProgress(window.localStorage)
+    completeLabLearningStep(window.localStorage, staleTab, 'memory-addresses-01', 3)
+    const afterFullReset = loadProgress(window.localStorage, TOTAL)
+    expect(afterFullReset.completedLevels).toEqual([])
+    expect(afterFullReset.completedLabIds).toEqual([])
+    expect(afterFullReset.hintsUsed).toEqual({})
+    expect(afterFullReset.labHintsUsed).toEqual({})
+    expect(afterFullReset.labCompletedSteps['memory-addresses-01']).toEqual([3])
+  })
+
+  it('storage 外部更新同步到 reactive 单例，损坏事件不会回写或覆盖状态', () => {
+    const singleton = useLabProgress()
+    singleton.resetAll()
+    const externalTab = loadProgress(window.localStorage, TOTAL)
+    completeLab(
+      window.localStorage,
+      externalTab,
+      'memory-addresses-01',
+      'memory-model',
+      GUIDED_COMPLETION,
+    )
+    const externalRaw = window.localStorage.getItem(PROGRESS_STORAGE_KEY)!
+
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: PROGRESS_STORAGE_KEY,
+        newValue: externalRaw,
+        storageArea: window.localStorage,
+      }),
+    )
+    expect(singleton.state.completedLabIds).toContain('memory-addresses-01')
+
+    window.localStorage.setItem(PROGRESS_STORAGE_KEY, '{{broken')
+    const setItem = vi.spyOn(Storage.prototype, 'setItem')
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: PROGRESS_STORAGE_KEY,
+        newValue: '{{broken',
+        storageArea: window.localStorage,
+      }),
+    )
+    expect(singleton.state.completedLabIds).toContain('memory-addresses-01')
+    expect(setItem).not.toHaveBeenCalled()
+    setItem.mockRestore()
   })
 
   it('损坏的存档不会导致异常，直接从头开始', () => {

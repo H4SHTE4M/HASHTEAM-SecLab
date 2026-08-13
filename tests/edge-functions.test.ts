@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import crypto from 'node:crypto'
 // @ts-expect-error EdgeOne deploys this function as a JavaScript module.
 import { onRequestPost as postEvents } from '../edge-functions/api/telemetry/events.js'
 // @ts-expect-error EdgeOne deploys this function as a JavaScript module.
@@ -24,7 +25,10 @@ describe('EdgeOne telemetry functions', () => {
         const { session } = JSON.parse(String(init.body))
         return Response.json({ session, expiresAt: Date.now() + 60_000 })
       }
-      if (url.includes('/stats')) return Response.json({ seclab: {} })
+      if (url.includes('/stats')) {
+        const module = new URL(url).searchParams.get('module')
+        return Response.json(module ? { [module]: {} } : { seclab: {} })
+      }
       if (url.endsWith('/events')) return Response.json({ ok: true })
       return new Response(null, { status: 404 })
     }))
@@ -66,5 +70,37 @@ describe('EdgeOne telemetry functions', () => {
     expect(statsResponse.status).toBe(200)
     await expect(statsResponse.json()).resolves.toEqual({ seclab: {} })
     expect(fetch).toHaveBeenCalledTimes(3)
+  })
+
+  it('pwnhub stats 使用匹配后端的 URL 和 HMAC 转发', async () => {
+    const response = await getStats({
+      request: new Request('https://lab.example/api/telemetry/stats?module=pwnhub'),
+      env: ENV,
+    })
+
+    const expectedSig = crypto
+      .createHmac('sha256', ENV.TELEMETRY_EDGE_SECRET)
+      .update('stats:?module=pwnhub')
+      .digest('hex')
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ pwnhub: {} })
+    expect(fetch).toHaveBeenCalledWith(
+      'https://telemetry.example.test/stats?module=pwnhub',
+      expect.objectContaining({
+        method: 'GET',
+        headers: { 'X-Telemetry-Sig': expectedSig },
+      }),
+    )
+  })
+
+  it('stats 拒绝 unknown module 且不请求后端', async () => {
+    const response = await getStats({
+      request: new Request('https://lab.example/api/telemetry/stats?module=unknown'),
+      env: ENV,
+    })
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'invalid module' })
+    expect(fetch).not.toHaveBeenCalled()
   })
 })

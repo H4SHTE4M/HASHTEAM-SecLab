@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { basename, resolve } from 'node:path'
+import { contentAddressedArtifactPath } from '../vite.config'
 import { COURSE, getCourseLab } from '../src/modules/pwnhub/course'
 import { PUBLISHED_PWNHUB_LAB_IDS } from '../src/modules/pwnhub/published-labs'
 import { parseCourseLabManifest } from '../src/services/course-manifest'
@@ -284,6 +286,101 @@ describe('course manifest v3 compatibility layer', () => {
       labId: 'wrong-lab',
     }
     expect(() => parseCourseLabManifest(external)).toThrow('必须与实验 labId 一致')
+  })
+
+  it('companion 下载 URL 由 artifact SHA-256 内容寻址', () => {
+    const labIds = ['rev-strings-xrefs-01', 'rev-functions-flow-01']
+    const urls = new Set<string>()
+
+    for (const labId of labIds) {
+      const manifestPath = `vm/labs/pwnhub/${labId}/manifest.json`
+      const source = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+        artifacts: Array<{ path: string; sha256: string; downloadable: boolean }>
+        steps: Array<{
+          companion?: {
+            artifact: { name: string; downloadUrl: string; sha256: string }
+          }
+        }>
+      }
+      const artifact = source.artifacts.find((item) => item.downloadable)
+      const companion = source.steps.find((step) => step.companion)?.companion
+      expect(artifact).toBeDefined()
+      expect(companion).toBeDefined()
+
+      const artifactName = basename(artifact!.path)
+      const expectedUrl = `/${contentAddressedArtifactPath(
+        artifact!.sha256,
+        artifact!.path,
+      )}`
+      const actualSha = createHash('sha256')
+        .update(readFileSync(`vm/labs/pwnhub/${labId}/${artifactName}`))
+        .digest('hex')
+      expect(companion!.artifact).toMatchObject({
+        name: artifactName,
+        downloadUrl: expectedUrl,
+        sha256: artifact!.sha256,
+      })
+      expect(actualSha).toBe(artifact!.sha256)
+      expect(contentAddressedArtifactPath('f'.repeat(64), artifact!.path))
+        .not.toBe(contentAddressedArtifactPath(artifact!.sha256, artifact!.path))
+      urls.add(companion!.artifact.downloadUrl)
+    }
+
+    expect(urls).toEqual(new Set([
+      '/artifacts/a1d48129804d6eee16ddf44e8697b780dc47a9b2b088503bc5a41fe7543d66cb/reverse-companion',
+    ]))
+  })
+
+  it('production profile 的每个下载样本使用同一内容寻址输出规则', () => {
+    const profile = JSON.parse(
+      readFileSync('vm/profiles/production.json', 'utf8'),
+    ) as { pwnhubLabs: string[] }
+    expect(profile.pwnhubLabs.length).toBeGreaterThan(0)
+
+    for (const labId of profile.pwnhubLabs) {
+      const manifestPath = `vm/labs/pwnhub/${labId}/manifest.json`
+      const source = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+        artifacts: Array<{ path: string; sha256: string; downloadable: boolean }>
+      }
+      for (const artifact of source.artifacts.filter((item) => item.downloadable)) {
+        const artifactName = basename(artifact.path)
+        const actualSha = createHash('sha256')
+          .update(readFileSync(`vm/labs/pwnhub/${labId}/${artifactName}`))
+          .digest('hex')
+        expect(actualSha).toBe(artifact.sha256)
+        expect(contentAddressedArtifactPath(artifact.sha256, artifact.path)).toBe(
+          `artifacts/${artifact.sha256}/${artifactName}`,
+        )
+      }
+    }
+  })
+
+  it('发布配置禁止缓存 companion 并永久提供内容寻址 artifact', () => {
+    const edgeOne = JSON.parse(readFileSync('edgeone.json', 'utf8')) as {
+      headers: Array<{
+        source: string
+        headers: Array<{ key: string; value: string }>
+      }>
+    }
+    const cacheControlBySource = Object.fromEntries(
+      edgeOne.headers.map((rule) => [
+        rule.source,
+        rule.headers.find((header) => header.key === 'Cache-Control')?.value,
+      ]),
+    )
+
+    expect(cacheControlBySource['/companion.html']).toBe('no-store')
+    expect(cacheControlBySource['/artifacts/*']).toBe(
+      'public, max-age=31536000, immutable',
+    )
+
+    const nginx = readFileSync('.deploy/nginx/hashteam.conf', 'utf8')
+    expect(nginx).toMatch(
+      /location = \/companion\.html \{[^}]*Cache-Control "no-store"/s,
+    )
+    expect(nginx).toMatch(
+      /location \^~ \/artifacts\/ \{[^}]*alias \/var\/www\/hashteam\/artifacts\/;[^}]*immutable/s,
+    )
   })
 
   it('course.schema.json 保持有效 JSON', () => {

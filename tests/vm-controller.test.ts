@@ -16,30 +16,59 @@ import {
 class FakeEmulator implements V86Emulator {
   static latest: FakeEmulator | null = null
 
-  private listener: ((byte: number) => void) | null = null
+  private serialListener: ((byte: number) => void) | null = null
+  private readyListener: (() => void) | null = null
   private running = true
+  static autoReady = true
   readonly sent: string[] = []
+  destroyCount = 0
+  destroyPromise: Promise<void> = Promise.resolve()
 
   constructor(_options: Record<string, unknown>) {
     FakeEmulator.latest = this
+    if (FakeEmulator.autoReady) queueMicrotask(() => this.emitReady())
   }
 
-  add_listener(_event: 'serial0-output-byte', callback: (byte: number) => void): void {
-    this.listener = callback
+  add_listener(event: 'serial0-output-byte', callback: (byte: number) => void): void
+  add_listener(event: 'emulator-ready', callback: () => void): void
+  add_listener(
+    event: 'serial0-output-byte' | 'emulator-ready',
+    callback: ((byte: number) => void) | (() => void),
+  ): void {
+    if (event === 'serial0-output-byte') {
+      this.serialListener = callback as (byte: number) => void
+    } else {
+      this.readyListener = callback as () => void
+    }
   }
 
-  remove_listener(_event: 'serial0-output-byte', callback: (byte: number) => void): void {
-    if (this.listener === callback) this.listener = null
+  remove_listener(event: 'serial0-output-byte', callback: (byte: number) => void): void
+  remove_listener(event: 'emulator-ready', callback: () => void): void
+  remove_listener(
+    event: 'serial0-output-byte' | 'emulator-ready',
+    callback: ((byte: number) => void) | (() => void),
+  ): void {
+    if (event === 'serial0-output-byte' && this.serialListener === callback) {
+      this.serialListener = null
+    }
+    if (event === 'emulator-ready' && this.readyListener === callback) {
+      this.readyListener = null
+    }
   }
 
   serial0_send(data: string): void {
     this.sent.push(data)
   }
-  run(): void {
+  async run(): Promise<void> {
     this.running = true
   }
-  stop(): void {
+  async stop(): Promise<void> {
     this.running = false
+  }
+  async destroy(): Promise<void> {
+    this.destroyCount += 1
+    this.running = false
+    await this.destroyPromise
   }
   restart(): void {}
   is_running(): boolean {
@@ -47,13 +76,18 @@ class FakeEmulator implements V86Emulator {
   }
 
   emit(text: string): void {
-    for (const byte of new TextEncoder().encode(text)) this.listener?.(byte)
+    for (const byte of new TextEncoder().encode(text)) this.serialListener?.(byte)
+  }
+
+  emitReady(): void {
+    this.readyListener?.()
   }
 }
 
 beforeEach(() => {
   logMock.mockReset()
   FakeEmulator.latest = null
+  FakeEmulator.autoReady = true
   window.V86 = FakeEmulator
   vi.stubGlobal(
     'fetch',
@@ -67,6 +101,7 @@ beforeEach(() => {
 afterEach(() => {
   delete window.V86
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 
 describe('V86Controller serial diagnostics', () => {
@@ -127,6 +162,59 @@ describe('V86Controller serial diagnostics', () => {
     controller.runCommand('echo ready')
 
     expect(FakeEmulator.latest?.sent).toEqual(['\u0003', '\u0015', 'echo ready\n'])
+    await controller.stop()
+  })
+
+  it('stop 会等待 V86 destroy 完整 settle 后才完成', async () => {
+    const controller = new V86Controller()
+    await controller.start()
+    const emulator = FakeEmulator.latest!
+    let resolveDestroy!: () => void
+    emulator.destroyPromise = new Promise<void>((resolve) => {
+      resolveDestroy = resolve
+    })
+
+    let stopSettled = false
+    const stopping = controller.stop().then(() => {
+      stopSettled = true
+    })
+    await vi.waitFor(() => {
+      expect(emulator.destroyCount).toBe(1)
+    })
+    expect(stopSettled).toBe(false)
+
+    resolveDestroy()
+    await stopping
+    expect(stopSettled).toBe(true)
+  })
+
+  it('构造后 emulator-ready 永不到达时 stop 有界收口，迟到 ready 仍会销毁且可重试', async () => {
+    vi.useFakeTimers()
+    FakeEmulator.autoReady = false
+    const controller = new V86Controller()
+    await controller.start()
+    const stalledEmulator = FakeEmulator.latest!
+
+    let stopSettled = false
+    const stopping = controller.stop().then(() => {
+      stopSettled = true
+    })
+    await vi.advanceTimersByTimeAsync(999)
+    expect(stopSettled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    await stopping
+    expect(stalledEmulator.destroyCount).toBe(0)
+
+    FakeEmulator.autoReady = true
+    await controller.start()
+    const replacement = FakeEmulator.latest!
+    expect(replacement).not.toBe(stalledEmulator)
+    replacement.emitReady()
+
+    stalledEmulator.emitReady()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(stalledEmulator.destroyCount).toBe(1)
     await controller.stop()
   })
 })

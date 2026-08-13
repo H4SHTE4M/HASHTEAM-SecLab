@@ -78,6 +78,7 @@ class FakeController implements VirtualMachineController {
   startCount = 0
   stopCount = 0
 
+  stopPromise: Promise<void> = Promise.resolve()
   constructor(
     private readonly onStageChange: (stage: BootStage) => void,
     private readonly startError?: Error,
@@ -93,6 +94,7 @@ class FakeController implements VirtualMachineController {
   async stop(): Promise<void> {
     this.stopCount += 1
     this.serialCallbacks.clear()
+    await this.stopPromise
   }
 
   async reset(): Promise<void> {}
@@ -217,6 +219,60 @@ describe('virtual machine lifecycle', () => {
     controller?.emit('stale\n')
 
     expect(display).toEqual(['hello\n'])
+  })
+
+  it('旧 owner 的延迟 dispose 不会覆盖新工作台 stage、module 或 display callback', async () => {
+    const controllers: FakeController[] = []
+    const vm = createVirtualMachine({
+      createController: (onStageChange) => {
+        const controller = new FakeController(onStageChange)
+        controllers.push(controller)
+        return controller
+      },
+    })
+    const oldOwner = Symbol('old-workspace')
+    const newOwner = Symbol('new-workspace')
+    const oldDisplay: string[] = []
+    const newDisplay: string[] = []
+    vm.handoff(oldOwner, 'seclab')
+    vm.onDisplay((data) => oldDisplay.push(data), oldOwner)
+
+    await vm.boot(oldOwner)
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+    expect(vm.stage.value).toBe('ready')
+
+    let releaseStop!: () => void
+    controllers[0].stopPromise = new Promise<void>((resolve) => {
+      releaseStop = resolve
+    })
+    const disposingOldWorkspace = vm.dispose(oldOwner)
+    vm.handoff(newOwner, 'pwnhub')
+    vm.onDisplay((data) => newDisplay.push(data), newOwner)
+    // 旧工作台迟到的模块写入也不能夺回遥测归属。
+    vm.setModule('seclab', oldOwner)
+    const bootingNewWorkspace = vm.boot(newOwner)
+    expect(controllers).toHaveLength(1)
+
+    releaseStop()
+    await Promise.all([disposingOldWorkspace, bootingNewWorkspace])
+    expect(controllers).toHaveLength(2)
+    expect(vm.stage.value).toBe('preparing-env')
+
+    vm.resetCurrentLevel()
+    expect(telemetryMocks.trackActivityReset).toHaveBeenCalledOnce()
+    expect(telemetryMocks.trackReset).not.toHaveBeenCalled()
+    controllers[0].emit('stale\n')
+    controllers[1].emit('new\n')
+    expect(oldDisplay).not.toContain('stale\n')
+    expect(oldDisplay).not.toContain('new\n')
+    expect(newDisplay).toContain('new\n')
+
+    controllers[1].emit(readyLine())
+    await vm.waitForProtocolIdle()
+    expect(vm.stage.value).toBe('ready')
+    expect(newDisplay).toContain('new\n')
+    await vm.dispose(newOwner)
   })
 
   it('等待 ready 超时后进入可重试错误态并释放控制器', async () => {
@@ -795,13 +851,38 @@ describe('restart 生命周期', () => {
     const concurrentBoot = vm.boot()
     await Promise.all([restartPromise, concurrentBoot])
 
-    // 并发窗口内可能短暂创建两个控制器，但最终只有最后一个存活
-    expect(controllers.length).toBeGreaterThanOrEqual(2)
-    const live = controllers[controllers.length - 1]
+    expect(controllers).toHaveLength(2)
+    const live = controllers[1]
+    expect(controllers[0].stopCount).toBe(1)
     expect(live.stopCount).toBe(0)
-    expect(controllers.slice(0, -1).every((controller) => controller.stopCount >= 1)).toBe(true)
 
     live.emit(readyLine())
+    await vm.waitForProtocolIdle()
+    expect(vm.stage.value).toBe('ready')
+    await vm.dispose()
+  })
+
+  it('连续 restart 会等待延迟 stop，且只创建一个新控制器', async () => {
+    const { vm, controllers } = createTrackedVm()
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+
+    let releaseStop!: () => void
+    controllers[0].stopPromise = new Promise<void>((resolve) => {
+      releaseStop = resolve
+    })
+    const firstRestart = vm.restart()
+    const secondRestart = vm.restart()
+    expect(controllers).toHaveLength(1)
+
+    releaseStop()
+    await Promise.all([firstRestart, secondRestart])
+    expect(controllers).toHaveLength(2)
+    expect(controllers[0].stopCount).toBe(1)
+    expect(controllers[1].stopCount).toBe(0)
+
+    controllers[1].emit(readyLine())
     await vm.waitForProtocolIdle()
     expect(vm.stage.value).toBe('ready')
     await vm.dispose()

@@ -95,8 +95,8 @@ PwnHub 使用 `v=2` 和稳定 `activityId`：
 allowlist、完成去重和 Dashboard 数据，不接受交叉版本或交叉事件。
 
 PwnHub 的已公开 `activityId` 唯一来源是 `vm/profiles/production.json`。前端在
-构建时直接读取该文件，backend 部署时把同一文件复制为
-`/opt/hashteam-telemetry/production.json`；配置缺失、ID 非法或重复时服务拒绝启动。
+构建时直接读取该文件，backend 部署时把同一文件复制到当前 release 的
+`/opt/hashteam-telemetry/current/production.json`；配置缺失、ID 非法或重复时服务拒绝启动。
 
 ### 聚合表结构
 
@@ -284,10 +284,12 @@ find() { command find "$@"; local rc=$?; _ht_telemetry_emit find; return $rc; }
 ### 管理认证设计
 
 - 单管理员密码，服务端只存 scrypt 哈希（`scrypt:N:r:p:salt:hash`，N=16384）
-- `deploy.sh` 首次部署生成 20 位随机密码并**只在部署会话打印一次**；轮换用 `sudo bash /opt/hashteam-telemetry/set-admin-password.sh [新密码]`
+- `deploy.sh` 首次部署生成 20 位随机密码并**只在部署会话打印一次**
+- 自定义轮换使用 `sudo bash /opt/hashteam-telemetry/current/set-admin-password.sh`，脚本从 `/dev/tty` 隐式读取两次，拒绝 argv 密码；自动生成使用同一路径加 `--generate`
+- 密码按实际输入至少 12 位校验；首尾空白原样保留，换行符不属于密码内容。env 通过从创建即为 `0600` 的同目录临时文件原子替换
 - 登录（`POST /api/admin/login`）成功后下发 32 字节随机 token 的 cookie：`HttpOnly; Secure; SameSite=Strict; Path=/telemetry-backend/api/admin`，12 小时固定过期（不滑动）
 - 后端只存 token 的 SHA-256 哈希（`admin_sessions` 表），与匿名 session 同一清理周期
-- 登录限流：5 次/5 分钟/IP + 30 次/5 分钟全局；overview 60 次/分钟/IP
+- 登录限流：5 次/5 分钟/IP + 30 次/5 分钟全局；失败日志不写入原始 IP；overview 60 次/分钟/IP
 - 会话固定 12h 过期 + SameSite=Strict + 仅 JSON API（无表单提交，CSP `form-action 'none'`），CSRF 面最小
 
 ### Dashboard 环境变量
@@ -350,8 +352,9 @@ ssh cn-tencent sudo sqlite3 /var/lib/hashteam-telemetry/telemetry.db \
 ssh cn-tencent sudo bash \
   /tmp/hashteam-telemetry-release/backend/deploy.sh
 
-# 4. 脚本会把同一 production.json 安装到 /opt/hashteam-telemetry/，
-#    以加列/加表方式升级 SQLite，并保留现有 SecLab 数据。
+# 4. 脚本先在 /opt/hashteam-telemetry/releases/ 下的同文件系统 staging
+#    复制文件、执行 frozen install 并完成语法/权限检查，之后才原子切换
+#    /opt/hashteam-telemetry/current；production.json 位于 current 中。
 
 # 5. 配置 nginx 反代（7841 始终只监听 127.0.0.1）：
 #    location /telemetry-backend/ {
@@ -362,6 +365,13 @@ ssh cn-tencent sudo bash \
 
 # 6. 在 EdgeOne 配置同一 TELEMETRY_EDGE_SECRET 与 backend URL。
 ```
+
+release 目录采用 `/opt/hashteam-telemetry/releases/<release-id>`。systemd 始终从
+`/opt/hashteam-telemetry/current` 启动；健康检查成功后，原 active release 由
+`/opt/hashteam-telemetry/previous` 保留以便回滚。install、语法、权限、unit、
+重启或健康检查任一步失败，脚本都会保持或恢复原 `current`，且不会改写原 release
+中的任何字节。纯本地故障注入回归入口为 `bash scripts/test-backend-ops.sh`，使用
+临时目录和伪造的 pnpm/systemd 命令，不执行实际部署。
 
 上线顺序不可反转：旧前端只发送 v1，新 backend 同时接受 v1/v2，因此先升级 backend
 无行为变化；如果先发布新前端，旧 backend 会拒绝 PwnHub v2，客户端虽不受影响，
@@ -405,7 +415,7 @@ ssh cn-tencent sudo cat /etc/hashteam-telemetry/env
 | 刷量                  | session 事件预算（500）+ batch 上限（50）+ 队列上限（200）+ EdgeOne rate limit |
 | 绕过 Edge Function    | 后端验证 HMAC 签名（共享密钥），无签名请求被拒绝 |
 | session 劫持          | token 只存 SHA-256 hash，30 分钟过期           |
-| 管理密码爆破          | scrypt + 登录限流（5 次/5 分钟/IP + 全局限流） |
+| 管理密码爆破          | scrypt + 登录限流（5 次/5 分钟/IP + 全局限流）；失败日志不记录原始 IP |
 | 管理 cookie 窃取/滥用 | HttpOnly + Secure + SameSite=Strict + Path 限定，12 小时过期，服务端只存哈希 |
 | 公开看板刷量          | `/api/public/stats` 限流 30 次/分钟/IP，且只读聚合数据 |
 | 用户画像 / 追踪       | 不收集 IP（不持久化）、账号、Cookie、指纹       |
