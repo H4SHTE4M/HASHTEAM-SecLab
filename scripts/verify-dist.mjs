@@ -116,29 +116,99 @@ if (groupHash.digest('hex') !== manifest.hash) {
   fail('VM 资产目录名不是清单内容计算出的组哈希')
 }
 
-const index = (await requireFile('index.html')).toString('utf8')
-const scriptPaths = [
-  ...index.matchAll(/<script[^>]+src="\.\/([^"]+\.js)"/g),
-].map((match) => match[1])
-const stylePaths = [
-  ...index.matchAll(/<link[^>]+href="\.\/([^"]+\.css)"[^>]*>/g),
-].map((match) => match[1])
-if (scriptPaths.length !== 1 || !/^assets\/[A-Za-z0-9_.-]+\.js$/.test(scriptPaths[0])) {
-  fail('生产 index.html 必须只有一个安全的相对路径 JavaScript 入口')
+async function verifyHtmlEntry(relativePath) {
+  const html = (await requireFile(relativePath)).toString('utf8')
+  const scriptPaths = [
+    ...html.matchAll(/<script[^>]+src="\.\/([^"]+\.js)"/g),
+  ].map((match) => match[1])
+  const stylePaths = [
+    ...html.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="\.\/([^"]+\.css)"[^>]*>/g),
+  ].map((match) => match[1])
+  const preloadPaths = [
+    ...html.matchAll(/<link[^>]+rel="modulepreload"[^>]+href="\.\/([^"]+\.js)"[^>]*>/g),
+  ].map((match) => match[1])
+  if (scriptPaths.length !== 1 || !/^assets\/[A-Za-z0-9_.-]+\.js$/.test(scriptPaths[0])) {
+    fail(`生产 ${relativePath} 必须只有一个安全的相对路径 JavaScript 入口`)
+  }
+  if (
+    stylePaths.length < 1 ||
+    new Set(stylePaths).size !== stylePaths.length ||
+    stylePaths.some((assetPath) => !/^assets\/[A-Za-z0-9_.-]+\.css$/.test(assetPath))
+  ) {
+    fail(`生产 ${relativePath} 必须引用至少一份且不重复的安全相对路径 CSS`)
+  }
+  if (
+    new Set(preloadPaths).size !== preloadPaths.length ||
+    preloadPaths.some((assetPath) => !/^assets\/[A-Za-z0-9_.-]+\.js$/.test(assetPath))
+  ) {
+    fail(`生产 ${relativePath} 包含不安全或重复的 modulepreload`)
+  }
+  await Promise.all([...stylePaths, ...preloadPaths].map(requireFile))
+  return {
+    html,
+    script: (await requireFile(scriptPaths[0])).toString('utf8'),
+  }
 }
-if (stylePaths.length !== 1 || !/^assets\/[A-Za-z0-9_.-]+\.css$/.test(stylePaths[0])) {
-  fail('生产 index.html 必须只有一个安全的相对路径 CSS 入口')
-}
-const scriptPath = scriptPaths[0]
-const appScript = (await requireFile(scriptPath)).toString('utf8')
-await requireFile(stylePaths[0])
-if (!appScript.includes(manifest.base)) {
+
+const indexEntry = await verifyHtmlEntry('index.html')
+const companionEntry = await verifyHtmlEntry('companion.html')
+const productionScripts = await Promise.all(
+  (await readdir(path.join(dist, 'assets')))
+    .filter((fileName) => /^[A-Za-z0-9_.-]+\.js$/.test(fileName))
+    .map(async (fileName) => (await requireFile(`assets/${fileName}`)).toString('utf8')),
+)
+if (!productionScripts.some((script) => script.includes(manifest.base))) {
   fail('生产 JavaScript 没有引用清单中的内容寻址 VM 资产目录')
 }
-if (!appScript.includes(manifest.sourceId)) {
+if (!productionScripts.some((script) => script.includes(manifest.sourceId))) {
   fail('生产 JavaScript 中的 Build ID 与 VM 资产清单不一致')
 }
+if (!companionEntry.html.includes('PwnHub Companion')) {
+  fail('生产 companion.html 缺少伴侣入口标题')
+}
 await requireFile('favicon.svg')
+const productionProfile = JSON.parse(
+  await readFile(path.join(root, 'vm/profiles/production.json'), 'utf8'),
+)
+if (!Array.isArray(productionProfile.pwnhubLabs)) {
+  fail('production profile 缺少 pwnhubLabs')
+}
+const expectedArtifactPaths = new Set()
+for (const labId of productionProfile.pwnhubLabs) {
+  if (typeof labId !== 'string' || !/^[a-z][a-z0-9-]*$/.test(labId)) {
+    fail('production profile 包含非法 PwnHub labId')
+  }
+  const labRoot = path.join(root, 'vm/labs/pwnhub', labId)
+  const labManifest = JSON.parse(await readFile(path.join(labRoot, 'manifest.json'), 'utf8'))
+  for (const artifact of labManifest.artifacts ?? []) {
+    if (artifact.downloadable !== true) continue
+    const artifactName = path.posix.basename(artifact.path)
+    expectedArtifactPaths.add(`artifacts/${labId}/${artifactName}`)
+    const packaged = await requireFile(`artifacts/${labId}/${artifactName}`)
+    const actual = createHash('sha256').update(packaged).digest('hex')
+    if (actual !== artifact.sha256) {
+      fail(`生产 artifact 与 manifest SHA-256 不一致：${labId}/${artifactName}`)
+    }
+  }
+}
+const actualArtifactPaths = []
+async function collectPackagedArtifacts(directory = path.join(dist, 'artifacts')) {
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const absolute = path.join(directory, entry.name)
+    if (entry.isDirectory()) {
+      await collectPackagedArtifacts(absolute)
+    } else if (entry.isFile()) {
+      actualArtifactPaths.push(path.relative(dist, absolute).split(path.sep).join('/'))
+    }
+  }
+}
+await collectPackagedArtifacts()
+if (
+  JSON.stringify(actualArtifactPaths.sort()) !==
+  JSON.stringify([...expectedArtifactPaths].sort())
+) {
+  fail('生产 artifacts 与当前 production profile 的 downloadable 清单不一致')
+}
 const sourceNotice = (await requireFile('legal/SOURCE_CODE.md')).toString('utf8')
 const thirdPartyNotice = (await requireFile('legal/THIRD_PARTY_NOTICES.md')).toString('utf8')
 const releaseSourceUrl =
@@ -161,6 +231,11 @@ for (const requiredSourceReference of [
   'vm/busybox-suid.sha256',
   'vm/build.sh',
   'vm/suid-toolchain.lock',
+  'vm/toolchain-source/htcheck/toolchain.lock',
+  'vm/binary-tools/build-binutils.sh',
+  'vm/binary-tools/binutils-2.42.lock',
+  'vm/binary-tools/build-gdb.sh',
+  'vm/binary-tools/gdb-15.1.lock',
   'vm/toolchain-source/aosc-glibc32/',
   'vm/toolchain-source/aosc-glibc32/SHA256SUMS',
 ]) {
@@ -210,6 +285,121 @@ const correspondingSources = [
     'https://ftp.gnu.org/gnu/glibc/glibc-2.42.tar.xz',
   ],
   [
+    'binutils-2.42.tar.xz',
+    'f6e4d41fd5fc778b06b7891457b3620da5ecea1006c6a4a41ae998109f85a800',
+    'https://ftp.gnu.org/gnu/binutils/binutils-2.42.tar.xz',
+  ],
+  [
+    'gdb-15.1.tar.xz',
+    '38254eacd4572134bca9c5a5aa4d4ca564cbbd30c369d881f733fb6b903354f2',
+    'https://ftp.gnu.org/gnu/gdb/gdb-15.1.tar.xz',
+  ],
+  [
+    'gcc-13_13.3.0.orig.tar.gz',
+    '3b85d91bf38d1b858d9d01134f4046b3359731968ed4e6e912d29717a35d1a46',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/gcc-13/13.3.0-6ubuntu2%7E24.04.1/gcc-13_13.3.0.orig.tar.gz',
+  ],
+  [
+    'gcc-13_13.3.0-6ubuntu2~24.04.1.debian.tar.xz',
+    '5523658f272ad6d15a83b6e26d178fbd5cb7709ec7ce2ca52b0c843e19c228e3',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/gcc-13/13.3.0-6ubuntu2%7E24.04.1/gcc-13_13.3.0-6ubuntu2%7E24.04.1.debian.tar.xz',
+  ],
+  [
+    'gcc-13_13.3.0-6ubuntu2~24.04.1.dsc',
+    '86b4012c312ac13e3e092877719a62a5b5dbab082ae7e9680780a25c6a13ddc6',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/gcc-13/13.3.0-6ubuntu2%7E24.04.1/gcc-13_13.3.0-6ubuntu2%7E24.04.1.dsc',
+  ],
+  [
+    'gmp_6.3.0+dfsg.orig.tar.xz',
+    'bd2966e6d277f79328e894a5a9f3ba3fbf2ed2be81def5f48623e30c23fb1572',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/gmp/2%3A6.3.0%2Bdfsg-2ubuntu6.1/gmp_6.3.0%2Bdfsg.orig.tar.xz',
+  ],
+  [
+    'gmp_6.3.0+dfsg-2ubuntu6.1.debian.tar.xz',
+    '0a7592ee94876fcc0dba60c9a9fba806a72752c104c04d553803e1b7a97026a3',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/gmp/2%3A6.3.0%2Bdfsg-2ubuntu6.1/gmp_6.3.0%2Bdfsg-2ubuntu6.1.debian.tar.xz',
+  ],
+  [
+    'gmp_6.3.0+dfsg-2ubuntu6.1.dsc',
+    '7fdd2464ee453296e33598dad6f84dd489640c08f50552389469bcf90537582e',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/gmp/2%3A6.3.0%2Bdfsg-2ubuntu6.1/gmp_6.3.0%2Bdfsg-2ubuntu6.1.dsc',
+  ],
+  [
+    'mpfr4_4.2.1.orig.tar.xz',
+    '277807353a6726978996945af13e52829e3abd7a9a5b7fb2793894e18f1fcbb2',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/mpfr4/4.2.1-1build1.1/mpfr4_4.2.1.orig.tar.xz',
+  ],
+  [
+    'mpfr4_4.2.1-1build1.1.debian.tar.xz',
+    '55770c471715c710690129e45c627d77da05547a8f6faee81dd420a9b2b5fded',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/mpfr4/4.2.1-1build1.1/mpfr4_4.2.1-1build1.1.debian.tar.xz',
+  ],
+  [
+    'mpfr4_4.2.1-1build1.1.dsc',
+    '9adabba2fbe45f0705b630b9b225752d945718ed4742b1c5b9fb1aa0fbcd0766',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/mpfr4/4.2.1-1build1.1/mpfr4_4.2.1-1build1.1.dsc',
+  ],
+  [
+    'expat_2.6.1.orig.tar.gz',
+    '14113ed69357172a0bf5a268793c8b5b01afc77c7a2e5fb8dd0b06cb87c02c4a',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/expat/2.6.1-2ubuntu0.4/expat_2.6.1.orig.tar.gz',
+  ],
+  [
+    'expat_2.6.1-2ubuntu0.4.debian.tar.xz',
+    '8a24bd6c87fe292a2f00a2df71f7d2bbe3713fa63b1952c8552cdac4288d10fd',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/expat/2.6.1-2ubuntu0.4/expat_2.6.1-2ubuntu0.4.debian.tar.xz',
+  ],
+  [
+    'expat_2.6.1-2ubuntu0.4.dsc',
+    'a25d3fde103454ad5d34d4770bd5adb60bb5872da775df74cad193b5c4de1dff',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/expat/2.6.1-2ubuntu0.4/expat_2.6.1-2ubuntu0.4.dsc',
+  ],
+  [
+    'ncurses_6.4+20240113.orig.tar.gz',
+    '37a12a0f8ae2605012c9a164dd286b0cfa02b51b5055836d09eb3d597fc351b1',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/ncurses/6.4%2B20240113-1ubuntu2.1/ncurses_6.4%2B20240113.orig.tar.gz',
+  ],
+  [
+    'ncurses_6.4+20240113-1ubuntu2.1.debian.tar.xz',
+    '5d86811c8c9c3fab79c9d644a00ee31b4113b969d32b0bb05b5d3e7c2bcea9ac',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/ncurses/6.4%2B20240113-1ubuntu2.1/ncurses_6.4%2B20240113-1ubuntu2.1.debian.tar.xz',
+  ],
+  [
+    'ncurses_6.4+20240113-1ubuntu2.1.dsc',
+    '87d71c553da108e83c4985e0bca8b944db2dd7931105e511a61e77faf1b415b7',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/ncurses/6.4%2B20240113-1ubuntu2.1/ncurses_6.4%2B20240113-1ubuntu2.1.dsc',
+  ],
+  [
+    'zlib_1.3.dfsg.orig.tar.xz',
+    '5eea0322c1c21c75cad3b607ac1c43ff5c71e014b8ac4a34300b5e2b80d02e70',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/zlib/1%3A1.3.dfsg-3.1ubuntu2.1/zlib_1.3.dfsg.orig.tar.xz',
+  ],
+  [
+    'zlib_1.3.dfsg-3.1ubuntu2.1.debian.tar.xz',
+    '958c7031c02f894516492954153c8d760d94e20a4039e48ca7231880b913ae26',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/zlib/1%3A1.3.dfsg-3.1ubuntu2.1/zlib_1.3.dfsg-3.1ubuntu2.1.debian.tar.xz',
+  ],
+  [
+    'zlib_1.3.dfsg-3.1ubuntu2.1.dsc',
+    'd083d6e1eb6f7f0dc5b107b0cc6b898f097947e1317769553f1c5c5d71ea5073',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/zlib/1%3A1.3.dfsg-3.1ubuntu2.1/zlib_1.3.dfsg-3.1ubuntu2.1.dsc',
+  ],
+  [
+    'glibc_2.39.orig.tar.xz',
+    'f77bd47cf8170c57365ae7bf86696c118adb3b120d3259c64c502d3dc1e2d926',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/glibc/2.39-0ubuntu8/glibc_2.39.orig.tar.xz',
+  ],
+  [
+    'glibc_2.39-0ubuntu8.debian.tar.xz',
+    '24d8627f34850f05554158b085499d255c67af27be9762d6a911b168852c1dd2',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/glibc/2.39-0ubuntu8/glibc_2.39-0ubuntu8.debian.tar.xz',
+  ],
+  [
+    'glibc_2.39-0ubuntu8.dsc',
+    'af44b50b4aba75916f920337523d89698c465fafb720268bb87b2555000bea7a',
+    'https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/glibc/2.39-0ubuntu8/glibc_2.39-0ubuntu8.dsc',
+  ],
+  [
     'seabios_1.16.3.orig.tar.gz',
     '374dd8f6938e1673b084de4b2964514f7f9fd1b60eca1c12066c484d26286272',
     'https://deb.debian.org/debian/pool/main/s/seabios/seabios_1.16.3.orig.tar.gz',
@@ -250,7 +440,12 @@ for (const projectMaterial of [
   'vm/busybox-suid.sha256',
   'vm/build.sh',
   'vm/suid-toolchain.lock',
+  'vm/toolchain-source/htcheck/toolchain.lock',
   'scripts/pack-initramfs.py',
+  'vm/binary-tools/build-binutils.sh',
+  'vm/binary-tools/binutils-2.42.lock',
+  'vm/binary-tools/build-gdb.sh',
+  'vm/binary-tools/gdb-15.1.lock',
   'vm/toolchain-source/aosc-glibc32/SHA256SUMS',
 ]) {
   await requireProjectFile(projectMaterial)

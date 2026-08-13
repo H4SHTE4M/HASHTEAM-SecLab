@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import gzip
 import hashlib
+import json
 import runpy
 import stat
 import sys
@@ -73,8 +74,18 @@ def read_locked_checksum(path: Path, member: str) -> str:
 
 def verify_overlay_manifest(entries: dict[str, Entry], repository: Path) -> None:
     packer = runpy.run_path(str(repository / "scripts" / "pack-initramfs.py"))
+    profile = json.loads(
+        (repository / "vm" / "profiles" / "production.json").read_text(encoding="utf-8")
+    )
     expected_entries = packer["collect_entries"](
-        str(repository / "vm" / "rootfs-overlay"), None, None
+        str(repository / "vm" / "rootfs-overlay"),
+        None,
+        None,
+        None,
+        str(repository / "vm" / "labs" / "pwnhub"),
+        tuple(profile["pwnhubLabs"]),
+        str(repository / "vm" / "binary-tools" / "prebuilt"),
+        tuple(profile["binaryTools"]),
     )
     expected = {entry.name: entry for entry in expected_entries}
     expected_names = set(expected) | {"bin/busybox", "bin/busybox-suid", "usr/local/bin/htcheck"}

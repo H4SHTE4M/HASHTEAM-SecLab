@@ -1,0 +1,180 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "asm-reading",
+  "labId": "asm-branches-01",
+  "title": "test、cmp 与条件跳转",
+  "summary": "观察 test 和 cmp 如何留下 flags，再用 je 与有符号 jg 选择执行路径。",
+  "goals": [
+    "用 test 判断一个值是否为零",
+    "说明 cmp 更新 flags 但不改写操作数",
+    "区分 je 的 ZF 条件和 jg 的有符号条件"
+  ],
+  "prerequisites": ["能够读取寄存器前后状态", "理解位运算与结果为零"],
+  "kind": "visual",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 35, "max": 55 },
+  "unlockAfter": ["asm-stack-ops-01"],
+  "artifacts": [
+    {
+      "path": "/opt/pwnhub/labs/asm-branches-01/asm-branches",
+      "architecture": "i386",
+      "sha256": "14b3db09dacc71c4ced0e2a81a5408ca7b3794e44ee56f20f62a24c35ceaa6bb",
+      "purpose": "固定、离线的 test、cmp、je、jg 与 flags 条件跳转观察样本",
+      "downloadable": true
+    }
+  ],
+  "concepts": [
+    { "id": "test-instruction", "term": "test", "explanation": "test 对两个操作数做按位与，只更新 flags 而不写回结果；test eax,eax 常用于判断 EAX 是否为零。" },
+    { "id": "cmp-instruction", "term": "cmp", "explanation": "cmp 按减法规则更新 flags，但不会把减法结果写回两个操作数。" },
+    { "id": "conditional-jumps", "term": "je 与 jg", "explanation": "je 在 ZF=1 时跳转；有符号 jg 要求 ZF=0 且 SF=OF。jne、jl、jle、jge 也都读取前一条指令留下的 flags。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "prediction",
+      "title": "先预测零值检测",
+      "objective": "把 test 的按位结果与 ZF 对应起来",
+      "instruction": "EAX 为 0，执行 test eax,eax。按位与结果仍是 0，因此 ZF 会记录“结果为零”。test 不把结果写回 EAX。",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [
+        { "id": "test-instruction", "term": "test", "explanation": "test 对两个操作数做按位与，只更新 flags 而不写回结果；test eax,eax 常用于判断 EAX 是否为零。" }
+      ],
+      "uses": ["test-instruction"],
+      "evidence": "prediction",
+      "question": {
+        "prompt": "test eax,eax 后，哪个事实成立？",
+        "choices": [
+          { "id": "zero", "label": "EAX 仍为 0，ZF=1" },
+          { "id": "one", "label": "EAX 变为 1，ZF=0" },
+          { "id": "cleared", "label": "EAX 被删除" }
+        ],
+        "answer": "zero",
+        "success": "预测已记录：test 保留 EAX，并用 ZF 记录零结果。"
+      }
+    },
+    {
+      "id": 2,
+      "type": "visual-trace",
+      "title": "test 后让 je 读取 ZF",
+      "objective": "观察检测指令和跳转指令之间的 flags 数据流",
+      "instruction": "先执行 test，再执行 je。je 不重新检查 EAX，它只读取刚才留下的 ZF=1，因此进入零值路径。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        { "id": "conditional-jumps", "term": "je 与 jg", "explanation": "je 在 ZF=1 时跳转；有符号 jg 要求 ZF=0 且 SF=OF。jne、jl、jle、jge 也都读取前一条指令留下的 flags。" }
+      ],
+      "uses": ["test-instruction", "conditional-jumps"],
+      "evidence": "observation",
+      "tool": "elf",
+      "initialTab": "registers",
+      "workbench": {
+        "registers": { "instruction": "test eax,eax; je zero_path", "registers": [{ "name": "eax", "before": 0, "after": 0 }], "flagsBefore": [], "flagsAfter": ["ZF"] },
+        "assemblyTui": {
+          "title": "test 与 je 单步",
+          "states": [
+            { "id": "before", "title": "检测前", "instruction": "test eax,eax", "explanation": "EAX 为零，flags 还没有记录本次检测。", "registers": { "instruction": "test eax,eax", "registers": [{ "name": "eax", "before": 0, "after": 0 }], "flagsBefore": [], "flagsAfter": [] } },
+            { "id": "after-test", "title": "检测后", "instruction": "test eax,eax", "explanation": "EAX 保持不变，按位与结果为零使 ZF 置位。", "registers": { "instruction": "test eax,eax", "registers": [{ "name": "eax", "before": 0, "after": 0 }], "flagsBefore": [], "flagsAfter": ["ZF"] } },
+            { "id": "branch", "title": "判断跳转", "instruction": "je zero_path", "explanation": "je 读取到 ZF=1，因此跳转。", "registers": { "instruction": "je zero_path", "registers": [{ "name": "eax", "before": 0, "after": 0 }], "flagsBefore": ["ZF"], "flagsAfter": ["ZF"] } }
+          ]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "visual-trace",
+      "title": "cmp 相等后执行 je",
+      "objective": "确认 cmp 保留操作数并设置关系 flags",
+      "instruction": "EAX 和 EBX 都为 7。cmp 按 EAX-EBX 的规则设置 flags，但两个寄存器仍是 7；差为零，所以 ZF=1，je 跳转。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        { "id": "cmp-instruction", "term": "cmp", "explanation": "cmp 按减法规则更新 flags，但不会把减法结果写回两个操作数。" }
+      ],
+      "uses": ["cmp-instruction", "conditional-jumps"],
+      "evidence": "observation",
+      "tool": "elf",
+      "initialTab": "registers",
+      "workbench": {
+        "registers": { "instruction": "cmp eax,ebx; je equal_path", "registers": [{ "name": "eax", "before": 7, "after": 7 }, { "name": "ebx", "before": 7, "after": 7 }], "flagsBefore": [], "flagsAfter": ["ZF"] },
+        "assemblyTui": {
+          "title": "cmp 与 je 单步",
+          "states": [
+            { "id": "before", "title": "比较前", "instruction": "cmp eax,ebx", "explanation": "两个操作数都为 7。", "registers": { "instruction": "cmp eax,ebx", "registers": [{ "name": "eax", "before": 7, "after": 7 }, { "name": "ebx", "before": 7, "after": 7 }], "flagsBefore": [], "flagsAfter": [] } },
+            { "id": "after", "title": "比较后", "instruction": "cmp eax,ebx", "explanation": "两个寄存器保持不变，相等关系使 ZF 置位。", "registers": { "instruction": "cmp eax,ebx", "registers": [{ "name": "eax", "before": 7, "after": 7 }, { "name": "ebx", "before": 7, "after": 7 }], "flagsBefore": [], "flagsAfter": ["ZF"] } },
+            { "id": "branch", "title": "判断跳转", "instruction": "je equal_path", "explanation": "je 读取 ZF=1，进入相等路径。", "registers": { "instruction": "je equal_path", "registers": [{ "name": "eax", "before": 7, "after": 7 }, { "name": "ebx", "before": 7, "after": 7 }], "flagsBefore": ["ZF"], "flagsAfter": ["ZF"] } }
+          ]
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "visual-trace",
+      "title": "用 jg 判断有符号大于",
+      "objective": "理解有符号条件由多个 flags 共同表达",
+      "instruction": "EAX=9、EBX=3，cmp 后 ZF=0、SF=0、OF=0。jg 检查 ZF=0 且 SF=OF，因此跳转。无符号比较应使用 ja、jb 等另一组跳转，不能混用。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "uses": ["cmp-instruction", "conditional-jumps"],
+      "evidence": "observation",
+      "tool": "elf",
+      "initialTab": "registers",
+      "workbench": {
+        "registers": { "instruction": "cmp eax,ebx; jg greater_path", "registers": [{ "name": "eax", "before": 9, "after": 9 }, { "name": "ebx", "before": 3, "after": 3 }], "flagsBefore": [], "flagsAfter": [] },
+        "assemblyTui": {
+          "title": "cmp 与 jg 单步",
+          "states": [
+            { "id": "before", "title": "比较前", "instruction": "cmp eax,ebx", "explanation": "按有符号整数解释，9 大于 3。", "registers": { "instruction": "cmp eax,ebx", "registers": [{ "name": "eax", "before": 9, "after": 9 }, { "name": "ebx", "before": 3, "after": 3 }], "flagsBefore": [], "flagsAfter": [] } },
+            { "id": "after", "title": "比较后", "instruction": "cmp eax,ebx", "explanation": "ZF=0 且 SF=OF；这里三个显示的 flag 都为 0。", "registers": { "instruction": "cmp eax,ebx", "registers": [{ "name": "eax", "before": 9, "after": 9 }, { "name": "ebx", "before": 3, "after": 3 }], "flagsBefore": [], "flagsAfter": [] } },
+            { "id": "branch", "title": "判断跳转", "instruction": "jg greater_path", "explanation": "jg 的两个条件都满足，因此进入有符号大于路径。", "registers": { "instruction": "jg greater_path", "registers": [{ "name": "eax", "before": 9, "after": 9 }, { "name": "ebx", "before": 3, "after": 3 }], "flagsBefore": [], "flagsAfter": [] } }
+          ]
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "terminal",
+      "title": "在真实终端复现",
+      "objective": "从三个真实分支案例提取跳转与 flags 证据",
+      "instruction": "样本进入实验时已经自动运行。逐行核对 ZF、SF、OF 和跳转列；jmp 是无条件跳转，jne、jl、jle、jge 则像 je、jg 一样读取已有 flags。",
+      "completion": "input",
+      "allowRun": false,
+      "autoRun": true,
+      "uses": ["test-instruction", "cmp-instruction", "conditional-jumps"],
+      "evidence": "observation",
+      "tool": "shell",
+      "observation": "三个案例是否跳转、je 读取的 flag，以及 jg 的 SF 与 OF 关系。",
+      "commonErrors": ["test 和 cmp 都不会把临时结果写回操作数。", "jg 是有符号大于；不要用无符号 carry 条件解释它。"],
+      "reinforcement": "比较或检测负责设置事实，条件跳转只消费这些 flags 并选择路径。"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "先看三行最后的跳转列，再分别核对 ZF 和 SF/OF。" },
+    { "level": 2, "kind": "tool", "text": "重新输入 ./asm-branches 可再次运行 HOME 中的真实 ELF。" },
+    { "level": 3, "kind": "structure", "text": "最终结构是 check <TEST后JE> <CMP后JE> <CMP后JG> <JE依据> <JG符号关系>；跳转填 1/0，关系写 FLAG=FLAG。" }
+  ],
+  "verification": {
+    "type": "answer",
+    "usage": "check <TEST后JE> <CMP后JE> <CMP后JG> <JE依据> <JG符号关系>",
+    "instruction": "依次把三个跳转结果写成 1/0，再填 je 依据和 jg 要求相等的两个符号 flag。",
+    "placeholders": [
+      { "token": "<TEST后JE>", "meaning": "零值检测行的跳转结果" },
+      { "token": "<CMP后JE>", "meaning": "相等比较行的跳转结果" },
+      { "token": "<CMP后JG>", "meaning": "有符号大于行的跳转结果" },
+      { "token": "<JE依据>", "meaning": "je 读取的结果为零标志" },
+      { "token": "<JG符号关系>", "meaning": "jg 要求相等的两个 flag，写成 FLAG=FLAG" }
+    ],
+    "feedback": {
+      "empty": "还没有提供五项条件跳转观察值。",
+      "incorrect": "回到真实输出，核对每行 flags 与跳转列的对应关系。",
+      "success": "真实 ELF 重放与 test、cmp、je、jg 的观察一致。"
+    }
+  },
+  "completionSummary": {
+    "solved": "通过真实 i386 ELF 把 test/cmp 设置的 flags 与 je/jg 跳转连接起来。",
+    "mastered": ["test 零值检测", "cmp 关系标志", "je 与有符号 jg"],
+    "next": "下一实验会把 push、call、ret、栈帧和 EAX 返回值组合成完整函数调用。"
+  }
+}

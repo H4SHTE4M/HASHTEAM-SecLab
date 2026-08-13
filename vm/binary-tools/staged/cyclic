@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+
+[ "$#" -eq 1 ] || { echo '用法：cyclic <长度>' >&2; exit 2; }
+case "$1" in ''|*[!0-9]*) echo '长度必须是十进制整数。' >&2; exit 2 ;; esac
+[ "$1" -le 65536 ] || { echo '长度不能超过 65536 字节。' >&2; exit 2; }
+
+awk -v requested="$1" 'BEGIN {
+    alphabet = "abcdefghijklmnopqrstuvwxyz"
+    width = 4
+    produced = 0
+    db(1, 1)
+}
+function db(depth, period, i) {
+    if (produced >= requested) return
+    if (depth > width) {
+        if (width % period == 0) {
+            for (i = 1; i <= period && produced < requested; i++) {
+                printf "%s", substr(alphabet, state[i] + 1, 1)
+                produced++
+            }
+        }
+        return
+    }
+    state[depth] = state[depth - period]
+    db(depth + 1, period)
+    for (i = state[depth - period] + 1; i < length(alphabet) && produced < requested; i++) {
+        state[depth] = i
+        db(depth + 1, depth)
+    }
+}'

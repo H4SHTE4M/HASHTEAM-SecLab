@@ -20,11 +20,16 @@ import {
   MAX_EVENTS_PER_SESSION,
   MAX_QUEUE_SIZE,
   REQUEST_TIMEOUT_MS,
-  TELEMETRY_PROTOCOL_VERSION,
   isAllowedCommand,
+  telemetryProtocolVersion,
   type CompletionPathDimension,
   type ModuleId,
+  type PwnHubCommand,
+  type SecLabCommand,
   type TelemetryEvent,
+  type VmBootDuration,
+  type VmBootOutcome,
+  type VmCacheState,
 } from './schema'
 
 /** 后端批量事件上报请求体。 */
@@ -120,28 +125,61 @@ export class TelemetryClient {
 
   /** 统计一次受支持命令的执行。命令不在 allowlist 中则静默忽略。 */
   trackCommand(command: string): void {
-    if (!isAllowedCommand(command)) return
-    this.enqueue({ type: 'command', command })
+    if (!isAllowedCommand(this.module, command)) return
+    if (this.module === 'seclab') {
+      this.enqueue({ type: 'command', command: command as SecLabCommand })
+    } else {
+      this.enqueue({ type: 'command', command: command as PwnHubCommand })
+    }
   }
 
   /** 统计一次关卡完成（含通关路径维度）。 */
   trackLevelComplete(level: number, path: CompletionPathDimension): void {
+    if (this.module !== 'seclab') return
     this.enqueue({ type: 'level_complete', level, path })
   }
 
   /** 统计一次 check 评分结果（通过/未通过，每次执行都计数，不去重）。 */
   trackCheckResult(level: number, passed: boolean): void {
+    if (this.module !== 'seclab') return
     this.enqueue({ type: 'check_result', level, passed })
   }
 
   /** 统计一次提示使用。 */
   trackHint(level: number): void {
+    if (this.module !== 'seclab') return
     this.enqueue({ type: 'hint', level })
   }
 
   /** 统计一次关卡重置。 */
   trackReset(level: number): void {
+    if (this.module !== 'seclab') return
     this.enqueue({ type: 'reset', level })
+  }
+
+  trackActivityComplete(activityId: string, path: CompletionPathDimension): void {
+    if (this.module !== 'pwnhub') return
+    this.enqueue({ type: 'activity_complete', activityId, path })
+  }
+
+  trackActivityCheck(activityId: string, passed: boolean): void {
+    if (this.module !== 'pwnhub') return
+    this.enqueue({ type: 'activity_check', activityId, passed })
+  }
+
+  trackActivityHint(activityId: string): void {
+    if (this.module !== 'pwnhub') return
+    this.enqueue({ type: 'activity_hint', activityId })
+  }
+
+  trackActivityReset(activityId: string): void {
+    if (this.module !== 'pwnhub') return
+    this.enqueue({ type: 'activity_reset', activityId })
+  }
+
+  trackVmBoot(outcome: VmBootOutcome, duration: VmBootDuration, cache: VmCacheState): void {
+    if (this.module !== 'pwnhub') return
+    this.enqueue({ type: 'vm_boot', outcome, duration, cache })
   }
 
   /** 立即冲刷队列（如页面卸载时）；失败静默忽略。 */
@@ -212,7 +250,7 @@ export class TelemetryClient {
     session.eventsSent += events.length
 
     await this.transport.sendBatch({
-      v: TELEMETRY_PROTOCOL_VERSION,
+      v: telemetryProtocolVersion(this.module),
       module: this.module,
       session: session.token,
       seq: this.seq,

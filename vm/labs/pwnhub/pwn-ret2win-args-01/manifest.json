@@ -1,0 +1,104 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "pwn-ret2win",
+  "labId": "pwn-ret2win-args-01",
+  "title": "把 cdecl 参数放回栈上",
+  "summary": "在固定 i386 ret2win 样本中把两个 cdecl 参数放在目标函数返回地址之后。",
+  "goals": ["解释 ret 后 ESP 指向的参数位置", "按小端顺序放置两个固定参数", "通过真实 stdin 重放带参目标函数"],
+  "prerequisites": ["能够确定返回地址覆盖偏移", "理解函数调用使用栈传递参数"],
+  "kind": "pwn",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 35, "max": 70 },
+  "unlockAfter": ["pwn-ret2win-01"],
+  "artifacts": [{
+    "path": "/opt/pwnhub/labs/pwn-ret2win-args-01/ret2win-args",
+    "architecture": "i386",
+    "sha256": "757ea0ddd6898723df8e48bc1d26b40aa0b68d558b96a562c9b5d1c2e8715559",
+    "purpose": "固定、离线、无害的 i386 cdecl 参数 ret2win 样本",
+    "downloadable": true
+  }],
+  "concepts": [
+    { "id": "cdecl-stack-argument", "term": "i386 cdecl 栈参数", "explanation": "目标函数地址被 ret 取走后，ESP 指向该函数自己的返回地址；第一个参数从 ESP+4 开始，后续参数按四字节顺序排列。" },
+    { "id": "ret-stack-consumption", "term": "ret 的栈消耗", "explanation": "vulnerable 的 ret 先弹出 win 地址；win 仍按普通函数布局解释新的栈顶，因此必须先有一个占位返回地址，再放参数。" },
+    { "id": "protected-target-state", "term": "目标状态与保护观察", "explanation": "NX、PIE、Canary 和 RELRO 是样本事实；本关只练习栈布局，不把保护绕过混进 payload。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "concept",
+      "title": "画出 ret 后的栈",
+      "objective": "把返回地址、参数一和参数二排成连续四字节槽",
+      "instruction": "覆盖偏移之后先放 win 地址；vulnerable 的 ret 取走它后，ESP 指向 win 自己的返回地址槽。先放一个占位返回地址，再依次放参数一和参数二。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [{ "id": "ret-stack-consumption", "term": "ret 的栈消耗", "explanation": "vulnerable 的 ret 先弹出 win 地址；win 仍按普通函数布局解释新的栈顶，因此必须先有一个占位返回地址，再放参数。" }],
+      "uses": ["ret-stack-consumption"],
+      "evidence": "observation",
+      "tool": "gdb",
+      "initialTab": "stack",
+      "workbench": { "stack": { "entries": [
+        { "address": 134529408, "value": 134516768, "label": "保存返回地址 · win", "kind": "return-address" },
+        { "address": 134529412, "value": 0, "label": "ESP · win 的占位返回地址", "kind": "return-address" },
+        { "address": 134529416, "value": 324478056, "label": "ESP+4 · 第一个 cdecl 参数", "kind": "argument" },
+        { "address": 134529420, "value": 610800471, "label": "ESP+8 · 第二个 cdecl 参数", "kind": "argument" }
+      ] } }
+    },
+    {
+      "id": 2,
+      "type": "prediction",
+      "title": "预测第一个参数的位置",
+      "objective": "理解 ret 对 ESP 的影响",
+      "instruction": "ret 已经取走覆盖的目标地址后，win 会把哪个槽位解释为第一个参数？",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [{ "id": "cdecl-stack-argument", "term": "i386 cdecl 栈参数", "explanation": "目标函数地址被 ret 取走后，ESP 指向该函数自己的返回地址；第一个参数从 ESP+4 开始，后续参数按四字节顺序排列。" }],
+      "uses": ["ret-stack-consumption", "cdecl-stack-argument"],
+      "evidence": "prediction",
+      "tool": "gdb",
+      "question": { "prompt": "win 入口处，第一个参数相对 ESP 在哪里？", "choices": [
+        { "id": "after-return", "label": "占位返回地址之后的 ESP+4" },
+        { "id": "before-ret", "label": "覆盖的 win 地址之前" },
+        { "id": "at-esp", "label": "新的 ESP 当前槽位" }
+      ], "answer": "after-return", "success": "预测已记录：新的 ESP 是 win 的返回地址，第一个参数位于 ESP+4。" }
+    },
+    {
+      "id": 3,
+      "type": "payload-builder",
+      "title": "组装两个参数",
+      "objective": "按 i386 小端顺序构造带参 payload",
+      "instruction": "使用偏移 68、win 地址 0x08049020、占位返回地址 0、参数 0x13572468 和 0x24681357。",
+      "completion": "confirm",
+      "allowRun": false,
+      "evidence": "payload-replay",
+      "payload": { "outputPath": "pwn-ret2win-args-01/payload.bin", "maxBytes": 512, "segments": [
+        { "id": "padding", "label": "padding", "kind": "padding", "byte": 65, "length": 68 },
+        { "id": "win", "label": "win 地址", "kind": "p32", "value": "0x08049020" },
+        { "id": "return", "label": "win 的占位返回地址", "kind": "p32", "value": "0x00000000" },
+        { "id": "first", "label": "第一个参数", "kind": "p32", "value": "0x13572468" },
+        { "id": "second", "label": "第二个参数", "kind": "p32", "value": "0x24681357" }
+      ] }
+    },
+    {
+      "id": 4,
+      "type": "terminal",
+      "title": "真实重放带参目标",
+      "objective": "让锁定 ELF 验证两个栈参数",
+      "instruction": "把 payload.bin 放入实验目录后运行 check；判题会重启真实 ELF 并只接受完整无害完成标记。",
+      "completion": "confirm",
+      "allowRun": false,
+      "evidence": "payload-replay",
+      "tool": "shell"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "先定位 vulnerable 的 ret 消耗的 win 地址，再从新的 ESP 排列 win 的返回地址和两个参数。" },
+    { "level": 2, "kind": "tool", "text": "用 StackView、p32 或原生 GDB 的 x/4wx $esp 核对每个四字节槽。" },
+    { "level": 3, "kind": "structure", "text": "payload = padding + p32(win) + p32(占位返回地址) + p32(arg1) + p32(arg2)。" }
+  ],
+  "verification": { "type": "payload-replay", "usage": "check", "instruction": "把带有两个 cdecl 参数的 payload.bin 放入指定目录后运行 check。", "placeholders": [], "feedback": {
+    "empty": "还没有 payload.bin。", "incorrect": "目标函数未看到两个正确参数，请检查地址槽、字节序和参数顺序。", "success": "真实 ELF 重放确认了 i386 cdecl 参数布局。"
+  } },
+  "completionSummary": { "solved": "通过真实重放验证了 win 的返回地址槽和 ESP+4/ESP+8 两个 cdecl 参数。", "mastered": ["ret 栈消耗", "i386 cdecl 参数", "多段 p32 payload"], "next": "下一章会把固定函数调用拆成短 gadget 链，观察每个 gadget 对栈和寄存器的消耗。" }
+}

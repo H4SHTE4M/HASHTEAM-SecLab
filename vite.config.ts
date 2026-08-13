@@ -47,6 +47,51 @@ interface VmAssetBundle {
   sha256: Record<string, string>
 }
 
+interface PublishedArtifact {
+  fileName: string
+  source: Buffer
+}
+
+function loadPublishedArtifacts(): PublishedArtifact[] {
+  const profile = JSON.parse(
+    readFileSync(path.resolve(process.cwd(), 'vm/profiles/production.json'), 'utf8'),
+  ) as { pwnhubLabs?: unknown }
+  if (!Array.isArray(profile.pwnhubLabs)) {
+    throw new Error('production profile 缺少 pwnhubLabs')
+  }
+  const artifacts: PublishedArtifact[] = []
+  for (const labId of profile.pwnhubLabs) {
+    if (typeof labId !== 'string' || !/^[a-z][a-z0-9-]*$/.test(labId)) {
+      throw new Error('production profile 包含非法 PwnHub labId')
+    }
+    const labRoot = path.resolve(process.cwd(), 'vm/labs/pwnhub', labId)
+    const manifest = JSON.parse(readFileSync(path.join(labRoot, 'manifest.json'), 'utf8')) as {
+      artifacts?: Array<{ path?: unknown; sha256?: unknown; downloadable?: unknown }>
+    }
+    for (const artifact of manifest.artifacts ?? []) {
+      if (artifact.downloadable !== true) continue
+      if (
+        typeof artifact.path !== 'string' ||
+        typeof artifact.sha256 !== 'string' ||
+        !/^[a-f0-9]{64}$/.test(artifact.sha256)
+      ) {
+        throw new Error(`${labId} 包含无效的可下载 artifact`)
+      }
+      const artifactName = path.posix.basename(artifact.path)
+      const source = readFileSync(path.join(labRoot, artifactName))
+      const actual = createHash('sha256').update(source).digest('hex')
+      if (actual !== artifact.sha256) {
+        throw new Error(`${labId}/${artifactName} 与 manifest SHA-256 不一致`)
+      }
+      artifacts.push({
+        fileName: `artifacts/${labId}/${artifactName}`,
+        source,
+      })
+    }
+  }
+  return artifacts
+}
+
 function resolveSourceId(): string {
   const configured = process.env.SOURCE_ID?.trim()
   if (configured !== undefined && configured !== '') {
@@ -125,7 +170,11 @@ function loadVmAssets(): VmAssetBundle {
  * 生产构建只输出内容寻址的 VM 资源。旧页面仍可按旧 hash 请求共享资产，
  * 避免原子切换后把新内核与旧 rootfs 混在同一个虚拟机里。
  */
-function vmAssetsPlugin(bundle: VmAssetBundle, sourceId: string): Plugin {
+function vmAssetsPlugin(
+  bundle: VmAssetBundle,
+  sourceId: string,
+  publishedArtifacts: PublishedArtifact[],
+): Plugin {
   return {
     name: 'hashteam-vm-assets',
     apply: 'build',
@@ -136,6 +185,9 @@ function vmAssetsPlugin(bundle: VmAssetBundle, sourceId: string): Plugin {
           fileName: `vm-assets/${bundle.hash}/${relativePath}`,
           source,
         })
+      }
+      for (const artifact of publishedArtifacts) {
+        this.emitFile({ type: 'asset', fileName: artifact.fileName, source: artifact.source })
       }
       this.emitFile({
         type: 'asset',
@@ -210,12 +262,13 @@ function vmAssetsPlugin(bundle: VmAssetBundle, sourceId: string): Plugin {
 export default defineConfig(({ command }) => {
   const vmBundle = loadVmAssets()
   const sourceId = resolveSourceId()
+  const publishedArtifacts = loadPublishedArtifacts()
   const vmAssetBase = command === 'serve' ? '' : `vm-assets/${vmBundle.hash}/`
 
   return {
     // 使用相对路径，构建产物可部署在任意子目录。
     base: './',
-    plugins: [vue(), vmAssetsPlugin(vmBundle, sourceId)],
+    plugins: [vue(), vmAssetsPlugin(vmBundle, sourceId, publishedArtifacts)],
     define: {
       __VM_ASSET_BASE__: JSON.stringify(vmAssetBase),
       __SOURCE_ID__: JSON.stringify(sourceId),
@@ -226,6 +279,12 @@ export default defineConfig(({ command }) => {
       // public/ 在开发服务器中仍按 Vite 约定提供；生产由上面的插件只输出
       // 审核过的 favicon 与内容寻址 VM 资产，避免遗留固定文件名副本。
       copyPublicDir: false,
+      rollupOptions: {
+        input: {
+          main: path.resolve(process.cwd(), 'index.html'),
+          companion: path.resolve(process.cwd(), 'companion.html'),
+        },
+      },
     },
     test: {
       include: ['tests/**/*.test.ts'],

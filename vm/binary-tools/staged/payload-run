@@ -1,0 +1,34 @@
+#!/bin/sh
+set -eu
+
+[ "$#" -eq 2 ] || { echo '用法：payload-run <当前实验样本名> <实验目录内payload文件>' >&2; exit 2; }
+program_name=$1
+payload=$2
+case "$program_name" in ''|*[!A-Za-z0-9._-]*|.|..) echo '样本名格式不正确。' >&2; exit 2 ;; esac
+
+state_root="${HOME:?}/.hashteam"
+lab_id=$(cat "$state_root/lab" 2>/dev/null || true)
+case "$lab_id" in [a-z]* ) ;; *) echo '当前不在稳定实验中。' >&2; exit 2 ;; esac
+case "$lab_id" in *[!a-z0-9-]*|*-) echo '当前实验状态无效。' >&2; exit 2 ;; esac
+lab_dir="${PWNHUB_LABS_DIR:-/opt/pwnhub/labs}/$lab_id"
+grep -Fqx -- "$program_name" "$lab_dir/home-files" || { echo '该样本不属于当前实验。' >&2; exit 2; }
+program="$lab_dir/$program_name"
+[ -f "$program" ] && [ ! -L "$program" ] || { echo '官方样本缺失或类型无效。' >&2; exit 2; }
+
+payload_dir="$HOME/$lab_id"
+case "$payload" in
+    /*) abs_payload=$payload ;;
+    *) abs_payload="${PWD:?}/$payload" ;;
+esac
+case "$abs_payload" in "$payload_dir"/*) ;; *) echo 'payload 必须位于当前实验专属目录。' >&2; exit 2 ;; esac
+case "/$abs_payload/" in */../*) echo 'payload 路径不能包含 ..。' >&2; exit 2 ;; esac
+[ -f "$abs_payload" ] && [ ! -L "$abs_payload" ] || { echo 'payload 缺失或类型无效。' >&2; exit 2; }
+[ "$(wc -c < "$abs_payload")" -le 512 ] || { echo 'payload 不能超过 512 字节。' >&2; exit 2; }
+
+output=$(mktemp "$payload_dir/run.XXXXXX")
+trap 'rm -f -- "$output"' EXIT
+rc=0
+timeout 2 "$program" < "$abs_payload" > "$output" 2>&1 || rc=$?
+[ "$(wc -c < "$output")" -le 4096 ] || { echo '程序输出超过 4096 字节限制。' >&2; exit 1; }
+cat "$output"
+exit "$rc"

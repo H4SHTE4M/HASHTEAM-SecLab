@@ -11,11 +11,13 @@
   "scripts": {
     "dev": "vite",
     "validate:challenges": "node scripts/validate-challenges.mjs",
-    "build": "pnpm validate:challenges && vue-tsc --noEmit && vite build",
+    "validate:binary-profile": "node scripts/validate-binary-profile.mjs",
+    "build": "pnpm validate:challenges && pnpm validate:binary-profile && vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "pnpm validate:challenges && vitest run",
+    "test": "pnpm validate:challenges && pnpm validate:binary-profile && vitest run",
     "test:watch": "vitest",
     "test:vm": "pnpm validate:challenges && bash scripts/test-vm-checks.sh",
+    "test:binary-profile": "bash scripts/test-binary-profile.sh",
     "test:suid": "python3 scripts/verify-suid-initramfs.py public/vm/rootfs.cpio.gz",
     "test:integration": "pnpm validate:challenges && node scripts/integration-test.mjs",
     "verify:dist": "node scripts/verify-dist.mjs",
@@ -25,7 +27,8 @@
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
     "v86": "^0.5.424",
-    "vue": "^3.5.13"
+    "vue": "^3.5.13",
+    "vue-router": "^4.6.4"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",

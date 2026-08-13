@@ -1,0 +1,211 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "elf-static",
+  "labId": "elf-sections-01",
+  "title": "从入口点读懂 ELF 节表",
+  "summary": "用真实 readelf 从 ELF 头找到入口点，再区分 .text、.rodata、.data 和 .bss 的地址、类型与标志。",
+  "goals": [
+    "使用 readelf -h 找到程序入口点",
+    "区分节的虚拟地址与文件偏移",
+    "说明 .text、.rodata、.data 和 .bss 的用途",
+    "从 Type 和 Flg 判断节是否占用文件字节以及加载后的权限"
+  ],
+  "prerequisites": ["能够用 file 和 ELF 识别字节确认文件类型", "理解代码、只读常量、已初始化数据和未初始化数据用途不同"],
+  "kind": "elf",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 30, "max": 50 },
+  "unlockAfter": ["elf-bytes-01"],
+  "artifacts": [
+    {
+      "path": "/opt/pwnhub/labs/elf-sections-01/elf-sections",
+      "architecture": "i386",
+      "sha256": "71b23b587a2a1e2a1ecf63f0fdc8cf68247965f6feb18e54fc1251fabf49883e",
+      "purpose": "固定、离线的 ELF 入口点与节表观察样本",
+      "downloadable": true
+    }
+  ],
+  "concepts": [
+    {
+      "id": "elf-entry-point",
+      "term": "入口点",
+      "explanation": "ELF 头中的入口点是加载完成后 CPU 开始取指令的虚拟地址，不是文件偏移。"
+    },
+    {
+      "id": "elf-section-table",
+      "term": "节表",
+      "explanation": "节表描述每个节的名称、类型、虚拟地址、文件偏移、大小和标志，主要服务链接与静态分析。"
+    },
+    {
+      "id": "elf-common-sections",
+      "term": "常见节与标志",
+      "explanation": ".text 保存代码，.rodata 保存只读常量，.data 保存已初始化数据，.bss 表示加载时补零的数据；A/W/X 表示加载、写入和执行。"
+    }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "prediction",
+      "title": "先选择结构读取工具",
+      "objective": "在不执行样本的情况下找到入口点和节表",
+      "instruction": "file 已经确认它是 ELF。现在选择能解析 ELF 头和节表的工具。",
+      "completion": "answer",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "elf-entry-point",
+          "term": "入口点",
+          "explanation": "ELF 头中的入口点是加载完成后 CPU 开始取指令的虚拟地址，不是文件偏移。"
+        }
+      ],
+      "uses": ["elf-entry-point"],
+      "evidence": "prediction",
+      "question": {
+        "prompt": "哪个命令能直接报告 ELF 入口点并继续读取节表？",
+        "choices": [
+          { "id": "readelf", "label": "readelf" },
+          { "id": "strings", "label": "strings" },
+          { "id": "chmod", "label": "chmod" }
+        ],
+        "answer": "readelf",
+        "success": "预测已记录：readelf 负责解析 ELF 的结构化元数据。"
+      }
+    },
+    {
+      "id": 2,
+      "type": "observe",
+      "title": "从 ELF 头找到入口点",
+      "objective": "区分入口虚拟地址与节表文件偏移",
+      "instruction": "运行命令并找到 Entry point address。它是加载后的虚拟地址；Start of section headers 才是节表在文件中的偏移。",
+      "completion": "run",
+      "allowRun": true,
+      "introduces": [
+        {
+          "id": "elf-entry-point",
+          "term": "入口点",
+          "explanation": "ELF 头中的入口点是加载完成后 CPU 开始取指令的虚拟地址，不是文件偏移。"
+        }
+      ],
+      "uses": ["elf-entry-point"],
+      "command": "readelf -h ./elf-sections",
+      "observation": "Entry point address、Start of section headers 和 Number of section headers 三行。",
+      "commonErrors": [
+        "入口点是虚拟地址，不是文件偏移，也不等于节表起点。",
+        "readelf 读取文件结构，不会执行目标程序。"
+      ],
+      "reinforcement": "ELF 头给出全局入口，下一步用节表解释这个地址落在哪类内容中。"
+    },
+    {
+      "id": 3,
+      "type": "concept",
+      "title": "认识节表和四个常见节",
+      "objective": "先理解列和节的分工，再读取真实表格",
+      "instruction": "节表中的 Addr 是加载后的虚拟地址，Off 是文件偏移。常见分工是：.text 保存代码，.rodata 保存只读常量，.data 保存已初始化数据，.bss 表示加载时补零的数据。Flg 中 A/W/X 分别表示加载到内存、可写和可执行。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "elf-section-table",
+          "term": "节表",
+          "explanation": "节表描述每个节的名称、类型、虚拟地址、文件偏移、大小和标志，主要服务链接与静态分析。"
+        },
+        {
+          "id": "elf-common-sections",
+          "term": "常见节与标志",
+          "explanation": ".text 保存代码，.rodata 保存只读常量，.data 保存已初始化数据，.bss 表示加载时补零的数据；A/W/X 表示加载、写入和执行。"
+        }
+      ],
+      "uses": ["elf-section-table", "elf-common-sections"],
+      "evidence": "observation"
+    },
+    {
+      "id": 4,
+      "type": "observe",
+      "title": "读取真实节表",
+      "objective": "从 Name、Type、Addr、Off、Size 和 Flg 列提取结构事实",
+      "instruction": "运行宽格式节表命令。逐行比较四个常见节，记录 .text 的 Addr、.bss 的 Type 和 .data 的 Flg。",
+      "completion": "run",
+      "allowRun": true,
+      "introduces": [
+        {
+          "id": "elf-section-table",
+          "term": "节表",
+          "explanation": "节表描述每个节的名称、类型、虚拟地址、文件偏移、大小和标志，主要服务链接与静态分析。"
+        },
+        {
+          "id": "elf-common-sections",
+          "term": "常见节与标志",
+          "explanation": ".text 保存代码，.rodata 保存只读常量，.data 保存已初始化数据，.bss 表示加载时补零的数据；A/W/X 表示加载、写入和执行。"
+        }
+      ],
+      "uses": ["elf-entry-point", "elf-section-table", "elf-common-sections"],
+      "command": "readelf -SW ./elf-sections",
+      "observation": ".text、.rodata、.data 和 .bss 四行的 Type、Addr、Off、Size 与 Flg。",
+      "commonErrors": [
+        "Addr 和 Off 是两列不同的地址体系，最终答案中的 .text 项来自 Addr。",
+        ".bss 的 NOBITS 不等于运行时没有内存；加载器会为它准备并清零内存。"
+      ],
+      "reinforcement": "同一个 ELF 同时有文件布局和加载后的内存布局，节表把两者连接起来。"
+    },
+    {
+      "id": 5,
+      "type": "prediction",
+      "title": "迁移到未初始化数据",
+      "objective": "用节类型解释文件大小与运行时内存的差异",
+      "instruction": "根据刚才的节表判断：哪个节在运行时占用内存，但不为初始零值在文件中保存同等字节？",
+      "completion": "answer",
+      "allowRun": false,
+      "uses": ["elf-section-table", "elf-common-sections"],
+      "evidence": "prediction",
+      "question": {
+        "prompt": "哪个常见节以 NOBITS 表示未初始化数据？",
+        "choices": [
+          { "id": "bss", "label": ".bss" },
+          { "id": "text", "label": ".text" },
+          { "id": "rodata", "label": ".rodata" }
+        ],
+        "answer": "bss",
+        "success": "判断已记录：.bss 在加载时获得清零内存，不为零值内容占用同等文件字节。"
+      }
+    }
+  ],
+  "hints": [
+    {
+      "level": 1,
+      "kind": "direction",
+      "text": "先在 ELF 头找 Entry point address，再在节表逐行读取 .text、.data 和 .bss。"
+    },
+    {
+      "level": 2,
+      "kind": "tool",
+      "text": "readelf -h 查看 ELF 头；readelf -SW 使用不折行的宽格式显示节表。"
+    },
+    {
+      "level": 3,
+      "kind": "structure",
+      "text": "最终结构是 check <入口点> <.text地址> <.bss类型> <.data标志>；地址可带 0x，后两项填写对应英文列值。"
+    }
+  ],
+  "verification": {
+    "type": "answer",
+    "usage": "check <入口点> <.text地址> <.bss类型> <.data标志>",
+    "instruction": "按 ELF 头和节表输出依次填写四项真实观察值。",
+    "placeholders": [
+      { "token": "<入口点>", "meaning": "readelf -h 输出中的 Entry point address" },
+      { "token": "<.text地址>", "meaning": ".text 行 Addr 列的八位十六进制地址" },
+      { "token": "<.bss类型>", "meaning": ".bss 行 Type 列的英文类型" },
+      { "token": "<.data标志>", "meaning": ".data 行 Flg 列的字母组合" }
+    ],
+    "feedback": {
+      "empty": "还没有提供入口点和三项节表观察值。",
+      "incorrect": "回到 ELF 头与节表，注意区分 Addr、Off、Type 和 Flg 列。",
+      "success": "锁定的 readelf 已从真实 ELF 重读并确认入口点与节表事实。"
+    }
+  },
+  "completionSummary": {
+    "solved": "通过真实 readelf 把 ELF 入口点、文件偏移、虚拟地址和四个常见节连接起来。",
+    "mastered": ["readelf ELF 头", "入口点", "节表 Addr/Off", ".text/.rodata/.data/.bss", "A/W/X 与 NOBITS"],
+    "next": "下一实验会用 nm 读取符号名、地址和类型，并把符号定位回这些节。"
+  }
+}

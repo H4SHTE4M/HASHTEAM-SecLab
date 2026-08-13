@@ -1,0 +1,26 @@
+format=1
+distribution=Ubuntu 24.04.3 LTS
+packages=gcc-i686-linux-gnu=4:13.2.0-7ubuntu1;gcc-13-i686-linux-gnu=13.3.0-6ubuntu2~24.04.1cross1;g++-i686-linux-gnu=4:13.2.0-7ubuntu1;g++-13-i686-linux-gnu=13.3.0-6ubuntu2~24.04.1cross1;binutils-i686-linux-gnu=2.42-4ubuntu2.10;libc6-dev-i386-cross=2.39-0ubuntu8cross1;libgcc-13-dev-i386-cross=13.3.0-6ubuntu2~24.04.1cross1;libstdc++-13-dev-i386-cross=13.3.0-6ubuntu2~24.04.1cross1;libgmp-dev:i386=2:6.3.0+dfsg-2ubuntu6.1;libmpfr-dev:i386=4.2.1-1build1.1;libexpat1-dev:i386=2.6.1-2ubuntu0.4;zlib1g-dev:i386=1:1.3.dfsg-3.1ubuntu2.1;libncurses-dev:i386=6.4+20240113-1ubuntu2.1
+gdb_version=15.1
+source_url=https://ftp.gnu.org/gnu/gdb/gdb-15.1.tar.xz
+source_sha256=38254eacd4572134bca9c5a5aa4d4ca564cbbd30c369d881f733fb6b903354f2
+compiler=i686-linux-gnu-gcc
+compiler_version=i686-linux-gnu-gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+compiler_sha256=441d893628701a7e11c5be38d7aa3d295d2c3560dc1a38d441e1626f8e7d7c21
+cxx=i686-linux-gnu-g++
+cxx_version=i686-linux-gnu-g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+cxx_sha256=7ad90e397ba3532ac4a5fa5859de6d238d058937e3b0e3fd4990493c4aa6abfd
+linker=i686-linux-gnu-ld
+linker_version=GNU ld (GNU Binutils for Ubuntu) 2.42
+linker_sha256=6250222e7132f5c7ae8bec570375710fa7b984c00d3a4eea2715d76842e4d972
+source_date_epoch=0
+architecture=i386
+endianness=little
+cflags=-Os -ffunction-sections -fdata-sections
+ldflags=-static -Wl,--gc-sections
+configure_flags=--build=x86_64-linux-gnu --host=i686-linux-gnu --target=i686-linux-gnu --disable-nls --disable-shared --enable-static --disable-werror --disable-binutils --disable-gas --disable-gdbserver --disable-gold --disable-gprofng --disable-ld --disable-libctf --disable-sim --disable-tui --without-babeltrace --without-debuginfod --without-guile --without-intel-pt --without-libunwind-ia64 --without-lzma --without-python --without-zstd --with-expat --with-system-gdbinit=/etc/pwnhub/gdbinit
+strip_flags=--strip-all --remove-section=.note.gnu.build-id
+static_shim=gdb-static-shim.c maps fmod to glibc __ieee754_fmod for Ubuntu i386 static libm
+gdb_sha256=5bed8004d18a154d4358b82c4068c33e7649c02d9cdd9801e8db55dd100ae216
+pwndbg_status=excluded
+pwndbg_reason=The audited Ubuntu package occupies 305 MiB, its Python closure occupies 187 MiB, and it bundles a 43 MiB pwntools tree; this exceeds the 25 MiB release file gate and violates the no-pwntools course boundary.

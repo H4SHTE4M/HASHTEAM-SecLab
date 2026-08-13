@@ -1,0 +1,25 @@
+format=1
+distribution=Ubuntu 24.04.3 LTS
+packages=gcc-i686-linux-gnu=4:13.2.0-7ubuntu1;gcc-13-i686-linux-gnu=13.3.0-6ubuntu2~24.04.1cross1;binutils-i686-linux-gnu=2.42-4ubuntu2.10;libc6-dev-i386-cross=2.39-0ubuntu8cross1
+binutils_version=2.42
+source_url=https://ftp.gnu.org/gnu/binutils/binutils-2.42.tar.xz
+source_sha256=f6e4d41fd5fc778b06b7891457b3620da5ecea1006c6a4a41ae998109f85a800
+compiler=i686-linux-gnu-gcc
+compiler_version=i686-linux-gnu-gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+compiler_sha256=441d893628701a7e11c5be38d7aa3d295d2c3560dc1a38d441e1626f8e7d7c21
+linker=i686-linux-gnu-ld
+linker_version=GNU ld (GNU Binutils for Ubuntu) 2.42
+linker_sha256=6250222e7132f5c7ae8bec570375710fa7b984c00d3a4eea2715d76842e4d972
+libc_source=glibc 2.39-0ubuntu8
+libc_source_url=https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/glibc/2.39-0ubuntu8/
+source_date_epoch=0
+architecture=i386
+endianness=little
+cflags=-Os
+configure_ldflags=-static
+final_ldflags=-all-static
+configure_flags=--build=x86_64-linux-gnu --host=i686-linux-gnu --target=i686-linux-gnu --disable-nls --disable-shared --enable-static --disable-werror --disable-gdb --disable-gdbserver --disable-gprofng --disable-gold --disable-ld --disable-gas --disable-sim --disable-plugins --disable-libctf --without-zstd --without-debuginfod --without-system-zlib --enable-deterministic-archives
+strip_flags=--strip-all --remove-section=.note.gnu.build-id
+readelf_sha256=4f6cfab9ad21cdaa8cebbf65cd34af881f8645ce47eb2541e8c9f6a3f24cb8f7
+nm_sha256=608bb8aa47218aa818e08e32d85fd4baf294cb05afcf9950d4169367c408a625
+objdump_sha256=dd8bcd1a98c0136042cf1246d1e36153183485647b6f7e5cd676b3b915aace1b

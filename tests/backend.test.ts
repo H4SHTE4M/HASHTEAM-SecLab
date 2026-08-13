@@ -93,8 +93,14 @@ async function createSession(token: string): Promise<FetchResult> {
   })
 }
 
-async function sendEvents(token: string, seq: number, events: unknown[]): Promise<FetchResult> {
-  const batch = { v: 1, module: 'seclab', session: token, seq, events }
+async function sendEvents(
+  token: string,
+  seq: number,
+  events: unknown[],
+  module: 'seclab' | 'pwnhub' = 'seclab',
+  version = module === 'seclab' ? 1 : 2,
+): Promise<FetchResult> {
+  const batch = { v: version, module, session: token, seq, events }
   const batchStr = JSON.stringify(batch)
   const sig = hmac(SECRET, batchStr)
   return httpFetch('/events', {
@@ -324,6 +330,62 @@ describe('Telemetry Backend', () => {
     expect(paths['level-1:guided']).toBe(1)
     expect(paths['level-2:mixed']).toBe(1)
     expect(paths['level-3:challenge']).toBe(1)
+  })
+
+  it('PwnHub v2 事件按 activityId 去重、聚合并隔离 module', async () => {
+    const token = randomToken()
+    await createSession(token)
+    const activityId = 'memory-addresses-01'
+
+    const accepted = await sendEvents(token, 1, [
+      { type: 'command', command: 'readelf' },
+      { type: 'activity_complete', activityId, path: 'guided' },
+      { type: 'activity_check', activityId, passed: true },
+      { type: 'activity_check', activityId, passed: false },
+      { type: 'activity_hint', activityId },
+      { type: 'activity_reset', activityId },
+      { type: 'vm_boot', outcome: 'ready', duration: '5-10s', cache: 'cold' },
+    ], 'pwnhub')
+    expect(accepted.status).toBe(200)
+    expect(requireBody(accepted)['processed']).toBe(7)
+
+    const duplicate = await sendEvents(token, 2, [
+      { type: 'activity_complete', activityId, path: 'challenge' },
+    ], 'pwnhub')
+    expect(duplicate.status).toBe(200)
+    expect(requireBody(duplicate)['processed']).toBe(0)
+
+    const statsSig = hmac(SECRET, 'stats:?module=pwnhub')
+    const stats = await httpFetch('/stats?module=pwnhub', {
+      headers: { 'X-Telemetry-Sig': statsSig },
+    })
+    const pwnhub = requireBody(stats)['pwnhub'] as Record<string, Record<string, number>>
+    expect(pwnhub['complete']).toEqual({ [activityId]: 1 })
+    expect(pwnhub['complete_path']).toEqual({ [`${activityId}:guided`]: 1 })
+    expect(pwnhub['check_pass']).toEqual({ [activityId]: 1 })
+    expect(pwnhub['check_fail']).toEqual({ [activityId]: 1 })
+    expect(pwnhub['vm_boot_outcome']).toEqual({ ready: 1 })
+    expect(pwnhub['vm_boot_duration']).toEqual({ '5-10s': 1 })
+  })
+
+  it('严格校验 module 协议版本、命令 allowlist 与 activityId', async () => {
+    const token = randomToken()
+    await createSession(token)
+    expect((await sendEvents(token, 1, [
+      { type: 'command', command: 'find' },
+    ], 'pwnhub')).status).toBe(400)
+    expect((await sendEvents(token, 2, [
+      { type: 'command', command: 'readelf' },
+    ])).status).toBe(400)
+    expect((await sendEvents(token, 3, [
+      { type: 'activity_hint', activityId: 'gdb-breakpoints-01' },
+    ], 'pwnhub')).status).toBe(400)
+    expect((await sendEvents(token, 4, [
+      { type: 'activity_hint', activityId: 'memory-addresses-01' },
+    ], 'pwnhub', 1)).status).toBe(400)
+    expect((await sendEvents(token, 5, [
+      { type: 'hint', level: 1 },
+    ], 'seclab', 2)).status).toBe(400)
   })
 
   describe('Dashboard & Admin', () => {

@@ -16,6 +16,7 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
+  (e: 'exit'): void
   (e: 'reset-level'): void
   (e: 'reset-all'): void
   (e: 'about', trigger: HTMLElement): void
@@ -164,6 +165,17 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="tool-group">
+              <button
+                type="button"
+                class="icon-btn"
+                aria-label="返回 Lab 选择器"
+                data-tooltip="返回 Lab 选择器"
+                data-tooltip-placement="bottom"
+                @click="emit('exit')"
+              >
+                <AppIcon name="hash" />
+                <span class="btn-label">选择 Lab</span>
+              </button>
               <button
                 type="button"
                 class="icon-btn"

@@ -42,7 +42,7 @@ Vite 构建时将 `edge-functions/` 原样输出到 `dist/edge-functions/`，`ve
 
 ## 事件与数据模型
 
-### 事件 schema（版本化，v=1）
+### 事件 schema（按 module 版本化）
 
 ```json
 {
@@ -60,6 +60,22 @@ Vite 构建时将 `edge-functions/` 原样输出到 `dist/edge-functions/`，`ve
 }
 ```
 
+PwnHub 使用 `v=2` 和稳定 `activityId`：
+
+```json
+{
+  "v": 2,
+  "module": "pwnhub",
+  "session": "<anonymous-token>",
+  "seq": 4,
+  "events": [
+    { "type": "activity_complete", "activityId": "memory-addresses-01", "path": "guided" },
+    { "type": "activity_check", "activityId": "memory-addresses-01", "passed": true },
+    { "type": "vm_boot", "outcome": "ready", "duration": "5-10s", "cache": "unknown" }
+  ]
+}
+```
+
 | type             | 维度                     | 说明                         |
 |------------------|--------------------------|------------------------------|
 | `command`        | `command` (allowlist)    | 某命令实际执行一次           |
@@ -67,16 +83,32 @@ Vite 构建时将 `edge-functions/` 原样输出到 `dist/edge-functions/`，`ve
 | `check_result`   | `level`, `passed`        | 每次 check 评分结果（通过/未通过，不去重） |
 | `hint`           | `level`                  | 提示使用                     |
 | `reset`          | `level`                  | 关卡重置                     |
+| `activity_complete` | `activityId`, `path` | PwnHub 实验首次完成 |
+| `activity_check` | `activityId`, `passed` | PwnHub 实验 check 结果 |
+| `activity_hint` / `activity_reset` | `activityId` | PwnHub 提示 / 重置 |
+| `vm_boot` | `outcome`, `duration`, `cache` | PwnHub VM 启动结果与分桶耗时 |
 
 ### Module 概念
 
-事件携带 `module` 字段（当前只有 `"seclab"`）。未来新增 Lab 只需注册新 module，不需要修改数据模型或创建新表。
+事件携带 `module` 字段。`seclab` 固定使用 v1 与数字 `level`；`pwnhub`
+固定使用 v2 与稳定 `activityId`。后端按 module 分离事件 allowlist、命令
+allowlist、完成去重和 Dashboard 数据，不接受交叉版本或交叉事件。
 
 ### 聚合表结构
 
 ```sql
 aggregates(module, metric, dimension, count)
 ```
+
+首次完成去重分别使用：
+
+```sql
+completions(token_hash, module, level)
+activity_completions(token_hash, module, activity_id)
+```
+
+前者服务 SecLab 数字关卡，后者服务 PwnHub 稳定实验；同一匿名 session
+重复完成不会增加 `complete` 或 `complete_path`。
 
 ```
 seclab | command       | find                 | 271
@@ -89,6 +121,10 @@ seclab | check_pass    | level-5              | 45
 seclab | check_fail    | level-5              | 9
 seclab | hint          | level-3              | 67
 seclab | reset         | level-2              | 23
+pwnhub | command       | readelf                       | 84
+pwnhub | complete      | memory-addresses-01           | 31
+pwnhub | complete_path | memory-addresses-01:guided    | 22
+pwnhub | vm_boot_duration | 5-10s                       | 19
 ```
 
 ### 事件明细表（时间序列）
@@ -100,8 +136,9 @@ event_log(id, module, event_type, dimension, ts)
 ```
 
 - `module`：事件所属 module（session 创建事件为空串）
-- `event_type`：`session_create` / `command` / `level_complete` / `hint` / `reset`
-- `dimension`：事件维度（如命令名 `find`、关卡 `level-3`）；session 创建为空串
+- `event_type`：包含 `session_create`、`command`、SecLab 的数字关卡事件、
+  PwnHub 的 `activity_*` 与 `vm_boot`
+- `dimension`：命令名、`level-N`、稳定 `activityId` 或 VM 启动分桶；session 创建为空串
 - `ts`：事件到达后端的时间戳（ms epoch）
 
 明细表不含 token_hash、IP 或任何身份信息，与聚合表同属匿名统计。保留 90 天，过期后定期删除。
@@ -119,13 +156,15 @@ event_log(id, module, event_type, dimension, ts)
 
 ### 命令 allowlist
 
-VM wrapper 只上报预定义命令（`src/telemetry/schema.ts` 的 `SECLAB_COMMAND_ALLOWLIST`）：
+VM wrapper 只上报各 module 预定义的命令名，不包含参数：
 
-```
-find grep chmod ls cat cd pwd whoami check help su
+```text
+seclab: find grep chmod ls cat cd pwd whoami check help su
+pwnhub: ls cat cd pwd whoami check help file readelf nm objdump gdb p32
+        hex2bin cyclic cyclic-find payload-run
 ```
 
-`hint` 和 `reset-level` 有独立的遥测事件类型（`hint` / `reset`），不经 command wrapper。
+提示和重置使用独立事件类型，不经 command wrapper。
 
 ### 扩展性
 
@@ -138,12 +177,12 @@ find grep chmod ls cat cd pwd whoami check help su
 
 ### 收集
 
-- 受支持命令的执行次数（命令名，不含参数）
-- 每关成功完成次数（含通关路径 guided/mixed/challenge）
-- 每次 check 的评分结果（通过/未通过，按关聚合为正确率）
-- 提示使用次数
-- 关卡重置次数
-- 事件时间序列（按天聚合的 session 创建数 + 各事件类型计数，保留 90 天明细）
+- 各 module 受支持命令的执行次数（命令名，不含参数）
+- SecLab 关卡或 PwnHub 实验的首次完成次数与完成路径
+- 每次 check 的通过/未通过结果
+- 提示与重置次数
+- PwnHub VM 启动结果、耗时区间与缓存状态（分桶值）
+- 按 module 过滤的事件时间序列（明细保留 90 天）
 
 ### 不收集
 

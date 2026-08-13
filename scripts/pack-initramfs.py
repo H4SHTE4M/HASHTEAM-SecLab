@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import json
 import os
+import re
 import stat
 import sys
 
@@ -28,11 +30,18 @@ def mode_for(rel: str, is_dir: bool) -> int:
         rel == "init"
         or rel.startswith("usr/local/bin/")
         or (rel.startswith("opt/hashteam/levels/") and rel.endswith(".sh"))
+        or (rel.startswith("opt/pwnhub/labs/") and not rel.endswith((".json", ".txt", ".sha256")))
         or rel == "bin/busybox"
     ):
         return stat.S_IFREG | 0o755
     return stat.S_IFREG | 0o644
 
+
+def normalize_overlay_data(data: bytes) -> bytes:
+    """文本资源统一为 LF；ELF 和含 NUL 的二进制保持逐字节不变。"""
+    if data.startswith(b"\x7fELF") or b"\x00" in data:
+        return data
+    return data.replace(b"\r\n", b"\n")
 
 def owner_for(rel: str) -> tuple[int, int]:
     if rel == "home/guest" or rel.startswith("home/guest/"):
@@ -50,7 +59,16 @@ class Entry:
         self.linkname = linkname
 
 
-def collect_entries(root: str, busybox_path: str | None, busybox_suid_path: str | None = None, htcheck_path: str | None = None) -> list[Entry]:
+def collect_entries(
+    root: str,
+    busybox_path: str | None,
+    busybox_suid_path: str | None = None,
+    htcheck_path: str | None = None,
+    pwnhub_labs_root: str | None = None,
+    pwnhub_lab_ids: tuple[str, ...] = (),
+    binary_tools_root: str | None = None,
+    binary_tools: tuple[str, ...] = (),
+) -> list[Entry]:
     entries: list[Entry] = []
     dir_added: set[str] = set()
 
@@ -99,7 +117,52 @@ def collect_entries(root: str, busybox_path: str | None, busybox_suid_path: str 
         else:
             uid, gid = owner_for(rel)
             with open(ap, "rb") as fh:
-                add(rel, mode_for(rel, False), uid, gid, fh.read())
+                add(rel, mode_for(rel, False), uid, gid, normalize_overlay_data(fh.read()))
+
+    def add_tree(source_root: str, destination_root: str) -> None:
+        for dirpath, dirnames, filenames in os.walk(source_root):
+            dirnames.sort()
+            filenames.sort()
+            relative_dir = os.path.relpath(dirpath, source_root)
+            destination_dir = (
+                destination_root
+                if relative_dir == "."
+                else f"{destination_root}/{relative_dir.replace(os.sep, '/')}"
+            )
+            ensure_dir(destination_dir)
+            for filename in filenames:
+                source = os.path.join(dirpath, filename)
+                destination = f"{destination_dir}/{filename}"
+                uid, gid = owner_for(destination)
+                with open(source, "rb") as fh:
+                    add(
+                        destination,
+                        mode_for(destination, False),
+                        uid,
+                        gid,
+                        normalize_overlay_data(fh.read()),
+                    )
+
+    if pwnhub_labs_root is not None:
+        for lab_id in pwnhub_lab_ids:
+            source = os.path.join(pwnhub_labs_root, lab_id)
+            if not os.path.isdir(source):
+                raise FileNotFoundError(f"生产 profile 中的实验不存在：{source}")
+            add_tree(source, f"opt/pwnhub/labs/{lab_id}")
+
+    if binary_tools_root is not None:
+        for tool in binary_tools:
+            source = os.path.join(binary_tools_root, tool)
+            if not os.path.isfile(source):
+                raise FileNotFoundError(f"生产 profile 中的工具不存在：{source}")
+            with open(source, "rb") as fh:
+                add(
+                    f"usr/local/bin/{tool}",
+                    stat.S_IFREG | 0o755,
+                    0,
+                    0,
+                    fh.read(),
+                )
 
     # busybox 二进制与 /bin/sh 链接（bin/ 目录由 ensure_dir 自动补齐）
     if busybox_path is not None:
@@ -177,10 +240,48 @@ def main() -> int:
     parser.add_argument("--busybox", default=None, help="busybox 静态二进制路径（完整的 applet 集合）")
     parser.add_argument("--busybox-suid", default=None, help="最小 SUID busybox 路径（仅含 su）")
     parser.add_argument("--htcheck", default=None, help="SUID 签名评分检查器路径")
+    parser.add_argument("--profile", default=None, help="生产 rootfs 内容 allowlist JSON")
+    parser.add_argument("--labs-root", default=None, help="PwnHub 实验源码根目录")
+    parser.add_argument("--binary-tools-root", default=None, help="锁定二进制工具目录")
     parser.add_argument("--out", required=True, help="输出 .cpio.gz 路径")
     args = parser.parse_args()
 
-    entries = collect_entries(args.root, args.busybox, args.busybox_suid, args.htcheck)
+    pwnhub_lab_ids: tuple[str, ...] = ()
+    binary_tools: tuple[str, ...] = ()
+    if args.profile is not None:
+        if args.labs_root is None or args.binary_tools_root is None:
+            parser.error("--profile 需要同时提供 --labs-root 与 --binary-tools-root")
+        with open(args.profile, encoding="utf-8") as fh:
+            profile = json.load(fh)
+        raw_lab_ids = profile.get("pwnhubLabs")
+        raw_tools = profile.get("binaryTools")
+        if not isinstance(raw_lab_ids, list) or not isinstance(raw_tools, list):
+            parser.error("profile 必须包含 pwnhubLabs 与 binaryTools 数组")
+        lab_pattern = re.compile(r"^[a-z][a-z0-9-]{0,95}$")
+        tool_pattern = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
+        if (
+            any(not isinstance(item, str) or lab_pattern.fullmatch(item) is None for item in raw_lab_ids)
+            or len(set(raw_lab_ids)) != len(raw_lab_ids)
+        ):
+            parser.error("profile.pwnhubLabs 含非法或重复 ID")
+        if (
+            any(not isinstance(item, str) or tool_pattern.fullmatch(item) is None for item in raw_tools)
+            or len(set(raw_tools)) != len(raw_tools)
+        ):
+            parser.error("profile.binaryTools 含非法或重复工具名")
+        pwnhub_lab_ids = tuple(raw_lab_ids)
+        binary_tools = tuple(raw_tools)
+
+    entries = collect_entries(
+        args.root,
+        args.busybox,
+        args.busybox_suid,
+        args.htcheck,
+        args.labs_root,
+        pwnhub_lab_ids,
+        args.binary_tools_root,
+        binary_tools,
+    )
     with open(args.out, "wb") as raw:
         with gzip.GzipFile(fileobj=raw, mode="wb", compresslevel=9, mtime=0) as gz:
             write_cpio(entries, gz)

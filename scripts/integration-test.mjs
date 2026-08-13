@@ -57,6 +57,9 @@ function send(line) {
 function goToLevel(level) {
   send(`cd "$HOME" && hashteamctl goto ${level}`)
 }
+function goToLab(labId) {
+  send(`cd "$HOME" && hashteamctl goto-lab ${labId}`)
+}
 
 function waitFor(re, timeout = 30000, label = String(re)) {
   return new Promise((resolve, reject) => {
@@ -207,6 +210,33 @@ async function main() {
     send('hint')
     await waitFor(/@@HASHTEAM:\{"type":"hint-request","level":1\}/)
   })
+  await step('PwnHub 首个实验可独立进入并按稳定 labId 验签', async () => {
+    goToLab('memory-addresses-01')
+    const ready = await waitFor(
+      /@@HASHTEAM:\{"type":"lab-ready","labId":"memory-addresses-01","sig":"([0-9a-f]{64})"\}/,
+    )
+    const expectedReady = createHmac('sha256', Buffer.from(sessionKeyB64, 'base64'))
+      .update('lab-ready:memory-addresses-01', 'utf8')
+      .digest('hex')
+    if (ready[1] !== expectedReady) {
+      throw new Error(`lab-ready 签名不符：${ready[1]} != ${expectedReady}`)
+    }
+
+    goToLab('memory-layout-01')
+    await waitFor(/这个实验尚未解锁，请先完成前置实验/)
+
+    send('check 0x0804b140 0xdec0de42 0x0804b140 -42')
+    const passed = await waitFor(
+      /@@HASHTEAM:\{"type":"lab-result","labId":"memory-addresses-01","status":"passed","sig":"([0-9a-f]{64})"\}/,
+    )
+    const expectedPassed = createHmac('sha256', Buffer.from(sessionKeyB64, 'base64'))
+      .update('lab-result:memory-addresses-01:passed', 'utf8')
+      .digest('hex')
+    if (passed[1] !== expectedPassed) {
+      throw new Error(`lab-result 签名不符：${passed[1]} != ${expectedPassed}`)
+    }
+  })
+
 
   await step('第 2 关：隐藏文件', async () => {
     goToLevel(2)

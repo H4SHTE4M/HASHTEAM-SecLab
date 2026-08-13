@@ -11,6 +11,7 @@ const vmMock = vi.hoisted(() => ({
   restart: vi.fn(async () => undefined),
   onDisplay: vi.fn(() => () => undefined),
   sendSerial: vi.fn(),
+  setModule: vi.fn(),
   gotoLevel: vi.fn(),
   resetCurrentLevel: vi.fn(),
   runCommand: vi.fn(),
@@ -30,7 +31,7 @@ vi.mock('../src/components/LabTerminal.vue', () => ({
   },
 }))
 
-import App from '../src/App.vue'
+import App from '../src/views/SecLabWorkspace.vue'
 import { useLabPreferences } from '../src/composables/useLabPreferences'
 import { useLabProgress } from '../src/composables/useLabProgress'
 import { TOTAL_LEVELS } from '../src/data/levels'

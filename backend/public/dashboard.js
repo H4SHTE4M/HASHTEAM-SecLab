@@ -10,9 +10,11 @@ const REFRESH_INTERVAL_MS = 30 * 1000
 
 const els = {
   banner: document.getElementById('status-banner'),
+  moduleTabs: document.getElementById('module-tabs'),
   cards: document.getElementById('overview-cards'),
   commands: document.getElementById('command-leaderboard'),
   levels: document.getElementById('level-leaderboard'),
+  completionHeading: document.getElementById('completion-heading'),
   checkAccuracy: document.getElementById('check-accuracy'),
   hints: document.getElementById('hint-leaderboard'),
   resets: document.getElementById('reset-leaderboard'),
@@ -49,17 +51,27 @@ function levelSortKey(dimension) {
   return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER
 }
 
-/** 从 complete_path 的 "level-N:path" 维度解析每关三路径细分 */
+function dimensionSortKey(dimension) {
+  const level = levelSortKey(dimension)
+  return level === Number.MAX_SAFE_INTEGER ? dimension : String(level).padStart(6, '0')
+}
+
+/** 从 complete_path 的 "<activity>:path" 维度解析三种完成路径。 */
 function parsePathBreakdown(completePathMetric) {
-  const byLevel = new Map() // level -> { guided, mixed, challenge }
-  if (!completePathMetric || typeof completePathMetric !== 'object') return byLevel
+  const byActivity = new Map()
+  if (!completePathMetric || typeof completePathMetric !== 'object') return byActivity
   for (const [dimension, count] of Object.entries(completePathMetric)) {
-    const m = /^(level-\d+):(guided|mixed|challenge)$/.exec(dimension)
-    if (!m || typeof count !== 'number') continue
-    if (!byLevel.has(m[1])) byLevel.set(m[1], { guided: 0, mixed: 0, challenge: 0 })
-    byLevel.get(m[1])[m[2]] = count
+    const separator = dimension.lastIndexOf(':')
+    if (separator <= 0 || typeof count !== 'number') continue
+    const activityId = dimension.slice(0, separator)
+    const path = dimension.slice(separator + 1)
+    if (!['guided', 'mixed', 'challenge'].includes(path)) continue
+    if (!byActivity.has(activityId)) {
+      byActivity.set(activityId, { guided: 0, mixed: 0, challenge: 0 })
+    }
+    byActivity.get(activityId)[path] = count
   }
-  return byLevel
+  return byActivity
 }
 
 function emptyState(text) {
@@ -124,22 +136,22 @@ function renderBars(container, entries, subText) {
   })
 }
 
-function renderCards(modules) {
-  const seclab = modules.seclab || {}
-  const commandTotal = sumMetric(seclab.command)
-  const completeTotal = sumMetric(seclab.complete)
-  const hintTotal = sumMetric(seclab.hint)
-  const resetTotal = sumMetric(seclab.reset)
-  const checkPass = sumMetric(seclab.check_pass)
-  const checkTotal = checkPass + sumMetric(seclab.check_fail)
+function renderCards(moduleStats, moduleId) {
+  const activityLabel = moduleId === 'pwnhub' ? '实验' : '关卡'
+  const commandTotal = sumMetric(moduleStats.command)
+  const completeTotal = sumMetric(moduleStats.complete)
+  const hintTotal = sumMetric(moduleStats.hint)
+  const resetTotal = sumMetric(moduleStats.reset)
+  const checkPass = sumMetric(moduleStats.check_pass)
+  const checkTotal = checkPass + sumMetric(moduleStats.check_fail)
   const checkRate = checkTotal > 0 ? `${((checkPass / checkTotal) * 100).toFixed(1)}%` : '—'
 
   const cards = [
-    { label: '命令执行总数', value: commandTotal, sub: `${sortedEntries(seclab.command).length} 种命令` },
-    { label: '通关总人次', value: completeTotal, sub: '全部关卡合计' },
+    { label: '命令执行总数', value: commandTotal, sub: `${sortedEntries(moduleStats.command).length} 种命令` },
+    { label: '完成总人次', value: completeTotal, sub: `全部${activityLabel}合计` },
     { label: 'check 正确率', value: checkRate, sub: `${fmtNum(checkPass)} 通过 / ${fmtNum(checkTotal)} 次` },
-    { label: '提示使用次数', value: hintTotal, sub: '全部关卡合计' },
-    { label: '关卡重置次数', value: resetTotal, sub: '全部关卡合计' },
+    { label: '提示使用次数', value: hintTotal, sub: `全部${activityLabel}合计` },
+    { label: `${activityLabel}重置次数`, value: resetTotal, sub: `全部${activityLabel}合计` },
   ]
 
   els.cards.textContent = ''
@@ -164,11 +176,11 @@ function renderCards(modules) {
  * 渲染 check 正确率（按关卡）。
  * check_pass / check_fail: dimension "level-N" -> count（可能缺失，防御式处理）。
  */
-function renderCheckAccuracy(seclab) {
+function renderCheckAccuracy(moduleStats) {
   const container = els.checkAccuracy
   if (!container) return
-  const pass = seclab.check_pass || {}
-  const fail = seclab.check_fail || {}
+  const pass = moduleStats.check_pass || {}
+  const fail = moduleStats.check_fail || {}
 
   const entries = [...new Set([...Object.keys(pass), ...Object.keys(fail)])]
     .map((dimension) => {
@@ -177,7 +189,7 @@ function renderCheckAccuracy(seclab) {
       return { dimension, passed: p, failed: f, attempts: p + f }
     })
     .filter((entry) => entry.attempts > 0)
-    .sort((a, b) => levelSortKey(a.dimension) - levelSortKey(b.dimension))
+    .sort((a, b) => String(dimensionSortKey(a.dimension)).localeCompare(String(dimensionSortKey(b.dimension))))
 
   container.textContent = ''
   if (entries.length === 0) {
@@ -541,38 +553,39 @@ function renderHourly(hourly) {
 
 function render(data) {
   const modules = (data && typeof data.modules === 'object' && data.modules) || {}
-  const seclab = modules.seclab || {}
+  const moduleStats = modules[activeModule] || {}
 
-  renderCards(modules)
-
+  renderCards(moduleStats, activeModule)
   renderTimeseries(data.timeseries)
-
   renderHourly(data.hourly)
+  renderBars(els.commands, sortedEntries(moduleStats.command), null)
 
-  renderBars(els.commands, sortedEntries(seclab.command), null)
-
-  const levelEntries = sortedEntries(seclab.complete)
-    .sort((a, b) => levelSortKey(a[0]) - levelSortKey(b[0]))
-  const breakdown = parsePathBreakdown(seclab.complete_path)
-  renderBars(els.levels, levelEntries, (label) => {
+  const completionEntries = sortedEntries(moduleStats.complete)
+    .sort((a, b) => String(dimensionSortKey(a[0])).localeCompare(String(dimensionSortKey(b[0]))))
+  const breakdown = parsePathBreakdown(moduleStats.complete_path)
+  renderBars(els.levels, completionEntries, (label) => {
     const paths = breakdown.get(label)
     if (!paths) return null
     return `guided ${fmtNum(paths.guided)} · mixed ${fmtNum(paths.mixed)} · challenge ${fmtNum(paths.challenge)}`
   })
 
-  renderCheckAccuracy(seclab)
-
+  renderCheckAccuracy(moduleStats)
   renderBars(
     els.hints,
-    sortedEntries(seclab.hint).sort((a, b) => levelSortKey(a[0]) - levelSortKey(b[0])),
+    sortedEntries(moduleStats.hint)
+      .sort((a, b) => String(dimensionSortKey(a[0])).localeCompare(String(dimensionSortKey(b[0])))),
     null,
   )
   renderBars(
     els.resets,
-    sortedEntries(seclab.reset).sort((a, b) => levelSortKey(a[0]) - levelSortKey(b[0])),
+    sortedEntries(moduleStats.reset)
+      .sort((a, b) => String(dimensionSortKey(a[0])).localeCompare(String(dimensionSortKey(b[0])))),
     null,
   )
 
+  if (els.completionHeading) {
+    els.completionHeading.textContent = activeModule === 'pwnhub' ? '实验完成榜' : '关卡通关榜'
+  }
   els.updatedAt.textContent = `数据更新时间:${fmtTime(data.generatedAt || Date.now())}`
 }
 
@@ -586,10 +599,13 @@ function hideBanner() {
 }
 
 let hadData = false
+let activeModule = 'seclab'
 
 async function refresh() {
   try {
-    const response = await fetch('../api/public/stats', { headers: { Accept: 'application/json' } })
+    const response = await fetch(`../api/public/stats?module=${encodeURIComponent(activeModule)}`, {
+      headers: { Accept: 'application/json' },
+    })
     if (response.status === 429) {
       showBanner('请求过于频繁，已自动降低刷新频率，请稍候…')
       return
@@ -602,6 +618,18 @@ async function refresh() {
   } catch (err) {
     showBanner(hadData ? '数据刷新失败，将在 30 秒后重试(当前显示为上次成功数据)' : '数据加载失败，将在 30 秒后重试')
   }
+}
+
+if (els.moduleTabs) {
+  els.moduleTabs.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-module]')
+    if (!button || button.dataset.module === activeModule) return
+    activeModule = button.dataset.module
+    for (const tab of els.moduleTabs.querySelectorAll('[data-module]')) {
+      tab.classList.toggle('active', tab.dataset.module === activeModule)
+    }
+    refresh()
+  })
 }
 
 refresh()

@@ -1,0 +1,27 @@
+set pagination off
+set confirm off
+set disassembly-flavor intel
+set print pretty on
+set style enabled off
+set startup-with-shell off
+set auto-load off
+set debuginfod enabled off
+set history save on
+set history filename ~/.gdb_history
+
+define context
+  echo \n[PwnHub GDB 上下文]\n
+  echo 寄存器\n
+  info registers eip esp ebp eax ebx ecx edx eflags
+  echo 当前指令\n
+  x/5i $eip
+  echo 栈顶（8 个四字节）\n
+  x/8wx $esp
+  echo 调用栈\n
+  backtrace
+end
+
+document context
+显示当前 i386 寄存器、指令、栈顶和调用栈。
+这是 PwnHub 提供的纯 GDB 退路命令，不是 Pwndbg。
+end

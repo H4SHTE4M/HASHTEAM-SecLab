@@ -17,6 +17,14 @@ export function levelReadyMessage(level: number): string {
   return `level-ready:${level}`
 }
 
+export function labResultMessage(labId: string, status: 'passed'): string {
+  return `lab-result:${labId}:${status}`
+}
+
+export function labReadyMessage(labId: string): string {
+  return `lab-ready:${labId}`
+}
+
 function base64ToBytes(base64: string): Uint8Array | null {
   try {
     const binary = atob(base64)

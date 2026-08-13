@@ -1,0 +1,543 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HASHTEAM Security Lab course manifest v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "courseId",
+    "chapterId",
+    "labId",
+    "title",
+    "summary",
+    "goals",
+    "prerequisites",
+    "kind",
+    "environmentProfile",
+    "estimatedMinutes",
+    "unlockAfter",
+    "artifacts",
+    "concepts",
+    "steps",
+    "hints",
+    "verification",
+    "completionSummary"
+  ],
+  "properties": {
+    "$schema": { "const": "../course.schema.json" },
+    "schemaVersion": { "const": 3 },
+    "courseId": { "$ref": "#/$defs/id" },
+    "chapterId": { "$ref": "#/$defs/id" },
+    "labId": { "$ref": "#/$defs/id" },
+    "title": { "$ref": "#/$defs/text" },
+    "summary": { "$ref": "#/$defs/text" },
+    "goals": { "$ref": "#/$defs/textList" },
+    "prerequisites": { "$ref": "#/$defs/textListOptional" },
+    "kind": { "enum": ["terminal", "visual", "elf", "gdb", "external-tool", "pwn"] },
+    "environmentProfile": { "enum": ["base", "binary"] },
+    "estimatedMinutes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min", "max"],
+      "properties": {
+        "min": { "type": "integer", "minimum": 1 },
+        "max": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "unlockAfter": { "$ref": "#/$defs/textListOptional" },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "architecture", "sha256", "purpose", "downloadable"],
+        "properties": {
+          "path": { "$ref": "#/$defs/text" },
+          "architecture": { "enum": ["i386", "x86_64", "any"] },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "purpose": { "$ref": "#/$defs/text" },
+          "downloadable": { "type": "boolean" }
+        }
+      }
+    },
+    "concepts": { "type": "array", "items": { "$ref": "#/$defs/concept" } },
+    "steps": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/step" } },
+    "hints": { "$ref": "challenge.schema.json#/properties/hints" },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "usage", "instruction", "placeholders", "feedback"],
+      "properties": {
+        "type": {
+          "enum": ["terminal-state", "answer", "payload-replay", "external-observation"]
+        },
+        "usage": { "$ref": "#/$defs/text" },
+        "instruction": { "$ref": "#/$defs/text" },
+        "placeholders": { "type": "array", "items": { "$ref": "#/$defs/placeholder" } },
+        "feedback": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["empty", "incorrect", "success"],
+          "properties": {
+            "empty": { "$ref": "#/$defs/text" },
+            "incorrect": { "$ref": "#/$defs/text" },
+            "success": { "$ref": "#/$defs/text" }
+          }
+        }
+      }
+    },
+    "completionSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["solved", "mastered", "next"],
+      "properties": {
+        "solved": { "$ref": "#/$defs/text" },
+        "mastered": { "$ref": "#/$defs/textList" },
+        "next": { "$ref": "#/$defs/text" }
+      }
+    }
+  },
+  "$defs": {
+    "text": { "type": "string", "minLength": 1 },
+    "textList": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/text" } },
+    "textListOptional": { "type": "array", "items": { "$ref": "#/$defs/text" } },
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "concept": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "term", "explanation"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "term": { "$ref": "#/$defs/text" },
+        "explanation": { "$ref": "#/$defs/text" }
+      }
+    },
+    "placeholder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["token", "meaning"],
+      "properties": {
+        "token": { "type": "string", "pattern": "^<[^<>\\n]+>$" },
+        "meaning": { "$ref": "#/$defs/text" }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "title", "objective", "instruction", "completion", "allowRun"],
+      "properties": {
+        "id": { "type": "integer", "minimum": 1 },
+        "type": {
+          "enum": [
+            "concept", "terminal", "prediction", "visual-trace", "external-tool",
+            "worksheet", "payload-builder", "explain", "observe", "partial-command",
+            "manual-command", "question", "checkpoint", "reflection"
+          ]
+        },
+        "title": { "$ref": "#/$defs/text" },
+        "objective": { "$ref": "#/$defs/text" },
+        "instruction": { "$ref": "#/$defs/text" },
+        "completion": { "enum": ["acknowledge", "run", "input", "answer", "confirm"] },
+        "allowRun": { "type": "boolean" },
+        "autoRun": { "type": "boolean" },
+        "introduces": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/concept" } },
+        "uses": { "$ref": "#/$defs/textListOptional" },
+        "evidence": {
+          "enum": ["observation", "prediction", "answer", "external-observation", "payload-replay"]
+        },
+        "tool": { "enum": ["gdb", "pwndbg", "ida", "ghidra", "elf", "shell"] },
+        "command": { "$ref": "#/$defs/text" },
+        "commandTemplate": { "$ref": "#/$defs/text" },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "challenge.schema.json#/$defs/commandField" }
+        },
+        "observation": { "$ref": "#/$defs/text" },
+        "question": { "$ref": "challenge.schema.json#/$defs/question" },
+        "commonErrors": { "$ref": "#/$defs/textList" },
+        "reinforcement": { "$ref": "#/$defs/text" },
+        "initialTab": { "enum": ["bytes", "memory", "registers", "stack", "trace", "protections"] },
+        "workbench": { "$ref": "#/$defs/workbench" },
+        "payload": { "$ref": "#/$defs/payloadPreset" },
+        "companion": { "$ref": "#/$defs/companion" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "enum": ["prediction", "question"] } },
+            "required": ["type"]
+          },
+          "then": { "required": ["question"] },
+          "else": { "not": { "required": ["question"] } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "prediction" } }, "required": ["type"] },
+          "then": {
+            "required": ["evidence"],
+            "properties": {
+              "completion": { "const": "answer" },
+              "evidence": { "const": "prediction" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "visual-trace" } }, "required": ["type"] },
+          "then": { "required": ["workbench"] },
+          "else": {
+            "not": {
+              "anyOf": [
+                { "required": ["workbench"] },
+                { "required": ["initialTab"] }
+              ]
+            }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "payload-builder" } }, "required": ["type"] },
+          "then": {
+            "required": ["evidence", "payload"],
+            "properties": { "evidence": { "const": "payload-replay" } }
+          },
+          "else": { "not": { "required": ["payload"] } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "external-tool" } }, "required": ["type"] },
+          "then": {
+            "required": ["evidence", "companion"],
+            "properties": { "evidence": { "const": "external-observation" } }
+          },
+          "else": { "not": { "required": ["companion"] } }
+        }
+      ]
+    },
+    "uint32": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+    "byteSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseAddress", "bytes", "endian"],
+      "properties": {
+        "baseAddress": { "$ref": "#/$defs/uint32" },
+        "bytes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 65536,
+          "items": { "type": "integer", "minimum": 0, "maximum": 255 }
+        },
+        "endian": { "enum": ["little", "big"] },
+        "selectedOffset": { "type": "integer", "minimum": 0 },
+        "selectedLength": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "registerSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["registers"],
+      "properties": {
+        "instruction": { "$ref": "#/$defs/text" },
+        "registers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "before", "after"],
+            "properties": {
+              "name": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" },
+              "before": { "$ref": "#/$defs/uint32" },
+              "after": { "$ref": "#/$defs/uint32" }
+            }
+          }
+        },
+        "flagsBefore": { "$ref": "#/$defs/textListOptional" },
+        "flagsAfter": { "$ref": "#/$defs/textListOptional" }
+      }
+    },
+    "memorySnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["endian", "cells"],
+      "properties": {
+        "endian": { "enum": ["little", "big"] },
+        "cells": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["address", "name", "value", "kind", "meaning"],
+            "properties": {
+              "address": { "$ref": "#/$defs/uint32" },
+              "name": { "$ref": "#/$defs/text" },
+              "value": { "$ref": "#/$defs/uint32" },
+              "kind": { "enum": ["value", "pointer", "signed"] },
+              "meaning": { "$ref": "#/$defs/text" },
+              "targetAddress": { "$ref": "#/$defs/uint32" },
+              "targetName": { "$ref": "#/$defs/text" }
+            }
+          }
+        }
+      }
+    },
+    "stackSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entries"],
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["address", "value", "label", "kind"],
+            "properties": {
+              "address": { "$ref": "#/$defs/uint32" },
+              "value": { "$ref": "#/$defs/uint32" },
+              "label": { "$ref": "#/$defs/text" },
+              "kind": {
+                "enum": ["stack-pointer", "frame-pointer", "return-address", "local", "argument", "payload"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "traceSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entries"],
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "kind", "functionName", "instruction", "stackPointer"],
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "kind": { "enum": ["call", "current", "return"] },
+              "functionName": { "$ref": "#/$defs/text" },
+              "instruction": { "$ref": "#/$defs/text" },
+              "stackPointer": { "$ref": "#/$defs/uint32" }
+            }
+          }
+        }
+      }
+    },
+    "protectionSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entries"],
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "state", "evidence"],
+            "properties": {
+              "name": { "enum": ["architecture", "nx", "pie", "canary", "relro", "symbols"] },
+              "state": { "enum": ["enabled", "disabled", "partial", "present", "stripped", "unknown"] },
+              "evidence": { "$ref": "#/$defs/text" }
+            }
+          }
+        }
+      }
+    },
+    "workbench": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "bytes": { "$ref": "#/$defs/byteSnapshot" },
+        "memory": { "$ref": "#/$defs/memorySnapshot" },
+        "registers": { "$ref": "#/$defs/registerSnapshot" },
+        "stack": { "$ref": "#/$defs/stackSnapshot" },
+        "trace": { "$ref": "#/$defs/traceSnapshot" },
+        "assemblyTui": { "$ref": "#/$defs/assemblyTuiSnapshot" },
+        "protections": { "$ref": "#/$defs/protectionSnapshot" }
+      }
+    },
+    "assemblyTuiState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "instruction", "explanation"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "$ref": "#/$defs/text" },
+        "instruction": { "$ref": "#/$defs/text" },
+        "explanation": { "$ref": "#/$defs/text" },
+        "registers": { "$ref": "#/$defs/registerSnapshot" },
+        "stack": { "$ref": "#/$defs/stackSnapshot" },
+        "trace": { "$ref": "#/$defs/traceSnapshot" }
+      },
+      "anyOf": [
+        { "required": ["registers"] },
+        { "required": ["stack"] },
+        { "required": ["trace"] }
+      ]
+    },
+    "assemblyTuiSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["states"],
+      "properties": {
+        "title": { "$ref": "#/$defs/text" },
+        "states": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/assemblyTuiState" }
+        }
+      }
+    },
+    "payloadSegment": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "label", "kind", "byte", "length"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "label": { "$ref": "#/$defs/text" },
+            "kind": { "const": "padding" },
+            "byte": { "type": "integer", "minimum": 0, "maximum": 255 },
+            "length": { "type": "integer", "minimum": 0, "maximum": 65536 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "label", "kind", "value"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "label": { "$ref": "#/$defs/text" },
+            "kind": { "const": "p32" },
+            "value": { "type": "string", "pattern": "^(0x[0-9A-Fa-f]+|[0-9]+)$" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "label", "kind", "value"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "label": { "$ref": "#/$defs/text" },
+            "kind": { "const": "hex" },
+            "value": { "$ref": "#/$defs/text" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "label", "kind", "length"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "label": { "$ref": "#/$defs/text" },
+            "kind": { "const": "cyclic" },
+            "length": { "type": "integer", "minimum": 0, "maximum": 65536 }
+          }
+        }
+      ]
+    },
+    "payloadPreset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outputPath", "maxBytes", "segments"],
+      "properties": {
+        "outputPath": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"
+        },
+        "maxBytes": { "type": "integer", "minimum": 1, "maximum": 65536 },
+        "segments": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/payloadSegment" }
+        }
+      }
+    },
+    "companionArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "downloadUrl", "architecture", "sha256", "purpose"],
+      "properties": {
+        "name": { "$ref": "#/$defs/text" },
+        "downloadUrl": {
+          "type": "string",
+          "pattern": "^(\\./|/)[A-Za-z0-9][A-Za-z0-9._/-]*$"
+        },
+        "architecture": { "enum": ["i386", "x86_64"] },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "purpose": { "$ref": "#/$defs/text" }
+      }
+    },
+    "companionTool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "label", "versionNote", "installNote", "steps"],
+      "properties": {
+        "tool": { "enum": ["ida", "ghidra", "objdump"] },
+        "label": { "$ref": "#/$defs/text" },
+        "versionNote": { "$ref": "#/$defs/text" },
+        "installNote": { "$ref": "#/$defs/text" },
+        "steps": { "$ref": "#/$defs/textList" }
+      }
+    },
+    "companionTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "description"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "$ref": "#/$defs/text" },
+        "description": { "$ref": "#/$defs/text" }
+      }
+    },
+    "companionObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "kind", "placeholder", "required"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "$ref": "#/$defs/text" },
+        "kind": { "enum": ["address", "function-name", "integer", "text"] },
+        "placeholder": { "$ref": "#/$defs/text" },
+        "required": { "type": "boolean" }
+      }
+    },
+    "companion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "labId", "title", "artifact", "tools", "tasks", "observations",
+        "verificationCommandTemplate"
+      ],
+      "properties": {
+        "labId": { "$ref": "#/$defs/id" },
+        "title": { "$ref": "#/$defs/text" },
+        "artifact": { "$ref": "#/$defs/companionArtifact" },
+        "tools": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/companionTool" }
+        },
+        "tasks": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/companionTask" }
+        },
+        "observations": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/companionObservation" }
+        },
+        "verificationCommandTemplate": {
+          "type": "string",
+          "pattern": "^check(?:[ \\t]+\\{\\{[a-z][a-z0-9-]*\\}\\})+$"
+        }
+      }
+    }
+  }
+}

@@ -14,7 +14,7 @@ const API_HEADERS = {
 }
 
 const MAX_EVENTS_PER_BATCH = 50
-const PROTOCOL_VERSION = 1
+const PROTOCOL_VERSIONS = new Set([1, 2])
 
 export function onRequestOptions() {
   return new Response(null, { status: 204, headers: API_HEADERS })
@@ -48,7 +48,7 @@ export async function onRequestPost(context) {
   // 基础校验：协议版本、module、session、events 格式
   if (
     typeof batch !== 'object' || batch === null ||
-    batch.v !== PROTOCOL_VERSION ||
+    !PROTOCOL_VERSIONS.has(batch.v) ||
     typeof batch.module !== 'string' || batch.module.length === 0 ||
     typeof batch.session !== 'string' || batch.session.length === 0 ||
     typeof batch.seq !== 'number' || !Number.isInteger(batch.seq) || batch.seq < 1 ||

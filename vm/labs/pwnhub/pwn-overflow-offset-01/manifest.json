@@ -1,0 +1,102 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "pwn-ret2win",
+  "labId": "pwn-overflow-offset-01",
+  "title": "用受控崩溃测量偏移",
+  "summary": "用 cyclic 输入让真实 GDB 报出崩溃 EIP，再换算缓冲区到保存返回地址的覆盖偏移。",
+  "goals": ["解释越界写入如何覆盖保存返回地址", "用 cyclic 与真实 EIP 求出覆盖偏移", "用受控 EIP 重放证明偏移可靠"],
+  "prerequisites": ["已会用原生 GDB 复现并定位 SIGSEGV", "已会观察 i386 固定 ELF"],
+  "kind": "pwn",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 30, "max": 60 },
+  "unlockAfter": ["rev-functions-flow-01"],
+  "artifacts": [{
+    "path": "/opt/pwnhub/labs/pwn-overflow-offset-01/overflow-offset",
+    "architecture": "i386",
+    "sha256": "381972c7fab3c613cbd6503a51104a3eba9cca11036800484b830d4050b30333",
+    "purpose": "固定、离线、无害的一次性 stdin 覆盖偏移样本",
+    "downloadable": true
+  }],
+  "concepts": [
+    { "id": "overflow-saved-return", "term": "越界写入覆盖返回地址", "explanation": "读入的长度超过缓冲区后，后续字节会依次覆盖保存的 EBP 与保存返回地址，ret 因此弹出受控值。" },
+    { "id": "cyclic-offset", "term": "cyclic 偏移定位", "explanation": "输入由不重复的四字节片段组成；崩溃 EIP 显示哪个片段落在返回地址，用 cyclic-find 即可得到缓冲区起点到返回地址的偏移。" },
+    { "id": "controlled-eip", "term": "受控 EIP", "explanation": "按偏移填充后把返回地址精确写成 0x42424242；若真实重放的 EIP 正是该值，偏移证据才算闭环。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "concept",
+      "title": "崩溃 EIP 是偏移证据",
+      "objective": "把越界写入、保存返回地址和崩溃 EIP 连起来",
+      "instruction": "样本把 256 字节读进 64 字节缓冲区。越界字节会覆盖保存的 EBP 和保存返回地址；ret 从栈上弹出什么，EIP 就变成什么。先用原生 GDB 复现一次崩溃，记录崩溃时的 EIP。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [{ "id": "overflow-saved-return", "term": "越界写入覆盖返回地址", "explanation": "读入的长度超过缓冲区后，后续字节会依次覆盖保存的 EBP 与保存返回地址，ret 因此弹出受控值。" }],
+      "uses": ["overflow-saved-return"],
+      "evidence": "observation",
+      "tool": "gdb",
+      "initialTab": "stack",
+      "workbench": { "stack": { "entries": [
+        { "address": 134529356, "value": 0, "label": "EBP-0x40 · buffer 起点", "kind": "local" },
+        { "address": 134529424, "value": 0, "label": "EBP · 保存的 EBP", "kind": "frame-pointer" },
+        { "address": 134529428, "value": 0, "label": "EBP+4 · 保存返回地址（将被覆盖）", "kind": "return-address" }
+      ] } }
+    },
+    {
+      "id": 2,
+      "type": "payload-builder",
+      "title": "用 cyclic 找到偏移",
+      "objective": "从崩溃 EIP 换算出覆盖偏移并拼出受控 payload",
+      "instruction": "先生成一段 72 字节的 cyclic 探测输入，用 GDB 的 run < payload.bin 重放并读取崩溃 EIP；在工作台内 cyclic-find 该四字节，把分段改成 padding(偏移) + p32(0x42424242)。",
+      "completion": "confirm",
+      "allowRun": false,
+      "introduces": [{ "id": "cyclic-offset", "term": "cyclic 偏移定位", "explanation": "输入由不重复的四字节片段组成；崩溃 EIP 显示哪个片段落在返回地址，用 cyclic-find 即可得到缓冲区起点到返回地址的偏移。" }],
+      "uses": ["overflow-saved-return", "cyclic-offset"],
+      "evidence": "payload-replay",
+      "tool": "gdb",
+      "payload": {
+        "outputPath": "pwn-overflow-offset-01/payload.bin",
+        "maxBytes": 512,
+        "segments": [
+          { "id": "pattern", "label": "cyclic 探测输入", "kind": "cyclic", "length": 72 }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "type": "terminal",
+      "title": "真实 GDB 重放受控 EIP",
+      "objective": "让判题重启真实 GDB 验证 EIP 恰为 0x42424242",
+      "instruction": "把 payload.bin 放入实验专属目录后运行 check；判题会用锁定 GDB 重新运行样本并读取 EIP，不检查你的输入历史。",
+      "completion": "confirm",
+      "allowRun": false,
+      "introduces": [{ "id": "controlled-eip", "term": "受控 EIP", "explanation": "按偏移填充后把返回地址精确写成 0x42424242；若真实重放的 EIP 正是该值，偏移证据才算闭环。" }],
+      "uses": ["cyclic-offset", "controlled-eip"],
+      "evidence": "payload-replay",
+      "tool": "gdb"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "先让真实 GDB 报出崩溃 EIP，再谈偏移是多少。" },
+    { "level": 2, "kind": "tool", "text": "使用原生 GDB 的 run < payload.bin 与 info registers eip，或工作台内的 cyclic-find。" },
+    { "level": 3, "kind": "structure", "text": "payload = padding(你的偏移) + p32(0x42424242)，偏移由读到的 EIP 用 cyclic-find 求出。" }
+  ],
+  "verification": {
+    "type": "payload-replay",
+    "usage": "check",
+    "instruction": "把能证明偏移的 payload.bin 放入 $HOME/pwn-overflow-offset-01/ 后运行 check。",
+    "placeholders": [],
+    "feedback": {
+      "empty": "还没有 payload.bin。",
+      "incorrect": "真实 GDB 没看到 0x42424242 的受控 EIP，请重新核对 padding 偏移。",
+      "success": "真实 GDB 重放确认 EIP 恰为 0x42424242。"
+    }
+  },
+  "completionSummary": {
+    "solved": "通过真实 GDB 重放确认了缓冲区起点到保存返回地址的覆盖偏移。",
+    "mastered": ["越界写入与返回地址", "cyclic 偏移定位", "受控 EIP"],
+    "next": "下一实验将把保存返回地址换成无害目标函数的地址，完成第一次 ret2win。"
+  }
+}

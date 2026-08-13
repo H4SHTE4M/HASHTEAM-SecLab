@@ -4,7 +4,7 @@
 //   1. run：以提交者身份运行当前关卡的 check.sh，只有退出码为 0 时才用
 //      root-only 会话密钥对结果做 HMAC-SHA256 签名并输出协议行；
 //      学生直接调用本程序等同于运行真实 check，无法取得未验证的签名。
-//   2. level-ready：为 hashteamctl 的关卡切换签发签名协议行
+//   2. level-ready / lab-ready：为 hashteamctl 的关卡或稳定实验切换签发协议行
 //      （前端仍按顺序解锁不变量门控，签名只防伪、不授权）。
 //
 // 信任边界：
@@ -219,6 +219,7 @@ static void render_result(int rc, const char *output, size_t output_len) {
 /* ---------------- 路径与运行环境 ---------------- */
 
 #define VM_LEVELS_DIR "/opt/hashteam/levels"
+#define VM_LABS_DIR "/opt/pwnhub/labs"
 #define VM_KEY_FILE "/etc/hashteam/protocol.key"
 #define VM_STATE_DIR "/home/guest/.hashteam"
 #define MAX_CAPTURE (1024 * 1024)
@@ -227,6 +228,7 @@ static void render_result(int rc, const char *output, size_t output_len) {
 typedef struct {
     int suid_active;            // 提权生效中（VM 内 SUID 调用）
     const char *levels_dir;     // check.sh 根目录
+    const char *labs_dir;       // v3 稳定实验 check.sh 根目录
     const char *key_file;       // 会话密钥文件
     char state_dir[512];        // VM 固定 guest 状态目录（非 SUID 测试可覆盖）
 } run_env;
@@ -237,11 +239,14 @@ static int resolve_run_env(run_env *env) {
         // 提权时忽略一切可被学生控制的路径环境变量。HOME 同样不能信任：
         // 后续状态更新发生在用户目录，若跟随环境值会把 SUID 写入导向任意路径。
         env->levels_dir = VM_LEVELS_DIR;
+        env->labs_dir = VM_LABS_DIR;
         env->key_file = VM_KEY_FILE;
         strcpy(env->state_dir, VM_STATE_DIR);
     } else {
         env->levels_dir = getenv("HASHTEAM_LEVELS_DIR");
         if (env->levels_dir == NULL || env->levels_dir[0] == '\0') env->levels_dir = VM_LEVELS_DIR;
+        env->labs_dir = getenv("PWNHUB_LABS_DIR");
+        if (env->labs_dir == NULL || env->labs_dir[0] == '\0') env->labs_dir = VM_LABS_DIR;
         env->key_file = getenv("HASHTEAM_KEY_FILE");
         if (env->key_file == NULL || env->key_file[0] == '\0') env->key_file = VM_KEY_FILE;
         const char *state_override = getenv("HASHTEAM_STATE_DIR");
@@ -277,6 +282,35 @@ static int read_current_level(const run_env *env) {
     }
     int level = atoi(buf);
     return level >= 1 && level <= 99 ? level : -1;
+}
+
+static int valid_lab_id(const char *value) {
+    size_t len = value != NULL ? strlen(value) : 0;
+    if (len == 0 || len > 96 || value[0] < 'a' || value[0] > 'z' || value[len - 1] == '-') {
+        return 0;
+    }
+    for (size_t i = 0; i < len; i++) {
+        char ch = value[i];
+        if (!((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-')) return 0;
+    }
+    return 1;
+}
+
+// 返回 1 表示读到合法 labId，0 表示仍处于旧数字关卡，-1 表示状态文件非法。
+static int read_current_lab(const run_env *env, char lab_id[97]) {
+    char path[600];
+    snprintf(path, sizeof(path), "%s/lab", env->state_dir);
+    FILE *fp = fopen(path, "rb");
+    if (fp == NULL) return errno == ENOENT ? 0 : -1;
+    char raw[128] = {0};
+    size_t n = fread(raw, 1, sizeof(raw) - 1, fp);
+    int truncated = fgetc(fp) != EOF;
+    fclose(fp);
+    while (n > 0 && (raw[n - 1] == '\n' || raw[n - 1] == '\r' || raw[n - 1] == ' ')) n--;
+    raw[n] = '\0';
+    if (truncated || !valid_lab_id(raw)) return -1;
+    strcpy(lab_id, raw);
+    return 1;
 }
 
 static int read_key(const run_env *env, uint8_t *key, size_t *key_len) {
@@ -321,6 +355,26 @@ static void update_max_completed(const run_env *env, int level) {
     fclose(fp);
 }
 
+static void update_completed_lab(const run_env *env, const char *lab_id) {
+    struct stat st;
+    if (stat(env->state_dir, &st) != 0 || !S_ISDIR(st.st_mode)) return;
+    char path[600];
+    snprintf(path, sizeof(path), "%s/completed-labs", env->state_dir);
+    FILE *fp = fopen(path, "ab+");
+    if (fp == NULL) return;
+    rewind(fp);
+    char line[128];
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        line[strcspn(line, "\r\n")] = '\0';
+        if (strcmp(line, lab_id) == 0) {
+            fclose(fp);
+            return;
+        }
+    }
+    fprintf(fp, "%s\n", lab_id);
+    fclose(fp);
+}
+
 // SUID 父进程必须一直保有 root 身份，稍后才能安全读取签名密钥；状态写入则放到
 // 单独子进程并永久降权，避免学生通过 HOME/符号链接把 fopen 导向 root 文件。
 static int drop_to_caller(void) {
@@ -346,18 +400,44 @@ static void update_max_completed_as_caller(const run_env *env, int level) {
     }
 }
 
+static void update_completed_lab_as_caller(const run_env *env, const char *lab_id) {
+    if (!env->suid_active) {
+        update_completed_lab(env, lab_id);
+        return;
+    }
+    pid_t pid = fork();
+    if (pid < 0) return;
+    if (pid == 0) {
+        if (drop_to_caller() != 0) _exit(1);
+        update_completed_lab(env, lab_id);
+        _exit(0);
+    }
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {
+    }
+}
+
 static int run_check(int argc, char **argv) {
     run_env env;
     if (resolve_run_env(&env) != 0) {
         fprintf(stderr, "✗ 评分组件故障（运行环境路径过长），请联系助教。\n");
         return 3;
     }
-    int level = read_current_level(&env);
+    char lab_id[97] = {0};
+    int lab_state = read_current_lab(&env, lab_id);
+    int level = lab_state == 0 ? read_current_level(&env) : 0;
     char script[640];
-    if (level < 0 ||
-        snprintf(script, sizeof(script), "%s/level-%d/check.sh", env.levels_dir, level) >=
+    if (lab_state < 0) {
+        script[0] = '\0';
+    } else if (lab_state == 1) {
+        if (snprintf(script, sizeof(script), "%s/%s/check.sh", env.labs_dir, lab_id) >=
             (int)sizeof(script)) {
-        level = 0; // 仅为错误信息保留输出
+            script[0] = '\0';
+        }
+    } else if (level < 0 ||
+               snprintf(script, sizeof(script), "%s/level-%d/check.sh", env.levels_dir, level) >=
+                   (int)sizeof(script)) {
+        level = 0;
         script[0] = '\0';
     }
     struct stat st;
@@ -449,7 +529,8 @@ static int run_check(int argc, char **argv) {
     free(output);
 
     if (rc == 0) {
-        update_max_completed_as_caller(&env, level);
+        if (lab_state == 1) update_completed_lab_as_caller(&env, lab_id);
+        else update_max_completed_as_caller(&env, level);
         // 仅在检查已经通过、所有降权子进程均退出后读取 root-only 密钥，避免
         // fork 出来的 guest 进程短暂继承含密钥的地址空间。
         uint8_t key[MAX_KEY_LEN];
@@ -459,12 +540,21 @@ static int run_check(int argc, char **argv) {
             printf("@@HASHTEAM:{\"type\":\"error\",\"message\":\"grading signer unavailable\"}\n");
             return 3;
         }
-        char message[64];
-        snprintf(message, sizeof(message), "level-result:%d:passed", level);
-        printf("@@HASHTEAM:{\"type\":\"level-result\",\"level\":%d,\"status\":\"passed\",", level);
+        char message[160];
+        if (lab_state == 1) {
+            snprintf(message, sizeof(message), "lab-result:%s:passed", lab_id);
+            printf("@@HASHTEAM:{\"type\":\"lab-result\",\"labId\":\"%s\",\"status\":\"passed\",", lab_id);
+        } else {
+            snprintf(message, sizeof(message), "level-result:%d:passed", level);
+            printf("@@HASHTEAM:{\"type\":\"level-result\",\"level\":%d,\"status\":\"passed\",", level);
+        }
         sign_and_print(message, key, key_len);
     } else {
-        printf("@@HASHTEAM:{\"type\":\"error\",\"message\":\"level %d check failed\"}\n", level);
+        if (lab_state == 1) {
+            printf("@@HASHTEAM:{\"type\":\"error\",\"message\":\"lab %s check failed\"}\n", lab_id);
+        } else {
+            printf("@@HASHTEAM:{\"type\":\"error\",\"message\":\"level %d check failed\"}\n", level);
+        }
     }
     return rc;
 }
@@ -499,6 +589,37 @@ static int emit_level_ready(const char *level_arg) {
     char message[64];
     snprintf(message, sizeof(message), "level-ready:%d", level);
     printf("@@HASHTEAM:{\"type\":\"level-ready\",\"level\":%d,", level);
+    sign_and_print(message, key, key_len);
+    return 0;
+}
+
+static int emit_lab_ready(const char *lab_id) {
+    if (!valid_lab_id(lab_id)) {
+        fprintf(stderr, "✗ 无效的实验 ID: %s\n", lab_id != NULL ? lab_id : "");
+        return 2;
+    }
+    run_env env;
+    if (resolve_run_env(&env) != 0) {
+        fprintf(stderr, "✗ 评分组件故障（运行环境路径过长），请联系助教。\n");
+        return 3;
+    }
+    char path[640];
+    struct stat st;
+    if (snprintf(path, sizeof(path), "%s/%s/check.sh", env.labs_dir, lab_id) >=
+            (int)sizeof(path) ||
+        stat(path, &st) != 0 || !S_ISREG(st.st_mode)) {
+        fprintf(stderr, "✗ 实验 %s 不存在。\n", lab_id);
+        return 2;
+    }
+    uint8_t key[MAX_KEY_LEN];
+    size_t key_len = 0;
+    if (read_key(&env, key, &key_len) != 0) {
+        fprintf(stderr, "✗ 评分组件故障（签名密钥不可用），请联系助教。\n");
+        return 3;
+    }
+    char message[128];
+    snprintf(message, sizeof(message), "lab-ready:%s", lab_id);
+    printf("@@HASHTEAM:{\"type\":\"lab-ready\",\"labId\":\"%s\",", lab_id);
     sign_and_print(message, key, key_len);
     return 0;
 }
@@ -570,9 +691,12 @@ int main(int argc, char **argv) {
     if (strcmp(mode, "level-ready") == 0) {
         return emit_level_ready(argc >= 3 ? argv[2] : NULL);
     }
+    if (strcmp(mode, "lab-ready") == 0) {
+        return emit_lab_ready(argc >= 3 ? argv[2] : NULL);
+    }
     if (strcmp(mode, "selftest") == 0) {
         return selftest();
     }
-    fprintf(stderr, "用法：htcheck run [check 参数...] | htcheck level-ready <关卡号> | htcheck selftest\n");
+    fprintf(stderr, "用法：htcheck run [check 参数...] | htcheck level-ready <关卡号> | htcheck lab-ready <实验 ID> | htcheck selftest\n");
     return 2;
 }

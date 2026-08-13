@@ -5,7 +5,12 @@ import {
   MIGRATABLE_PROGRESS_STORAGE_KEY,
   PREVIOUS_PROGRESS_STORAGE_KEY,
   PROGRESS_STORAGE_KEY,
+  V4_PROGRESS_STORAGE_KEY,
+  V5_PROGRESS_STORAGE_KEY,
+  advanceLabGuideStep,
   advanceGuideStep,
+  completeLab,
+  completeLabLearningStep,
   completeLearningStep,
   completeLevel,
   consumeProgressResetNotice,
@@ -13,11 +18,15 @@ import {
   createDefaultProgress,
   loadProgress,
   markGuidedAssistance,
+  markLabGuidedAssistance,
+  recordLabHint,
   recordHint,
   resetLevelAttempt,
+  resetLabAttempt,
   resetAllProgress,
   saveProgress,
   setCurrentLevel,
+  setCurrentLab,
   type StorageLike,
 } from '../src/services/progress-store'
 import {
@@ -47,7 +56,16 @@ describe('lab-progress（基于 localStorage）', () => {
   it('无存档时返回全新进度', () => {
     const p = loadProgress(window.localStorage, TOTAL)
     expect(p.currentLevel).toBe(1)
+    expect(p.schemaVersion).toBe(6)
+    expect(p.currentLabId).toBe('foundations-terminal-01')
     expect(p.completedLevels).toEqual([])
+    expect(p.completedLabIds).toEqual([])
+    expect(p.chapterProgress).toEqual({})
+    expect(p.labHintsUsed).toEqual({})
+    expect(p.labGuideSteps).toEqual({})
+    expect(p.labCompletedSteps).toEqual({})
+    expect(p.guidedAssistanceLabIds).toEqual([])
+    expect(p.labCompletionRecords).toEqual({})
     expect(p.hintsUsed).toEqual({})
     expect(p.guideSteps).toEqual({})
     expect(p.completedSteps).toEqual({})
@@ -60,7 +78,33 @@ describe('lab-progress（基于 localStorage）', () => {
     expect(completeLevel(window.localStorage, p, 1, GUIDED_COMPLETION)).toBe(true)
     const reloaded = loadProgress(window.localStorage, TOTAL)
     expect(reloaded.completedLevels).toEqual([1])
+    expect(reloaded.completedLabIds).toEqual(['foundations-terminal-01'])
+    expect(reloaded.chapterProgress['foundations-terminal']).toEqual([
+      'foundations-terminal-01',
+    ])
     expect(reloaded.completionRecords[1]).toEqual(GUIDED_COMPLETION)
+    expect(reloaded.labCompletionRecords['foundations-terminal-01']).toEqual(
+      GUIDED_COMPLETION,
+    )
+  })
+
+  it('SecLab 数字进度双写 v4，稳定实验操作只写 v6', () => {
+    const p = loadProgress(window.localStorage, TOTAL)
+    completeLevel(window.localStorage, p, 1, GUIDED_COMPLETION)
+
+    const legacy = JSON.parse(window.localStorage.getItem(V4_PROGRESS_STORAGE_KEY) ?? '{}')
+    expect(legacy.completedLevels).toEqual([1])
+    expect(legacy.schemaVersion).toBeUndefined()
+
+    const legacyBeforeLab = window.localStorage.getItem(V4_PROGRESS_STORAGE_KEY)
+    completeLab(
+      window.localStorage,
+      p,
+      'memory-addresses-01',
+      'memory-model',
+      GUIDED_COMPLETION,
+    )
+    expect(window.localStorage.getItem(V4_PROGRESS_STORAGE_KEY)).toBe(legacyBeforeLab)
   })
 
   it('重复完成同一关不重复写入或覆盖首次完成记录', () => {
@@ -133,28 +177,24 @@ describe('lab-progress（基于 localStorage）', () => {
     expect(reloaded.guidedAssistanceLevels).not.toContain(2)
   })
 
-  it('发现旧版存档时一次性重置并产生一次迁移提示', () => {
-    window.localStorage.setItem(
-      LEGACY_PROGRESS_STORAGE_KEY,
-      JSON.stringify({ currentLevel: 3, completedLevels: [1, 2] }),
-    )
+  it('无法迁移的旧版存档保留原始数据并产生一次迁移提示', () => {
+    const legacyRaw = JSON.stringify({ currentLevel: 3, completedLevels: [1, 2] })
+    window.localStorage.setItem(LEGACY_PROGRESS_STORAGE_KEY, legacyRaw)
 
     const p = loadProgress(window.localStorage, TOTAL)
     expect(p).toEqual(expect.objectContaining({ currentLevel: 1, completedLevels: [] }))
-    expect(window.localStorage.getItem(LEGACY_PROGRESS_STORAGE_KEY)).toBeNull()
+    expect(window.localStorage.getItem(LEGACY_PROGRESS_STORAGE_KEY)).toBe(legacyRaw)
     expect(consumeProgressResetNotice(window.localStorage)).toBe(true)
     expect(consumeProgressResetNotice(window.localStorage)).toBe(false)
 
-    window.localStorage.setItem(
-      PREVIOUS_PROGRESS_STORAGE_KEY,
-      JSON.stringify({ currentLevel: 3, completedLevels: [1, 2] }),
-    )
+    window.localStorage.clear()
+    window.localStorage.setItem(PREVIOUS_PROGRESS_STORAGE_KEY, legacyRaw)
     loadProgress(window.localStorage, TOTAL)
-    expect(window.localStorage.getItem(PREVIOUS_PROGRESS_STORAGE_KEY)).toBeNull()
+    expect(window.localStorage.getItem(PREVIOUS_PROGRESS_STORAGE_KEY)).toBe(legacyRaw)
     expect(consumeProgressResetNotice(window.localStorage)).toBe(true)
   })
 
-  it('v3 存档无损迁移到 v4，旧完成关卡不伪造完成模式', () => {
+  it('v3 存档无损迁移到 v6，旧完成关卡不伪造完成模式', () => {
     const v3 = {
       currentLevel: 3,
       completedLevels: [1, 2],
@@ -168,13 +208,87 @@ describe('lab-progress（基于 localStorage）', () => {
 
     const migrated = loadProgress(window.localStorage, TOTAL)
     expect(migrated).toEqual({
+      schemaVersion: 6,
       ...v3,
+      currentLabId: 'foundations-terminal-03',
+      completedLabIds: ['foundations-terminal-01', 'foundations-terminal-02'],
+      chapterProgress: {
+        'foundations-terminal': ['foundations-terminal-01', 'foundations-terminal-02'],
+      },
       guidedAssistanceLevels: [],
       completionRecords: {},
+      labHintsUsed: { 'foundations-terminal-03': 2 },
+      labGuideSteps: { 'foundations-terminal-03': 1 },
+      labCompletedSteps: { 'foundations-terminal-03': [1] },
+      guidedAssistanceLabIds: [],
+      labCompletionRecords: {},
     })
-    expect(window.localStorage.getItem(MIGRATABLE_PROGRESS_STORAGE_KEY)).toBeNull()
+    expect(window.localStorage.getItem(MIGRATABLE_PROGRESS_STORAGE_KEY)).not.toBeNull()
     expect(window.localStorage.getItem(PROGRESS_STORAGE_KEY)).not.toBeNull()
     expect(consumeProgressResetNotice(window.localStorage)).toBe(false)
+  })
+
+  it('v5 存档迁移后保留稳定身份和数字兼容字段', () => {
+    const v5 = {
+      schemaVersion: 5,
+      currentLevel: 2,
+      currentLabId: 'foundations-terminal-02',
+      completedLevels: [1],
+      completedLabIds: ['foundations-terminal-01'],
+      chapterProgress: { 'foundations-terminal': ['foundations-terminal-01'] },
+      hintsUsed: { 2: 1 },
+      guideSteps: { 2: 2 },
+      completedSteps: { 2: [1, 2] },
+      guidedAssistanceLevels: [2],
+      completionRecords: { 1: GUIDED_COMPLETION },
+      startedAt: 100,
+      updatedAt: 200,
+    }
+    window.localStorage.setItem(V5_PROGRESS_STORAGE_KEY, JSON.stringify(v5))
+
+    const migrated = loadProgress(window.localStorage, TOTAL)
+    expect(migrated.schemaVersion).toBe(6)
+    expect(migrated.currentLabId).toBe('foundations-terminal-02')
+    expect(migrated.labHintsUsed['foundations-terminal-02']).toBe(1)
+    expect(migrated.labGuideSteps['foundations-terminal-02']).toBe(2)
+    expect(migrated.labCompletedSteps['foundations-terminal-02']).toEqual([1, 2])
+    expect(migrated.guidedAssistanceLabIds).toEqual(['foundations-terminal-02'])
+    expect(migrated.labCompletionRecords['foundations-terminal-01']).toEqual(GUIDED_COMPLETION)
+    expect(window.localStorage.getItem(V5_PROGRESS_STORAGE_KEY)).not.toBeNull()
+  })
+
+  it('非旧版实验的选择、证据、提示与通关只使用稳定 labId', () => {
+    const p = loadProgress(window.localStorage, TOTAL)
+    setCurrentLab(window.localStorage, p, 'memory-addresses-01')
+    expect(p.currentLevel).toBe(1)
+    expect(p.currentLabId).toBe('memory-addresses-01')
+    expect(recordLabHint(window.localStorage, p, 'memory-addresses-01')).toBe(1)
+    expect(advanceLabGuideStep(window.localStorage, p, 'memory-addresses-01', 3)).toBe(1)
+    expect(completeLabLearningStep(window.localStorage, p, 'memory-addresses-01', 1)).toEqual([1])
+    expect(markLabGuidedAssistance(window.localStorage, p, 'memory-addresses-01')).toBe(true)
+    expect(
+      completeLab(
+        window.localStorage,
+        p,
+        'memory-addresses-01',
+        'memory-model',
+        { path: 'guided', hintsUsed: 1 },
+      ),
+    ).toBe(true)
+
+    const reloaded = loadProgress(window.localStorage, TOTAL)
+    expect(reloaded.completedLevels).toEqual([])
+    expect(reloaded.completedLabIds).toEqual(['memory-addresses-01'])
+    expect(reloaded.chapterProgress['memory-model']).toEqual(['memory-addresses-01'])
+    expect(reloaded.labCompletionRecords['memory-addresses-01']).toEqual({
+      path: 'guided',
+      hintsUsed: 1,
+    })
+
+    resetLabAttempt(window.localStorage, reloaded, 'memory-addresses-01')
+    expect(reloaded.labHintsUsed['memory-addresses-01']).toBeUndefined()
+    expect(reloaded.labCompletedSteps['memory-addresses-01']).toEqual([])
+    expect(reloaded.guidedAssistanceLabIds).not.toContain('memory-addresses-01')
   })
 
   it('损坏的存档不会导致异常，直接从头开始', () => {
@@ -252,6 +366,8 @@ describe('lab-progress（基于 localStorage）', () => {
     markGuidedAssistance(window.localStorage, p, 2)
     const fresh = resetAllProgress(window.localStorage)
     expect(fresh.completedLevels).toEqual([])
+    expect(fresh.completedLabIds).toEqual([])
+    expect(fresh.chapterProgress).toEqual({})
     expect(fresh.guideSteps).toEqual({})
     expect(fresh.completedSteps).toEqual({})
     expect(fresh.guidedAssistanceLevels).toEqual([])

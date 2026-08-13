@@ -1,0 +1,90 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "pwn-ret2win",
+  "labId": "pwn-ret2win-01",
+  "title": "离线 ret2win 样例",
+  "summary": "在已定位覆盖偏移后，改写固定 i386 ELF 的返回地址并重放无害目标函数。",
+  "goals": ["把偏移证据连接到保存的返回地址", "用小端 p32 编码固定目标地址", "通过真实 stdin 重放无害完成标记"],
+  "prerequisites": ["已用受控崩溃确定返回地址覆盖偏移"],
+  "kind": "pwn",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 30, "max": 60 },
+  "unlockAfter": ["pwn-overflow-offset-01"],
+  "artifacts": [
+    {
+      "path": "/opt/pwnhub/labs/pwn-ret2win-01/ret2win",
+      "architecture": "i386",
+      "sha256": "58841c68f57cd49e3ed33ec621f000cb4a1d24691f88c7ddcf0a0bdc71013068",
+      "purpose": "固定、离线、无害的 i386 观察样本",
+      "downloadable": true
+    }
+  ],
+  "concepts": [
+    { "id": "return-address", "term": "返回地址", "explanation": "函数返回时从栈上取出的下一条指令地址。" },
+    { "id": "stdin-replay", "term": "stdin 重放", "explanation": "把同一字节文件作为标准输入再次运行真实程序。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "concept",
+      "title": "先看样本边界",
+      "objective": "记录架构与保护状态",
+      "instruction": "使用 readelf、nm 或原生 GDB 核对 ELF 为固定 i386、NX 开启且没有栈保护；把观察结果留在实验记录中。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "evidence": "observation",
+      "tool": "elf"
+    },
+    {
+      "id": 2,
+      "type": "payload-builder",
+      "title": "组装 stdin",
+      "objective": "按栈布局拼接确定性字节",
+      "instruction": "使用 PayloadWorkbench 或等价离线工具生成 padding + p32(win) 的 payload.bin；地址来自你自己的 nm/GDB 观察。",
+      "completion": "confirm",
+      "allowRun": false,
+      "evidence": "payload-replay",
+      "payload": {
+        "outputPath": "pwn-ret2win-01/payload.bin",
+        "maxBytes": 512,
+        "segments": [
+          { "id": "padding", "label": "栈前缀", "kind": "padding", "byte": 65, "length": 68 },
+          { "id": "target", "label": "目标函数地址", "kind": "p32", "value": "0" }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "type": "terminal",
+      "title": "真实重放",
+      "objective": "根据输出判断是否到达目标状态",
+      "instruction": "运行 check，让 VM 重放 ELF 并记录结果。",
+      "completion": "confirm",
+      "allowRun": false,
+      "evidence": "payload-replay"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "先确认返回地址在局部缓冲区之后。" },
+    { "level": 2, "kind": "tool", "text": "使用 readelf、nm 或原生 GDB 观察 ELF。" },
+    { "level": 3, "kind": "structure", "text": "payload = padding + p32(目标函数地址)，具体地址由你的观察结果填写。" }
+  ],
+  "verification": {
+    "type": "payload-replay",
+    "usage": "check",
+    "instruction": "把 payload.bin 放入指定目录后运行 check。",
+    "placeholders": [],
+    "feedback": {
+      "empty": "还没有 payload.bin。",
+      "incorrect": "回到栈布局和目标函数观察结果。",
+      "success": "真实 ELF 输出了无害完成标记。"
+    }
+  },
+  "completionSummary": {
+    "solved": "通过真实 stdin 重放验证了保存返回地址被目标函数地址替换的影响。",
+    "mastered": ["固定 i386 保护观察", "保存返回地址与 padding", "p32 小端编码", "受限 stdin 重放"],
+    "next": "下一实验会把一个参数放在目标函数返回地址之后，练习 i386 cdecl 的栈上参数布局。"
+  }
+}

@@ -78,7 +78,7 @@ describe('V86Controller serial diagnostics', () => {
     expect(redactSerialLogLine('普通输出 key=visible')).toBe('普通输出 key=visible')
   })
 
-  it('超长串口单行只保留有界诊断，同时仍完整转发给终端', async () => {
+  it('超长串口行只截断诊断日志，终端仍收到完整内容', async () => {
     const controller = new V86Controller()
     let displayedLength = 0
     controller.onSerialOutput((data) => {
@@ -88,23 +88,45 @@ describe('V86Controller serial diagnostics', () => {
     await controller.start()
     FakeEmulator.latest?.emit(`${'x'.repeat(12_000)}\n`)
 
-    const serialLog = logMock.mock.calls.find(
-      ([source, text]) => source === 'serial' && String(text).includes('日志已截断'),
-    )
+    const serialLog = logMock.mock.calls.find(([source]) => source === 'serial')
     expect(serialLog).toBeDefined()
-    expect(String(serialLog?.[1]).length).toBeLessThan(4_200)
+    expect(serialLog?.[1]).toContain('（单行超过 4096 字符，日志已截断）')
     expect(displayedLength).toBe(12_001)
 
     await controller.stop()
   })
 
-  it('切关后在同一串口通道补发 cd "$HOME"，把学生 shell 带回主目录', async () => {
+  it('切关前中断前台程序，再补发 goto 和 cd "$HOME"', async () => {
     const controller = new V86Controller()
     await controller.start()
 
     await controller.restoreLevel(3)
 
-    expect(FakeEmulator.latest?.sent).toEqual(['hashteamctl goto 3\ncd "$HOME"\n'])
+    expect(FakeEmulator.latest?.sent).toEqual(['\u0003', '\u0015', 'hashteamctl goto 3\ncd "$HOME"\n'])
+    await controller.stop()
+  })
+
+  it('切换稳定实验前中断前台程序，并补发 cd "$HOME"', async () => {
+    const controller = new V86Controller()
+    await controller.start()
+
+    await controller.restoreLab('memory-addresses-01')
+
+    expect(FakeEmulator.latest?.sent).toEqual([
+      '\u0003',
+      '\u0015',
+      'hashteamctl goto-lab memory-addresses-01\ncd "$HOME"\n',
+    ])
+    await controller.stop()
+  })
+
+  it('运行面板命令前中断残留前台程序并清空当前输入', async () => {
+    const controller = new V86Controller()
+    await controller.start()
+
+    controller.runCommand('echo ready')
+
+    expect(FakeEmulator.latest?.sent).toEqual(['\u0003', '\u0015', 'echo ready\n'])
     await controller.stop()
   })
 })

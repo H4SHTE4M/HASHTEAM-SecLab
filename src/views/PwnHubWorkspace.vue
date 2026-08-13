@@ -1,0 +1,1310 @@
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import TopBar from '../components/TopBar.vue'
+import LabTerminal from '../components/PwnHubLabTerminal.vue'
+import MissionPanel from '../components/PwnHubMissionPanel.vue'
+import CourseRail from '../components/CourseRail.vue'
+import AppIcon from '../components/AppIcon.vue'
+import LoadingScreen from '../components/LoadingScreen.vue'
+import CompletionPage from '../components/CompletionPage.vue'
+import AboutModal from '../components/AboutModal.vue'
+import OnboardingDialog from '../components/OnboardingDialog.vue'
+import { useVirtualMachine } from '../composables/useVirtualMachine'
+import { useLabProgress } from '../composables/useLabProgress'
+import { useLabPreferences } from '../composables/useLabPreferences'
+import { createSafeStorage } from '../services/progress-store'
+import {
+  getMissionPanelWidthBounds,
+  measureHorizontalSafeArea,
+  shouldSplitShortLandscape,
+} from '../services/workspace-layout'
+import {
+  TERMINAL_FONT_SIZE_MAX,
+  TERMINAL_FONT_SIZE_MIN,
+} from '../services/ui-preferences-store'
+import { COURSE, getCourseLab } from '../modules/pwnhub/course'
+import { isLabUnlocked } from '../services/course-progress'
+import type { AccentName, CourseLabDef, LabMode, ThemeName } from '../types/lab'
+
+const PANEL_WIDTH_STORAGE_KEY = 'hashteam-mission-panel-width-v1'
+const PANEL_COLLAPSED_STORAGE_KEY = 'hashteam-mission-panel-collapsed-v1'
+const THEME_STORAGE_KEY = 'hashteam-theme-v1'
+const PANEL_DEFAULT_MIN = 360
+const PANEL_DEFAULT_MAX = 640
+const BOOT_OVERLAY_MIN_VISIBLE_MS = 900
+const BOOT_READY_HOLD_MS = 180
+const layoutStorage = createSafeStorage()
+
+function loadTheme(): ThemeName {
+  return layoutStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light'
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+function defaultPanelWidth(viewportWidth: number): number {
+  return Math.round(clamp(viewportWidth * 0.31, PANEL_DEFAULT_MIN, PANEL_DEFAULT_MAX))
+}
+
+function loadPanelWidth(viewportWidth: number): number {
+  const stored = Number(layoutStorage.getItem(PANEL_WIDTH_STORAGE_KEY))
+  return Number.isFinite(stored) && stored > 0 ? stored : defaultPanelWidth(viewportWidth)
+}
+
+function loadPanelCollapsed(): boolean {
+  return layoutStorage.getItem(PANEL_COLLAPSED_STORAGE_KEY) === 'true'
+}
+
+const router = useRouter()
+const vm = useVirtualMachine()
+vm.setModule('pwnhub')
+const progress = useLabProgress()
+const preferences = useLabPreferences()
+const availableLabIds = COURSE.chapters
+  .filter((chapter) => chapter.status === 'available')
+  .flatMap((chapter) => chapter.labIds)
+const availableLabs = availableLabIds
+  .map((labId) => getCourseLab(labId))
+  .filter((lab): lab is CourseLabDef => lab !== undefined)
+const firstAvailableLab = availableLabs[0]!
+
+const restoredLab = getCourseLab(progress.state.currentLabId)
+if (
+  restoredLab === undefined ||
+  !isLabUnlocked(restoredLab, progress.state.completedLabIds, progress.state.completedLevels)
+) {
+  const fallbackLab = [...availableLabs].reverse().find((lab) =>
+    isLabUnlocked(lab, progress.state.completedLabIds, progress.state.completedLevels),
+  ) ?? firstAvailableLab
+  progress.setLab(fallbackLab.labId, fallbackLab.legacyLevel)
+}
+
+function hasCompletedAvailableCourse(): boolean {
+  return availableLabIds.every((labId) => progress.state.completedLabIds.includes(labId))
+}
+
+const terminalRef = ref<InstanceType<typeof LabTerminal> | null>(null)
+const showAbout = ref(false)
+const showOnboarding = ref(
+  !preferences.state.onboardingComplete ||
+    preferences.state.mode === null ||
+    progress.progressResetNotice.value,
+)
+const showCompletion = ref(hasCompletedAvailableCourse())
+const viewportWidth = ref(window.innerWidth)
+const viewportHeight = ref(window.innerHeight)
+const horizontalSafeArea = ref(measureHorizontalSafeArea(document))
+const missionPanelWidth = ref(loadPanelWidth(viewportWidth.value))
+const isMissionPanelCollapsed = ref(loadPanelCollapsed())
+const isPanelResizing = ref(false)
+const theme = ref<ThemeName>(loadTheme())
+const showBootOverlay = ref(!showCompletion.value)
+// 会话开始时从 LocalStorage 恢复到的进度（此后 state 会被交互改变，需先快照）。
+// 仅「新会话恢复旧进度」时显示一次性的欢迎回来提示，首次访问不显示。
+const resumedLab = getCourseLab(progress.state.currentLabId) ?? firstAvailableLab
+const resumedHasProgress =
+  !hasCompletedAvailableCourse() &&
+  (progress.state.currentLabId !== availableLabs[0]?.labId ||
+    progress.state.completedLabIds.length > 0)
+const welcomeBackDismissed = ref(false)
+const mobileBannerDismissed = ref(false)
+const debugUnlockedLabIds = ref<string[]>([])
+const debugUnlockedChapterIds = ref<string[]>([])
+let resizeStartX = 0
+let resizeStartWidth = 0
+let themeTransitionTimer: number | null = null
+let bootOverlayTimer: number | null = null
+let bootOverlayShownAt = performance.now()
+let overlayReturnFocus: HTMLElement | null = null
+
+document.documentElement.dataset.theme = theme.value
+
+function syncAccentRoot(): void {
+  document.documentElement.dataset.accent = preferences.state.accent
+  document.documentElement.style.setProperty(
+    '--custom-accent-light',
+    preferences.state.customAccent.light,
+  )
+  document.documentElement.style.setProperty(
+    '--custom-accent-dark',
+    preferences.state.customAccent.dark,
+  )
+}
+
+syncAccentRoot()
+
+const currentLevelDef = computed(
+  () => getCourseLab(progress.state.currentLabId) ?? firstAvailableLab,
+)
+const currentCompleted = computed(() =>
+  progress.state.completedLabIds.includes(currentLevelDef.value.labId),
+)
+const currentHintsUsed = computed(() =>
+  progress.labHintsUsedFor(currentLevelDef.value.labId),
+)
+const currentLabIndex = computed(() =>
+  availableLabs.findIndex((lab) => lab.labId === currentLevelDef.value.labId),
+)
+const currentChapter = computed(
+  () => COURSE.chapters.find((chapter) => chapter.chapterId === currentLevelDef.value.chapterId)!,
+)
+const currentChapterLabIds = computed(() => currentChapter.value.labIds)
+const currentChapterCompletedCount = computed(
+  () => currentChapterLabIds.value.filter((labId) => progress.state.completedLabIds.includes(labId)).length,
+)
+const isLastLevel = computed(() => currentLabIndex.value >= availableLabs.length - 1)
+const currentMode = computed(() => preferences.state.mode ?? 'guided')
+const showOnboardingDialog = computed(
+  () =>
+    !showCompletion.value &&
+    vm.stage.value === 'ready' &&
+    !showBootOverlay.value &&
+    showOnboarding.value,
+)
+const backgroundInert = computed(
+  () => showBootOverlay.value || showAbout.value || showOnboardingDialog.value,
+)
+const shortLandscapeSplit = computed(() =>
+  shouldSplitShortLandscape(
+    viewportWidth.value,
+    viewportHeight.value,
+    horizontalSafeArea.value,
+  ),
+)
+const currentGuideStep = computed(() =>
+  progress.labGuideStepFor(
+    progress.state.currentLabId,
+    currentLevelDef.value.steps.length,
+  ),
+)
+const currentCompletedSteps = computed(() =>
+  progress.completedLabStepsFor(progress.state.currentLabId),
+)
+const currentCompletionRecord = computed(
+  () => progress.state.labCompletionRecords[progress.state.currentLabId],
+)
+const panelWidthBounds = computed(() =>
+  getMissionPanelWidthBounds(
+    viewportWidth.value,
+    viewportHeight.value,
+    horizontalSafeArea.value,
+  ),
+)
+const effectiveMissionPanelWidth = computed(() =>
+  clamp(
+    missionPanelWidth.value,
+    panelWidthBounds.value.min,
+    panelWidthBounds.value.max,
+  ),
+)
+const isMissionPanelVisuallyCollapsed = computed(
+  () =>
+    isMissionPanelCollapsed.value &&
+    (viewportWidth.value > 900 || shortLandscapeSplit.value),
+)
+const workspaceStyle = computed(() => ({
+  '--mission-panel-width': `${effectiveMissionPanelWidth.value}px`,
+  '--workspace-panel-width': isMissionPanelVisuallyCollapsed.value
+    ? '0px'
+    : `${effectiveMissionPanelWidth.value}px`,
+}))
+const showWelcomeBack = computed(
+  () =>
+    resumedHasProgress &&
+    !welcomeBackDismissed.value &&
+    !showCompletion.value &&
+    vm.stage.value === 'ready' &&
+    !showBootOverlay.value,
+)
+const showMobileBanner = computed(
+  () => !mobileBannerDismissed.value && !showCompletion.value && viewportWidth.value <= 900,
+)
+
+let unsubscribeDisplay: (() => void) | null = null
+
+function clearBootOverlayTimer(): void {
+  if (bootOverlayTimer === null) return
+  window.clearTimeout(bootOverlayTimer)
+  bootOverlayTimer = null
+}
+
+watch(
+  () => vm.stage.value,
+  (stage) => {
+    clearBootOverlayTimer()
+
+    if (showCompletion.value) {
+      showBootOverlay.value = false
+      return
+    }
+
+    if (stage !== 'ready') {
+      showBootOverlay.value = true
+      if (stage === 'loading-assets') bootOverlayShownAt = performance.now()
+      return
+    }
+
+    const visibleFor = performance.now() - bootOverlayShownAt
+    const delay = Math.max(BOOT_READY_HOLD_MS, BOOT_OVERLAY_MIN_VISIBLE_MS - visibleFor)
+    bootOverlayTimer = window.setTimeout(() => {
+      showBootOverlay.value = false
+      bootOverlayTimer = null
+    }, delay)
+  },
+  { immediate: true },
+)
+
+watch(
+  [
+    () => preferences.state.mode,
+    () => progress.state.currentLabId,
+    () => currentCompleted.value,
+  ],
+  ([mode, labId, completed]) => {
+    if (mode === 'guided' && !completed) progress.markLabGuided(labId)
+  },
+  { immediate: true },
+)
+
+onMounted(() => {
+  if (showCompletion.value) return
+  // 显示文本 → 终端；终端输入 → 虚拟机串口
+  unsubscribeDisplay = vm.onDisplay((data) => {
+    terminalRef.value?.write(data)
+  })
+  window.addEventListener('resize', handleViewportResize)
+  window.visualViewport?.addEventListener('resize', handleViewportResize)
+  void vm.boot()
+})
+
+onBeforeUnmount(() => {
+  unsubscribeDisplay?.()
+  unsubscribeDisplay = null
+  window.removeEventListener('resize', handleViewportResize)
+  window.visualViewport?.removeEventListener('resize', handleViewportResize)
+  stopPanelResize()
+  clearBootOverlayTimer()
+  if (themeTransitionTimer !== null) window.clearTimeout(themeTransitionTimer)
+  document.documentElement.classList.remove('theme-changing')
+  void vm.dispose()
+})
+
+function applyTheme(nextTheme: ThemeName, animate: boolean): void {
+  theme.value = nextTheme
+  document.documentElement.dataset.theme = nextTheme
+  layoutStorage.setItem(THEME_STORAGE_KEY, nextTheme)
+
+  if (animate) beginThemeTransition()
+}
+
+function beginThemeTransition(): void {
+  if (
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  ) return
+  if (themeTransitionTimer !== null) window.clearTimeout(themeTransitionTimer)
+  document.documentElement.classList.add('theme-changing')
+  themeTransitionTimer = window.setTimeout(() => {
+    document.documentElement.classList.remove('theme-changing')
+    themeTransitionTimer = null
+  }, 300)
+}
+
+function toggleTheme(): void {
+  applyTheme(theme.value === 'light' ? 'dark' : 'light', true)
+}
+
+function applyAccent(accent: AccentName): void {
+  preferences.setAccent(accent)
+  syncAccentRoot()
+  beginThemeTransition()
+}
+
+function applyCustomAccent(source: string): void {
+  preferences.setCustomAccent(source)
+  syncAccentRoot()
+  beginThemeTransition()
+}
+
+function handleViewportResize(): void {
+  viewportWidth.value = window.innerWidth
+  viewportHeight.value = window.innerHeight
+  horizontalSafeArea.value = measureHorizontalSafeArea(document)
+}
+
+function persistPanelWidth(): void {
+  layoutStorage.setItem(PANEL_WIDTH_STORAGE_KEY, String(Math.round(missionPanelWidth.value)))
+}
+
+function startPanelResize(event: PointerEvent): void {
+  if (event.button !== 0 || isMissionPanelVisuallyCollapsed.value) return
+  const handle = event.currentTarget
+  if (!(handle instanceof HTMLElement)) return
+
+  resizeStartX = event.clientX
+  resizeStartWidth = effectiveMissionPanelWidth.value
+  isPanelResizing.value = true
+  handle.setPointerCapture(event.pointerId)
+  document.documentElement.classList.add('is-panel-resizing')
+  event.preventDefault()
+}
+
+function movePanelResize(event: PointerEvent): void {
+  if (!isPanelResizing.value) return
+  const nextWidth = resizeStartWidth - (event.clientX - resizeStartX)
+  missionPanelWidth.value = clamp(
+    nextWidth,
+    panelWidthBounds.value.min,
+    panelWidthBounds.value.max,
+  )
+}
+
+function stopPanelResize(): void {
+  if (!isPanelResizing.value) return
+  isPanelResizing.value = false
+  document.documentElement.classList.remove('is-panel-resizing')
+  persistPanelWidth()
+}
+
+function resetPanelWidth(): void {
+  missionPanelWidth.value = clamp(
+    defaultPanelWidth(viewportWidth.value),
+    panelWidthBounds.value.min,
+    panelWidthBounds.value.max,
+  )
+  persistPanelWidth()
+}
+
+function handlePanelResizeKeydown(event: KeyboardEvent): void {
+  const step = event.shiftKey ? 32 : 12
+  let nextWidth = effectiveMissionPanelWidth.value
+
+  if (event.key === 'ArrowLeft') nextWidth += step
+  else if (event.key === 'ArrowRight') nextWidth -= step
+  else if (event.key === 'Home') nextWidth = panelWidthBounds.value.min
+  else if (event.key === 'End') nextWidth = panelWidthBounds.value.max
+  else return
+
+  event.preventDefault()
+  missionPanelWidth.value = clamp(
+    nextWidth,
+    panelWidthBounds.value.min,
+    panelWidthBounds.value.max,
+  )
+  persistPanelWidth()
+}
+
+function toggleMissionPanel(): void {
+  stopPanelResize()
+  isMissionPanelCollapsed.value = !isMissionPanelCollapsed.value
+  layoutStorage.setItem(
+    PANEL_COLLAPSED_STORAGE_KEY,
+    String(isMissionPanelCollapsed.value),
+  )
+}
+
+function handleTerminalInput(data: string): void {
+  vm.sendSerial(data)
+}
+
+function adjustTerminalFontSize(delta: number): void {
+  preferences.setTerminalFontSize(preferences.state.terminalFontSize + delta)
+}
+
+function handleRunCommand(command: string): void {
+  // runCommand 会先清空终端未提交的输入，避免与已有内容拼接
+  vm.runCommand(command)
+  terminalRef.value?.focus()
+}
+
+function handleRunDemo(): void {
+  handleRunCommand('echo "hello, HASHTEAM"')
+}
+
+function handleChangeMode(mode: LabMode): void {
+  preferences.setMode(mode)
+  if (mode === 'guided' && !currentCompleted.value) {
+    progress.markLabGuided(progress.state.currentLabId)
+  }
+}
+
+function handleNextLevel(): void {
+  if (isLastLevel.value) {
+    showCompletion.value = true
+    unsubscribeDisplay?.()
+    unsubscribeDisplay = null
+    void vm.dispose()
+    return
+  }
+  const nextLab = availableLabs[currentLabIndex.value + 1]
+  if (nextLab) vm.gotoLab(nextLab.labId)
+}
+
+function handleSelectLab(labId: string): void {
+  if (!getCourseLab(labId)) return
+  if (labId === progress.state.currentLabId) {
+    terminalRef.value?.focus()
+    return
+  }
+  vm.gotoLab(labId)
+  terminalRef.value?.focus()
+}
+
+function handleDebugUnlockLab(labId: string): void {
+  if (!getCourseLab(labId)) return
+  if (!debugUnlockedLabIds.value.includes(labId)) {
+    debugUnlockedLabIds.value = [...debugUnlockedLabIds.value, labId]
+  }
+  vm.temporarilyUnlockLab(labId)
+  handleSelectLab(labId)
+}
+
+function handleDebugUnlockChapter(chapterId: string): void {
+  const chapter = COURSE.chapters.find((item) => item.chapterId === chapterId)
+  if (chapter?.status !== 'available' || chapter.labIds.length === 0) return
+  if (!debugUnlockedChapterIds.value.includes(chapterId)) {
+    debugUnlockedChapterIds.value = [...debugUnlockedChapterIds.value, chapterId]
+  }
+  for (const labId of chapter.labIds) {
+    if (!debugUnlockedLabIds.value.includes(labId)) {
+      debugUnlockedLabIds.value = [...debugUnlockedLabIds.value, labId]
+    }
+    vm.temporarilyUnlockLab(labId)
+  }
+  handleSelectLab(chapter.labIds[0])
+}
+
+function exitWorkspace(): void {
+  void router.push('/')
+}
+
+function handleResetLevel(): void {
+  progress.resetLab(progress.state.currentLabId)
+  if (preferences.state.mode === 'guided') {
+    progress.markLabGuided(progress.state.currentLabId)
+  }
+  vm.resetCurrentLevel()
+}
+
+function handleResetAll(): void {
+  // 先同步清空 LocalStorage 中的进度（resetAllProgress 是同步的），
+  // 再刷新网页：刷新后 loadProgress 读到全新空进度，VM 也从全新 Linux 环境启动。
+  progress.resetAll()
+  window.location.reload()
+}
+
+function handleCompleteOnboarding(): void {
+  preferences.completeOnboarding()
+  progress.dismissProgressResetNotice()
+  showOnboarding.value = false
+  restoreFocusAfterOverlayClose()
+}
+
+function restoreFocusAfterOverlayClose(): void {
+  const returnFocus = overlayReturnFocus
+  overlayReturnFocus = null
+  void nextTick(() => {
+    if (showAbout.value || showOnboardingDialog.value) return
+    if (returnFocus?.isConnected) returnFocus.focus()
+    else terminalRef.value?.focus()
+  })
+}
+
+function openAbout(trigger: HTMLElement): void {
+  overlayReturnFocus = trigger
+  showOnboarding.value = false
+  showAbout.value = true
+}
+
+function closeAbout(): void {
+  showAbout.value = false
+  restoreFocusAfterOverlayClose()
+}
+
+function openHelp(trigger: HTMLElement): void {
+  overlayReturnFocus = trigger
+  showAbout.value = false
+  showOnboarding.value = true
+}
+</script>
+
+<template>
+  <div class="app-shell">
+    <div v-if="showMobileBanner" class="mobile-banner" role="status">
+      <span>建议用电脑打开以获得完整终端体验</span>
+      <button type="button" aria-label="关闭提示" @click="mobileBannerDismissed = true">×</button>
+    </div>
+    <Transition name="overlay-fade">
+      <div v-if="showWelcomeBack" class="welcome-back" role="status">
+        <span>
+          欢迎回来，你上次进行到“{{ resumedLab.title }}”。进度会自动保存在这台电脑的浏览器里。
+        </span>
+        <button type="button" aria-label="关闭提示" @click="welcomeBackDismissed = true">×</button>
+      </div>
+    </Transition>
+    <div
+      class="app-content"
+      :style="workspaceStyle"
+      :inert="backgroundInert"
+      :aria-hidden="backgroundInert ? 'true' : undefined"
+    >
+      <a class="skip-link" href="#lab-workspace">跳到实验工作台</a>
+      <TopBar
+        v-if="!showCompletion"
+        :completed-count="currentChapterCompletedCount"
+        :total="currentChapterLabIds.length"
+        :mode="currentMode"
+        :current-level="currentLabIndex + 1"
+        :current-level-name="currentLevelDef.title"
+        :theme="theme"
+        :accent="preferences.state.accent"
+        :custom-accent="preferences.state.customAccent"
+        @reset-level="handleResetLevel"
+        @exit="exitWorkspace"
+        @reset-all="handleResetAll"
+        @about="openAbout"
+        @help="openHelp"
+        @change-mode="handleChangeMode"
+        @change-theme="applyTheme($event, true)"
+        @change-accent="applyAccent"
+        @change-custom-accent="applyCustomAccent"
+        @toggle-theme="toggleTheme"
+      />
+
+      <Transition name="workspace-swap" mode="out-in">
+        <main
+          v-if="!showCompletion"
+          id="lab-workspace"
+          key="workspace"
+          class="workspace"
+          :class="{
+            'is-resizing': isPanelResizing,
+            'is-panel-collapsed': isMissionPanelVisuallyCollapsed,
+            'short-landscape-split': shortLandscapeSplit,
+          }"
+        >
+          <CourseRail
+            :course="COURSE"
+            :current-lab-id="progress.state.currentLabId"
+            :completed-lab-ids="progress.state.completedLabIds"
+            :completed-levels="progress.state.completedLevels"
+            :completion-records="progress.state.completionRecords"
+            :lab-completion-records="progress.state.labCompletionRecords"
+            :debug-unlocked-lab-ids="debugUnlockedLabIds"
+            :debug-unlocked-chapter-ids="debugUnlockedChapterIds"
+            :short-landscape-split="shortLandscapeSplit"
+            @select="handleSelectLab"
+            @debug-unlock-lab="handleDebugUnlockLab"
+            @debug-unlock-chapter="handleDebugUnlockChapter"
+          />
+          <section class="terminal-pane">
+            <header class="terminal-header">
+              <div class="terminal-title">
+                <AppIcon name="terminal" :size="16" />
+                <span>Linux 终端</span>
+                <code>guest@hashteam</code>
+              </div>
+              <div class="terminal-actions">
+                <div class="font-size-control" role="group" aria-label="终端字号">
+                  <button
+                    type="button"
+                    aria-label="减小终端字号"
+                    data-tooltip="减小字号"
+                    data-tooltip-placement="bottom"
+                    :disabled="preferences.state.terminalFontSize <= TERMINAL_FONT_SIZE_MIN"
+                    @click="adjustTerminalFontSize(-1)"
+                  >
+                    <AppIcon name="minus" :size="13" />
+                  </button>
+                  <output
+                    class="font-size-value"
+                    aria-live="polite"
+                    :aria-label="`当前终端字号 ${preferences.state.terminalFontSize} 像素`"
+                  >{{ preferences.state.terminalFontSize }}</output>
+                  <button
+                    type="button"
+                    aria-label="增大终端字号"
+                    data-tooltip="增大字号"
+                    data-tooltip-placement="bottom"
+                    :disabled="preferences.state.terminalFontSize >= TERMINAL_FONT_SIZE_MAX"
+                    @click="adjustTerminalFontSize(1)"
+                  >
+                    <AppIcon name="plus" :size="13" />
+                  </button>
+                </div>
+                <div
+                  class="vm-status"
+                  role="status"
+                  :aria-label="vm.stage.value === 'ready' ? '实验环境已就绪' : '实验环境正在启动'"
+                >
+                  <span class="status-dot" aria-hidden="true" />
+                  <AppIcon name="server" :size="14" />
+                  <span>{{ vm.stage.value === 'ready' ? '实验环境' : '启动中' }}</span>
+                </div>
+              </div>
+            </header>
+            <div class="terminal-surface">
+              <LabTerminal
+                ref="terminalRef"
+                :font-size="preferences.state.terminalFontSize"
+                :auto-focus="!backgroundInert"
+                @input="handleTerminalInput"
+              />
+            </div>
+          </section>
+          <div
+            class="panel-resizer"
+            :class="{ 'is-collapsed': isMissionPanelVisuallyCollapsed }"
+          >
+            <div
+              class="resizer-drag-handle"
+              role="separator"
+              :tabindex="isMissionPanelVisuallyCollapsed ? -1 : 0"
+              aria-label="调整任务栏宽度"
+              aria-orientation="vertical"
+              :aria-disabled="isMissionPanelVisuallyCollapsed"
+              :aria-valuemin="panelWidthBounds.min"
+              :aria-valuemax="panelWidthBounds.max"
+              :aria-valuenow="Math.round(effectiveMissionPanelWidth)"
+              :aria-valuetext="`${Math.round(effectiveMissionPanelWidth)} 像素`"
+              data-tooltip="拖动调整任务栏"
+              data-tooltip-placement="left"
+              @pointerdown="startPanelResize"
+              @pointermove="movePanelResize"
+              @pointerup="stopPanelResize"
+              @pointercancel="stopPanelResize"
+              @dblclick="resetPanelWidth"
+              @keydown="handlePanelResizeKeydown"
+            >
+              <span class="resizer-grip" aria-hidden="true" />
+            </div>
+            <button
+              type="button"
+              class="panel-collapse-toggle"
+              :aria-label="isMissionPanelVisuallyCollapsed ? '展开任务栏' : '收起任务栏'"
+              :aria-expanded="!isMissionPanelVisuallyCollapsed"
+              aria-controls="mission-panel"
+              :data-tooltip="isMissionPanelVisuallyCollapsed ? '展开任务栏' : '收起任务栏'"
+              data-tooltip-placement="left"
+              @click="toggleMissionPanel"
+            >
+              <AppIcon name="chevron-right" :size="16" />
+            </button>
+          </div>
+          <div
+            id="mission-panel"
+            class="mission-panel-slot"
+            :class="{ 'is-collapsed': isMissionPanelVisuallyCollapsed }"
+            :inert="isMissionPanelVisuallyCollapsed"
+            :aria-hidden="isMissionPanelVisuallyCollapsed ? 'true' : undefined"
+          >
+            <MissionPanel
+              :level="currentLevelDef"
+              :completed="currentCompleted"
+              :hints-used="currentHintsUsed"
+              :is-last="isLastLevel"
+              :mode="currentMode"
+              :guide-step="currentGuideStep"
+              :completed-steps="currentCompletedSteps"
+              :completion-record="currentCompletionRecord"
+              @next="handleNextLevel"
+              @use-hint="progress.useLabHint"
+              @run-command="handleRunCommand"
+              @advance-guide="progress.advanceLabGuide"
+              @complete-step="progress.completeLabStep"
+              @change-mode="handleChangeMode"
+            />
+          </div>
+        </main>
+        <CompletionPage
+          v-else
+          key="completion"
+          :course="COURSE"
+          :lab-completion-records="progress.state.labCompletionRecords"
+          @exit="exitWorkspace"
+          :completion-records="progress.state.completionRecords"
+          @restart="handleResetAll"
+        />
+      </Transition>
+    </div>
+
+    <Transition name="overlay-fade">
+      <LoadingScreen
+        v-if="showBootOverlay"
+        :stage="vm.stage.value"
+        :error-message="vm.errorMessage.value"
+        @retry="vm.boot"
+      />
+    </Transition>
+    <Transition name="overlay-fade">
+      <AboutModal v-if="showAbout" @close="closeAbout" />
+    </Transition>
+    <Transition name="overlay-fade">
+      <OnboardingDialog
+        v-if="showOnboardingDialog"
+        :mode="preferences.state.mode"
+        :progress-reset-notice="progress.progressResetNotice.value"
+        @select-mode="handleChangeMode"
+        @run-demo="handleRunDemo"
+        @complete="handleCompleteOnboarding"
+      />
+    </Transition>
+  </div>
+</template>
+
+<style scoped>
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100svh;
+  height: 100dvh;
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--bg-canvas-top) 0%, var(--bg-canvas) 100%);
+  color: var(--text-secondary);
+}
+
+.app-content {
+  --workspace-rail-width: 64px;
+  --workspace-resizer-width: 24px;
+  --workspace-terminal-min-width: 360px;
+  --workspace-column-gap: var(--space-2);
+
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 100;
+  padding: 8px 12px;
+  color: var(--bg-canvas);
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--accent-cyan);
+  border-radius: 6px;
+  transform: translateY(-140%);
+  transition: transform 160ms ease;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.mobile-banner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 7px calc(12px + var(--safe-right)) 7px calc(12px + var(--safe-left));
+  color: var(--accent-amber);
+  font-size: 12px;
+  background: var(--accent-amber-soft);
+  border-bottom: var(--hairline) solid var(--accent-amber-border);
+}
+
+.welcome-back {
+  position: fixed;
+  top: calc(10px + var(--safe-top));
+  left: 50%;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(480px, calc(100vw - 32px));
+  padding: 9px 12px;
+  color: var(--accent-amber);
+  font-size: 13px;
+  background: var(--floating-surface);
+  border: var(--hairline) solid var(--accent-amber-border);
+  border-radius: 7px;
+  box-shadow: var(--shadow-panel);
+  transform: translateX(-50%);
+  box-sizing: border-box;
+}
+
+.mobile-banner button,
+.welcome-back button {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  color: inherit;
+  font-size: 15px;
+  line-height: 1;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.workspace {
+  flex: 1;
+  display: grid;
+  grid-template-columns: var(--workspace-rail-width) minmax(var(--workspace-terminal-min-width), 1fr) var(--workspace-resizer-width) var(--workspace-panel-width);
+  gap: var(--workspace-column-gap);
+  padding: 0 calc(var(--space-4) + var(--safe-right)) max(var(--space-4), var(--safe-bottom)) calc(var(--space-4) + var(--safe-left));
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workspace:not(.is-resizing) {
+  transition: grid-template-columns var(--duration-normal) var(--ease-out);
+}
+
+.terminal-pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  --surface-1: #0c1113;
+  --surface-2: #11191b;
+  --surface-3: #182225;
+  --surface-raised: #1d292c;
+  --border-subtle: #273034;
+  --border-strong: #435458;
+  --text-primary: #f0f5f4;
+  --text-secondary: #d0d9d7;
+  --text-muted: #93a29f;
+  --text-faint: #71807d;
+  --accent-cyan: #6bd5d2;
+  --accent-cyan-soft: rgba(107, 213, 210, 0.11);
+  --accent-cyan-border: rgba(107, 213, 210, 0.3);
+  background: #090d0f;
+  border: var(--hairline) solid #273034;
+  border-radius: 8px;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.panel-resizer {
+  position: relative;
+  z-index: 4;
+  min-width: 24px;
+  display: grid;
+  place-items: stretch;
+}
+
+.resizer-drag-handle,
+.panel-collapse-toggle {
+  grid-area: 1 / 1;
+}
+
+.resizer-drag-handle {
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  transition: background-color var(--duration-normal) ease;
+}
+
+.resizer-grip {
+  width: 3px;
+  height: 104px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: height var(--duration-normal) var(--ease-out);
+}
+
+.resizer-grip::before,
+.resizer-grip::after {
+  width: 100%;
+  height: 32px;
+  background: var(--resizer-color);
+  border-radius: 3px;
+  content: '';
+  transition: height var(--duration-normal) var(--ease-out), background-color var(--duration-normal) ease;
+}
+
+.panel-resizer:hover .resizer-drag-handle,
+.resizer-drag-handle:focus-visible,
+.resizer-drag-handle:active {
+  background: var(--accent-cyan-soft);
+}
+
+.panel-resizer:hover .resizer-grip,
+.resizer-drag-handle:focus-visible .resizer-grip,
+.resizer-drag-handle:active .resizer-grip,
+.workspace.is-resizing .resizer-grip {
+  height: 120px;
+}
+
+.panel-resizer:hover .resizer-grip::before,
+.panel-resizer:hover .resizer-grip::after,
+.resizer-drag-handle:focus-visible .resizer-grip::before,
+.resizer-drag-handle:focus-visible .resizer-grip::after,
+.resizer-drag-handle:active .resizer-grip::before,
+.resizer-drag-handle:active .resizer-grip::after,
+.workspace.is-resizing .resizer-grip::before,
+.workspace.is-resizing .resizer-grip::after {
+  height: 40px;
+  background: var(--accent-cyan);
+}
+
+.panel-collapse-toggle {
+  z-index: 1;
+  width: 24px;
+  height: 40px;
+  align-self: center;
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--resizer-color);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: color var(--duration-normal) ease;
+}
+
+.panel-collapse-toggle:hover,
+.panel-collapse-toggle:focus-visible {
+  color: var(--accent-cyan);
+}
+
+.panel-collapse-toggle svg {
+  transition: transform var(--duration-normal) var(--ease-out);
+}
+
+.panel-resizer.is-collapsed .resizer-drag-handle {
+  pointer-events: none;
+}
+
+.panel-resizer.is-collapsed .panel-collapse-toggle svg {
+  transform: rotate(180deg);
+}
+
+.mission-panel-slot {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity var(--duration-fast) ease, visibility 0s;
+}
+
+.mission-panel-slot.is-collapsed {
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity var(--duration-fast) ease, visibility 0s var(--duration-normal);
+}
+
+.mission-panel-slot :deep(.mission-panel) {
+  box-sizing: border-box;
+}
+
+.terminal-header {
+  height: 48px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 16px;
+  background: #0c1113;
+  border-bottom: var(--hairline) solid #273034;
+}
+
+.terminal-title,
+.vm-status {
+  display: flex;
+  align-items: center;
+}
+
+.terminal-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.font-size-control {
+  height: 46px;
+  display: grid;
+  grid-template-columns: 44px 32px 44px;
+  align-items: stretch;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: 7px;
+}
+
+.font-size-control button {
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.font-size-control button:hover:not(:disabled),
+.font-size-control button:focus-visible {
+  color: var(--accent-cyan);
+  background: var(--accent-cyan-soft);
+}
+
+.font-size-control button:disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.font-size-value {
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+  font: 600 10px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  border-right: var(--hairline) solid var(--border-subtle);
+  border-left: var(--hairline) solid var(--border-subtle);
+}
+
+.terminal-title {
+  min-width: 0;
+  gap: 9px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 680;
+}
+
+.terminal-title > span {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.terminal-title > svg {
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  color: var(--accent-cyan);
+  background: var(--accent-cyan-soft);
+  border: var(--hairline) solid var(--accent-cyan-border);
+  border-radius: 7px;
+}
+
+.terminal-title code {
+  overflow: hidden;
+  color: var(--text-faint);
+  font: 500 12px/1 var(--font-terminal);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vm-status {
+  flex: 0 0 auto;
+  gap: 7px;
+  padding: 5px 8px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--surface-2);
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: 7px;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--accent-green);
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px var(--accent-green-soft);
+  animation: status-pulse 2.8s ease-in-out infinite;
+}
+
+.terminal-surface {
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+  background: #090d0f;
+}
+
+.workspace-swap-enter-active,
+.workspace-swap-leave-active {
+  transition: opacity var(--duration-normal) ease, transform var(--duration-slow) var(--ease-out);
+}
+
+.workspace-swap-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.workspace-swap-leave-to {
+  opacity: 0;
+  transform: translateY(-5px);
+}
+
+.overlay-fade-enter-active,
+.overlay-fade-leave-active {
+  transition: opacity var(--duration-normal) ease;
+}
+
+.overlay-fade-enter-from,
+.overlay-fade-leave-to {
+  opacity: 0;
+}
+
+@keyframes status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.72;
+    transform: scale(0.82);
+  }
+}
+
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: 64px minmax(300px, 42vh) max-content;
+    align-content: start;
+    gap: var(--space-2);
+    padding: 0 calc(var(--space-2) + var(--safe-right)) max(var(--space-2), var(--safe-bottom)) calc(var(--space-2) + var(--safe-left));
+    overflow-y: auto;
+  }
+
+  .terminal-pane {
+    border: var(--hairline) solid #2a342e;
+  }
+
+  .font-size-control [data-tooltip]::before {
+    display: none;
+  }
+
+  .panel-resizer {
+    display: none;
+  }
+
+  .workspace:not(.short-landscape-split) .mission-panel-slot {
+    height: auto;
+    overflow: visible;
+  }
+
+  .workspace:not(.short-landscape-split) :deep(.mission-panel),
+  .workspace:not(.short-landscape-split) :deep(.panel-scroll) {
+    height: auto;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 900px) and (max-height: 600px) and (orientation: landscape) {
+  .workspace.short-landscape-split {
+    --workspace-terminal-min-width: 320px;
+    grid-template-columns: 56px minmax(var(--workspace-terminal-min-width), 1fr) 24px var(--workspace-panel-width);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 6px;
+    padding: 0 calc(8px + var(--safe-right)) max(8px, var(--safe-bottom)) calc(8px + var(--safe-left));
+    overflow: hidden;
+  }
+
+  .terminal-pane {
+    border: var(--hairline) solid #2a342e;
+  }
+
+  .workspace.short-landscape-split .panel-resizer {
+    min-width: 24px;
+    display: grid;
+  }
+
+  .terminal-header {
+    height: 48px;
+    min-height: 48px;
+    gap: 6px;
+    padding-inline: 10px;
+  }
+
+  .terminal-title {
+    flex: 0 0 auto;
+    gap: 0;
+  }
+
+  .terminal-title > span,
+  .terminal-title code,
+  .vm-status span:last-child {
+    display: none;
+  }
+
+  .terminal-actions {
+    gap: 4px;
+  }
+
+  .vm-status {
+    gap: 5px;
+    padding-inline: 6px;
+  }
+
+  .terminal-title > svg {
+    width: 26px;
+    height: 26px;
+    padding: 5px;
+  }
+
+  .terminal-surface {
+    padding: 6px;
+  }
+  .workspace:not(.short-landscape-split) {
+    grid-template-rows: 52px minmax(220px, 68dvh) max-content;
+    overflow-y: auto;
+  }
+}
+
+@media (min-width: 901px) and (max-height: 680px) {
+  .terminal-header {
+    height: 48px;
+    min-height: 48px;
+  }
+
+  .terminal-surface {
+    padding: 8px;
+  }
+}
+
+@media (max-width: 560px) and (min-height: 601px) {
+  .workspace {
+    grid-template-rows: 64px minmax(260px, 38vh) max-content;
+  }
+
+  .terminal-header {
+    padding-inline: 12px;
+  }
+
+  .terminal-surface {
+    padding: 8px;
+  }
+
+}
+
+@media (max-width: 560px) {
+  .terminal-title {
+    gap: 7px;
+    white-space: nowrap;
+  }
+
+  .terminal-title code,
+  .vm-status span:last-child {
+    display: none;
+  }
+
+  .vm-status {
+    padding-inline: 7px;
+  }
+}
+</style>

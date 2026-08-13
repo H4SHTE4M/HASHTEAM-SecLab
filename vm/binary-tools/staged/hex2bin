@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+
+if [ "$#" -gt 0 ]; then
+    input=$*
+else
+    input=$(cat)
+fi
+[ -n "$input" ] || { echo '用法：hex2bin <十六进制字节>' >&2; exit 2; }
+
+compact=$(printf '%s' "$input" | sed -e 's/\\x//g' -e 's/0x//g' -e 's/[[:space:],:]//g')
+[ -n "$compact" ] && [ "${#compact}" -le 131072 ] || { echo '十六进制输入必须在 1 到 65536 字节之间。' >&2; exit 2; }
+case "$compact" in *[!0-9a-fA-F]*) echo '输入包含非十六进制字符。' >&2; exit 2 ;; esac
+[ $(( ${#compact} % 2 )) -eq 0 ] || { echo '十六进制字符数必须为偶数。' >&2; exit 2; }
+printf '%s' "$compact" | xxd -r -p
