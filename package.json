@@ -15,6 +15,7 @@
     "build": "pnpm validate:challenges && pnpm validate:binary-profile && vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "pnpm validate:challenges && pnpm validate:binary-profile && vitest run",
+    "test:backend": "vitest run --config vitest.backend.config.ts",
     "test:watch": "vitest",
     "test:vm": "pnpm validate:challenges && bash scripts/test-vm-checks.sh",
     "test:binary-profile": "bash scripts/test-binary-profile.sh",

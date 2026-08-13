@@ -70,12 +70,36 @@ const PROTOCOL_VERSIONS = new Set([1, 2])
 /** 事件明细保留天数（超出后定期删除）。 */
 const EVENT_LOG_RETENTION_DAYS = 90
 
-const PWNHUB_ACTIVITIES = [
-  'memory-addresses-01', 'memory-layout-01', 'memory-register-stack-01',
-  'asm-registers-01', 'asm-arithmetic-01', 'asm-stack-ops-01',
-  'asm-branches-01', 'asm-call-stack-01',
-  'elf-bytes-01', 'elf-sections-01', 'elf-symbols-01', 'elf-disassembly-01',
-]
+function loadPublishedPwnHubActivities() {
+  const configuredPath = process.env.TELEMETRY_PRODUCTION_PROFILE
+  const packagedPath = path.join(__dirname, 'production.json')
+  const repositoryPath = path.resolve(__dirname, '..', 'vm', 'profiles', 'production.json')
+  const profilePath = configuredPath || (fs.existsSync(packagedPath) ? packagedPath : repositoryPath)
+  let profile
+  try {
+    profile = JSON.parse(fs.readFileSync(profilePath, 'utf8'))
+  } catch (error) {
+    console.error(`FATAL: 无法读取 production profile: ${error instanceof Error ? error.message : String(error)}`)
+    process.exit(1)
+  }
+  const activities = profile?.pwnhubLabs
+  if (
+    !Array.isArray(activities) ||
+    activities.length === 0 ||
+    activities.some(
+      (activityId) =>
+        typeof activityId !== 'string' ||
+        !/^[a-z][a-z0-9-]{0,95}$/.test(activityId),
+    ) ||
+    new Set(activities).size !== activities.length
+  ) {
+    console.error('FATAL: production profile 包含无效或重复的 PwnHub labId')
+    process.exit(1)
+  }
+  return activities
+}
+
+const PWNHUB_ACTIVITIES = loadPublishedPwnHubActivities()
 
 const MODULES = {
   seclab: {
@@ -126,6 +150,7 @@ db.pragma('synchronous = NORMAL')
 db.exec(`
   CREATE TABLE IF NOT EXISTS sessions (
     token_hash  TEXT PRIMARY KEY,
+    module      TEXT NOT NULL DEFAULT '',
     created_at  INTEGER NOT NULL,
     expires_at  INTEGER NOT NULL,
     last_seq    INTEGER NOT NULL DEFAULT 0,
@@ -173,6 +198,12 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 `)
 
+// v1 数据库原本没有 sessions.module；加列迁移是幂等、向后兼容的。
+const sessionColumns = db.prepare('PRAGMA table_info(sessions)').all()
+if (!sessionColumns.some((column) => column.name === 'module')) {
+  db.exec("ALTER TABLE sessions ADD COLUMN module TEXT NOT NULL DEFAULT ''")
+}
+
 // ---- 预编译语句 ----
 
 const stmtInsertSession = db.prepare(
@@ -181,6 +212,9 @@ const stmtInsertSession = db.prepare(
 const stmtGetSession = db.prepare('SELECT * FROM sessions WHERE token_hash = ?')
 const stmtUpdateSession = db.prepare(
   'UPDATE sessions SET last_seq = ?, event_count = event_count + ? WHERE token_hash = ?',
+)
+const stmtBindSessionModule = db.prepare(
+  "UPDATE sessions SET module = ? WHERE token_hash = ? AND module = ''",
 )
 const stmtDeleteExpiredSessions = db.prepare('DELETE FROM sessions WHERE expires_at < ?')
 
@@ -272,13 +306,28 @@ const stmtGetAdminSession = db.prepare('SELECT * FROM admin_sessions WHERE token
 const stmtDeleteAdminSession = db.prepare('DELETE FROM admin_sessions WHERE token_hash = ?')
 const stmtDeleteExpiredAdminSessions = db.prepare('DELETE FROM admin_sessions WHERE expires_at < ?')
 
-const stmtCountSessions = db.prepare('SELECT COUNT(*) AS n FROM sessions')
-const stmtCountActiveSessions = db.prepare('SELECT COUNT(*) AS n FROM sessions WHERE expires_at > ?')
-const stmtRecentSessions = db.prepare(
-  'SELECT token_hash, created_at, expires_at, last_seq, event_count FROM sessions ORDER BY created_at DESC LIMIT 50',
+const stmtCountSessions = db.prepare(
+  "SELECT COUNT(*) AS n FROM sessions WHERE module = ?",
 )
-const stmtCountCompletions = db.prepare('SELECT COUNT(*) AS n FROM completions')
-const stmtCountUniqueCompleters = db.prepare('SELECT COUNT(DISTINCT token_hash) AS n FROM completions')
+const stmtCountActiveSessions = db.prepare(
+  "SELECT COUNT(*) AS n FROM sessions WHERE expires_at > ? AND module = ?",
+)
+const stmtRecentSessions = db.prepare(
+  `SELECT token_hash, created_at, expires_at, last_seq, event_count
+   FROM sessions WHERE module = ? ORDER BY created_at DESC LIMIT 50`,
+)
+const stmtCountLevelCompletions = db.prepare(
+  'SELECT COUNT(*) AS n FROM completions WHERE module = ?',
+)
+const stmtCountLevelCompleters = db.prepare(
+  'SELECT COUNT(DISTINCT token_hash) AS n FROM completions WHERE module = ?',
+)
+const stmtCountActivityCompletions = db.prepare(
+  'SELECT COUNT(*) AS n FROM activity_completions WHERE module = ?',
+)
+const stmtCountActivityCompleters = db.prepare(
+  'SELECT COUNT(DISTINCT token_hash) AS n FROM activity_completions WHERE module = ?',
+)
 
 // ---- HMAC 鉴权 ----
 
@@ -303,8 +352,6 @@ function createSession(token) {
   const tokenHash = sha256Hex(token)
   const now = Date.now()
   stmtInsertSession.run(tokenHash, now, now + SESSION_TTL_MS)
-  // 记录 session 创建事件到时间序列（不含 module，全局指标）
-  stmtInsertEventLog.run('', 'session_create', '', now)
   return { session: token, expiresAt: now + SESSION_TTL_MS }
 }
 
@@ -481,6 +528,7 @@ function processBatch(batch, sig) {
   }
   const sessionRow = getSession(batch.session)
   if (!sessionRow) return { status: 401 }
+  if (sessionRow.module !== '' && sessionRow.module !== batch.module) return { status: 400 }
 
   // seq 必须严格单调递增，重复或倒退均视为重放。
   if (!Number.isInteger(batch.seq) || batch.seq < 1) return { status: 400 }
@@ -499,6 +547,10 @@ function processBatch(batch, sig) {
   const tokenHash = sha256Hex(batch.session)
   let processed = 0
   const tx = db.transaction(() => {
+    if (sessionRow.module === '') {
+      stmtBindSessionModule.run(batch.module, tokenHash)
+      stmtInsertEventLog.run(batch.module, 'session_create', '', Date.now())
+    }
     for (const event of batch.events) {
       if (processEvent(batch.module, event, tokenHash)) processed++
     }
@@ -561,9 +613,11 @@ function getTimeseries(days = 30, mod) {
   for (const row of rows) {
     const entry = buckets.get(row.day_bucket)
     if (!entry) continue
-    const eventType = row.event_type.startsWith('activity_')
-      ? row.event_type.slice('activity_'.length)
-      : row.event_type
+    const eventType = row.event_type === 'activity_complete'
+      ? 'level_complete'
+      : row.event_type.startsWith('activity_')
+        ? row.event_type.slice('activity_'.length)
+        : row.event_type
     if (eventType in entry) entry[eventType] = row.count
   }
 
@@ -692,7 +746,20 @@ function getAdminSession(req) {
 
 const STARTED_AT = Date.now()
 
-function buildAdminOverview() {
+function getCompletionSummary(mod) {
+  if (mod === 'pwnhub') {
+    return {
+      total: stmtCountActivityCompletions.get(mod).n,
+      uniqueTokens: stmtCountActivityCompleters.get(mod).n,
+    }
+  }
+  return {
+    total: stmtCountLevelCompletions.get(mod).n,
+    uniqueTokens: stmtCountLevelCompleters.get(mod).n,
+  }
+}
+
+function buildAdminOverview(mod) {
   const now = Date.now()
   let dbSizeBytes = 0
   try {
@@ -702,6 +769,7 @@ function buildAdminOverview() {
   }
   return {
     generatedAt: now,
+    activeModule: mod,
     service: {
       startedAt: STARTED_AT,
       uptimeSec: Math.floor((now - STARTED_AT) / 1000),
@@ -709,11 +777,11 @@ function buildAdminOverview() {
       dbSizeBytes,
       modules: Object.keys(MODULES),
     },
-    modules: getStats(undefined).body,
+    modules: getStats(mod).body,
     sessions: {
-      active: stmtCountActiveSessions.get(now).n,
-      total: stmtCountSessions.get().n,
-      recent: stmtRecentSessions.all().map((row) => ({
+      active: stmtCountActiveSessions.get(now, mod).n,
+      total: stmtCountSessions.get(mod).n,
+      recent: stmtRecentSessions.all(mod).map((row) => ({
         tokenPrefix: row.token_hash.slice(0, 8),
         createdAt: row.created_at,
         expiresAt: row.expires_at,
@@ -722,12 +790,9 @@ function buildAdminOverview() {
         expired: row.expires_at < now,
       })),
     },
-    completions: {
-      total: stmtCountCompletions.get().n,
-      uniqueTokens: stmtCountUniqueCompleters.get().n,
-    },
-    timeseries: getTimeseries(30),
-    hourly: getHourlyTimeseries(24),
+    completions: getCompletionSummary(mod),
+    timeseries: getTimeseries(30, mod),
+    hourly: getHourlyTimeseries(24, mod),
   }
 }
 
@@ -937,7 +1002,7 @@ const server = http.createServer(async (req, res) => {
       })
     }
 
-    // GET /api/admin/overview — 管理页详细数据（需认证）
+    // GET /api/admin/overview?module=seclab — 管理页详细数据（需认证）
     if (path === '/api/admin/overview' && req.method === 'GET') {
       if (!rateLimiters.adminApi.allow(clientIp(req))) {
         return sendJson(res, 429, { error: 'rate limited' }, API_HEADERS)
@@ -945,7 +1010,11 @@ const server = http.createServer(async (req, res) => {
       if (!getAdminSession(req)) {
         return sendJson(res, 401, { error: 'unauthorized' }, API_HEADERS)
       }
-      return sendJson(res, 200, buildAdminOverview(), API_HEADERS)
+      const mod = url.searchParams.get('module') || 'seclab'
+      if (!(mod in MODULES)) {
+        return sendJson(res, 400, { error: 'invalid module' }, API_HEADERS)
+      }
+      return sendJson(res, 200, buildAdminOverview(mod), API_HEADERS)
     }
 
     // 未知路由

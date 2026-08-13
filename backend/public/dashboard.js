@@ -37,6 +37,50 @@ function sumMetric(metric) {
   return Object.values(metric).reduce((sum, v) => sum + (typeof v === 'number' ? v : 0), 0)
 }
 
+const VM_BOOT_DURATION_ORDER = ['<3s', '3-5s', '5-10s', '10-20s', '>=20s']
+
+function percentileBucket(metric, percentile) {
+  const total = sumMetric(metric)
+  if (total === 0) return '—'
+  const target = Math.ceil(total * percentile)
+  let cumulative = 0
+  for (const bucket of VM_BOOT_DURATION_ORDER) {
+    cumulative += typeof metric?.[bucket] === 'number' ? metric[bucket] : 0
+    if (cumulative >= target) return bucket
+  }
+  return '—'
+}
+
+function vmBootCards(moduleStats) {
+  const outcomes = moduleStats.vm_boot_outcome || {}
+  const cache = moduleStats.vm_boot_cache || {}
+  const total = sumMetric(outcomes)
+  const ready = typeof outcomes.ready === 'number' ? outcomes.ready : 0
+  const failed = Math.max(0, total - ready)
+  const successRate = total > 0 ? `${((ready / total) * 100).toFixed(1)}%` : '—'
+  const p75 = percentileBucket(moduleStats.vm_boot_duration, 0.75)
+  const cold = typeof cache.cold === 'number' ? cache.cold : 0
+  const warm = typeof cache.warm === 'number' ? cache.warm : 0
+  const unknown = typeof cache.unknown === 'number' ? cache.unknown : 0
+  return [
+    {
+      label: 'VM 启动成功率',
+      value: successRate,
+      sub: `${fmtNum(ready)} 成功 / ${fmtNum(failed)} 失败${total > 0 && failed / total > 0.02 ? ' · 超过 2% 阈值' : ''}`,
+    },
+    {
+      label: 'VM 启动 p75',
+      value: p75,
+      sub: p75 === '10-20s' || p75 === '>=20s' ? '已进入拆分评估区间' : '按匿名耗时区间估算',
+    },
+    {
+      label: 'VM 缓存样本',
+      value: `${fmtNum(cold)} / ${fmtNum(warm)}`,
+      sub: `冷 / 热；未知 ${fmtNum(unknown)}`,
+    },
+  ]
+}
+
 /** metric 对象按 count 降序排序为 [dimension, count][] */
 function sortedEntries(metric) {
   if (!metric || typeof metric !== 'object') return []
@@ -153,6 +197,7 @@ function renderCards(moduleStats, moduleId) {
     { label: '提示使用次数', value: hintTotal, sub: `全部${activityLabel}合计` },
     { label: `${activityLabel}重置次数`, value: resetTotal, sub: `全部${activityLabel}合计` },
   ]
+  if (moduleId === 'pwnhub') cards.push(...vmBootCards(moduleStats))
 
   els.cards.textContent = ''
   for (const { label, value, sub } of cards) {

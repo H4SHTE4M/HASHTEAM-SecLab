@@ -10,10 +10,13 @@ import LoadingScreen from '../components/LoadingScreen.vue'
 import CompletionPage from '../components/CompletionPage.vue'
 import AboutModal from '../components/AboutModal.vue'
 import OnboardingDialog from '../components/OnboardingDialog.vue'
+import BugReportDialog from '../components/BugReportDialog.vue'
 import { useVirtualMachine } from '../composables/useVirtualMachine'
 import { useLabProgress } from '../composables/useLabProgress'
 import { useLabPreferences } from '../composables/useLabPreferences'
 import { createSafeStorage } from '../services/progress-store'
+import { useAnomalyCenter } from '../services/anomaly-center'
+import { downloadBugReport } from '../services/bug-report'
 import {
   getMissionPanelWidthBounds,
   measureHorizontalSafeArea,
@@ -62,6 +65,8 @@ const vm = useVirtualMachine()
 vm.setModule('pwnhub')
 const progress = useLabProgress()
 const preferences = useLabPreferences()
+const anomalyCenter = useAnomalyCenter()
+const bugReportDownloaded = ref(false)
 const availableLabIds = COURSE.chapters
   .filter((chapter) => chapter.status === 'available')
   .flatMap((chapter) => chapter.labIds)
@@ -156,15 +161,21 @@ const currentChapterCompletedCount = computed(
 )
 const isLastLevel = computed(() => currentLabIndex.value >= availableLabs.length - 1)
 const currentMode = computed(() => preferences.state.mode ?? 'guided')
+const activeBlockingAnomaly = computed(() => anomalyCenter.pendingFor('pwnhub'))
 const showOnboardingDialog = computed(
   () =>
     !showCompletion.value &&
     vm.stage.value === 'ready' &&
     !showBootOverlay.value &&
-    showOnboarding.value,
+    showOnboarding.value &&
+    activeBlockingAnomaly.value === null,
 )
 const backgroundInert = computed(
-  () => showBootOverlay.value || showAbout.value || showOnboardingDialog.value,
+  () =>
+    showBootOverlay.value ||
+    showAbout.value ||
+    showOnboardingDialog.value ||
+    activeBlockingAnomaly.value !== null,
 )
 const shortLandscapeSplit = computed(() =>
   shouldSplitShortLandscape(
@@ -267,6 +278,10 @@ watch(
   },
   { immediate: true },
 )
+
+watch(activeBlockingAnomaly, () => {
+  bugReportDownloaded.value = false
+})
 
 onMounted(() => {
   if (showCompletion.value) return
@@ -506,7 +521,7 @@ function restoreFocusAfterOverlayClose(): void {
   const returnFocus = overlayReturnFocus
   overlayReturnFocus = null
   void nextTick(() => {
-    if (showAbout.value || showOnboardingDialog.value) return
+    if (showAbout.value || showOnboardingDialog.value || activeBlockingAnomaly.value !== null) return
     if (returnFocus?.isConnected) returnFocus.focus()
     else terminalRef.value?.focus()
   })
@@ -527,6 +542,41 @@ function openHelp(trigger: HTMLElement): void {
   overlayReturnFocus = trigger
   showAbout.value = false
   showOnboarding.value = true
+}
+
+function handleBugReportDismiss(): void {
+  if (activeBlockingAnomaly.value !== null) anomalyCenter.dismiss(activeBlockingAnomaly.value)
+}
+
+function handleBugReportPrimaryAction(): void {
+  const anomaly = activeBlockingAnomaly.value
+  if (anomaly === null) return
+  if (anomaly.kind === 'lab-guide-ahead-of-evidence') {
+    anomalyCenter.resolve(anomaly)
+    handleResetLevel()
+    return
+  }
+  anomalyCenter.resolve(anomaly)
+  void vm.restart()
+}
+
+function handleBugReportSecondaryAction(): void {
+  const anomaly = activeBlockingAnomaly.value
+  if (anomaly === null || anomaly.kind !== 'lab-guide-ahead-of-evidence') return
+  handleChangeMode('challenge')
+}
+
+async function handleBugReportDownload(): Promise<void> {
+  const anomaly = activeBlockingAnomaly.value
+  if (anomaly === null) return
+  const ok = await downloadBugReport(anomaly, {
+    module: 'pwnhub',
+    currentLabId: progress.state.currentLabId,
+    currentChapterId: currentChapter.value.chapterId,
+    mode: preferences.state.mode,
+    completedLabIds: progress.state.completedLabIds,
+  })
+  if (ok) bugReportDownloaded.value = true
 }
 </script>
 
@@ -749,6 +799,17 @@ function openHelp(trigger: HTMLElement): void {
         @select-mode="handleChangeMode"
         @run-demo="handleRunDemo"
         @complete="handleCompleteOnboarding"
+      />
+    </Transition>
+    <Transition name="overlay-fade">
+      <BugReportDialog
+        v-if="activeBlockingAnomaly !== null"
+        :anomaly="activeBlockingAnomaly"
+        :downloaded="bugReportDownloaded"
+        @primary-action="handleBugReportPrimaryAction"
+        @secondary-action="handleBugReportSecondaryAction"
+        @download="handleBugReportDownload"
+        @dismiss="handleBugReportDismiss"
       />
     </Transition>
   </div>

@@ -121,7 +121,7 @@ const currentCompleted = computed(() => progress.state.completedLevels.includes(
 const currentHintsUsed = computed(() => progress.hintsUsedFor(progress.state.currentLevel))
 const isLastLevel = computed(() => progress.state.currentLevel >= TOTAL_LEVELS)
 const currentMode = computed(() => preferences.state.mode ?? 'guided')
-const activeBlockingAnomaly = computed(() => anomalyCenter.pendingPopup.value)
+const activeBlockingAnomaly = computed(() => anomalyCenter.pendingFor('seclab'))
 const showOnboardingDialog = computed(
   () =>
     !showCompletion.value &&
@@ -517,6 +517,7 @@ async function handleBugReportDownload(): Promise<void> {
   const anomaly = activeBlockingAnomaly.value
   if (anomaly === null) return
   const ok = await downloadBugReport(anomaly, {
+    module: 'seclab',
     currentLevel: progress.state.currentLevel,
     mode: preferences.state.mode,
     completedLevels: progress.state.completedLevels,

@@ -21,7 +21,7 @@ import { useLabProgress } from './useLabProgress'
 import { useLabPreferences } from './useLabPreferences'
 import { useAnomalyCenter } from '../services/anomaly-center'
 import { useTelemetry } from '../telemetry'
-import type { ModuleId, VmBootDuration, VmBootOutcome } from '../telemetry'
+import type { ModuleId, VmBootDuration, VmBootOutcome, VmCacheState } from '../telemetry'
 import { getLevel, TOTAL_LEVELS } from '../data/levels'
 import { COURSE, getCourseLab } from '../modules/pwnhub/course'
 import { isLabUnlocked, legacyLabId } from '../services/course-progress'
@@ -35,6 +35,39 @@ function vmBootDuration(elapsedMs: number): VmBootDuration {
   return '>=20s'
 }
 
+const VM_BOOT_RESOURCE_SUFFIXES = ['/vm/bzImage', '/vm/rootfs.cpio.gz'] as const
+
+/**
+ * 根据本次页面最近的两个 VM 资源 timing 判断缓存状态。
+ * transferSize=0 且 decodedBodySize>0 表示资源来自浏览器缓存；资源 timing
+ * 缺失或浏览器隐藏体积时返回 unknown，不猜测。
+ */
+export function detectVmCacheState(
+  entries: readonly PerformanceEntry[] = globalThis.performance?.getEntriesByType('resource') ?? [],
+): VmCacheState {
+  const latestByAsset = new Map<string, PerformanceResourceTiming>()
+  for (const entry of entries) {
+    const resource = entry as PerformanceResourceTiming
+    const resourceName = resource.name.split(/[?#]/, 1)[0] ?? resource.name
+    const suffix = VM_BOOT_RESOURCE_SUFFIXES.find((candidate) => resourceName.endsWith(candidate))
+    if (suffix !== undefined) latestByAsset.set(suffix, resource)
+  }
+  if (latestByAsset.size !== VM_BOOT_RESOURCE_SUFFIXES.length) return 'unknown'
+  const resources = [...latestByAsset.values()]
+  if (
+    resources.some(
+      (resource) =>
+        typeof resource.transferSize !== 'number' ||
+        typeof resource.decodedBodySize !== 'number' ||
+        resource.decodedBodySize <= 0,
+    )
+  ) {
+    return 'unknown'
+  }
+  if (resources.some((resource) => resource.transferSize > 0)) return 'cold'
+  return resources.every((resource) => resource.transferSize === 0) ? 'warm' : 'unknown'
+}
+
 const DEFAULT_READY_TIMEOUT_MS = 60_000
 
 export interface VirtualMachineOptions {
@@ -46,6 +79,8 @@ export interface VirtualMachineOptions {
   getMode?: () => LabMode
   /** 当前工作台所属 module；单例可在路由切换后通过 setModule 更新。 */
   module?: ModuleId
+  /** 测试可注入；默认从 PerformanceResourceTiming 判断 VM 资产冷热缓存。 */
+  getVmCacheState?: () => VmCacheState
 }
 
 function isKnownLevel(level: number): boolean {
@@ -78,6 +113,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     options.createController ??
     ((onStageChange: (nextStage: BootStage) => void) => new V86Controller(undefined, onStageChange))
   const readyTimeoutMs = options.readyTimeoutMs ?? DEFAULT_READY_TIMEOUT_MS
+  const getVmCacheState = options.getVmCacheState ?? detectVmCacheState
 
   let controller: VirtualMachineController | null = null
   let protocol: SerialProtocol | null = null
@@ -165,7 +201,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
         : stage.value === 'loading-assets'
           ? 'asset_error'
           : 'linux_error'
-      getTelemetry().trackVmBoot(outcome, vmBootDuration(Date.now() - bootStartedAt), 'unknown')
+      getTelemetry().trackVmBoot(outcome, vmBootDuration(Date.now() - bootStartedAt), getVmCacheState())
     }
     await releaseCurrentVm()
     stage.value = 'error'
@@ -196,13 +232,18 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
         if (subtleUnavailable) {
           anomalyCenter.report({
             kind: 'crypto-unavailable',
+            module: activeModule,
             isSecureContext: window.isSecureContext,
           })
         }
         if (message.key === undefined) {
           log('protocol', 'ready 未携带会话密钥，本次启动的评分结果将被拒绝', 'warn')
           if (!subtleUnavailable) {
-            anomalyCenter.report({ kind: 'missing-session-key', keyPresent: false })
+            anomalyCenter.report({
+              kind: 'missing-session-key',
+              module: activeModule,
+              keyPresent: false,
+            })
           }
         } else {
           const importedKey = await importSessionKey(message.key)
@@ -212,7 +253,11 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
             log('protocol', '会话密钥导入失败，本次启动的评分结果将被拒绝', 'warn')
             // subtle 缺失导致的导入失败已按 crypto-unavailable 上报，不重复
             if (!subtleUnavailable) {
-              anomalyCenter.report({ kind: 'missing-session-key', keyPresent: true })
+              anomalyCenter.report({
+                kind: 'missing-session-key',
+                module: activeModule,
+                keyPresent: true,
+              })
             }
           }
         }
@@ -222,7 +267,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
           getTelemetry().trackVmBoot(
             'ready',
             vmBootDuration(Date.now() - bootStartedAt),
-            'unknown',
+            getVmCacheState(),
           )
         }
         stage.value = 'ready'

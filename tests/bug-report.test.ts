@@ -17,6 +17,7 @@ import type { BlockingAnomaly } from '../src/services/progress-anomaly'
 
 const GUIDE_AHEAD: BlockingAnomaly = {
   kind: 'guide-ahead-of-evidence',
+  module: 'seclab',
   level: 2,
   guideStep: 1,
   missingPrefixSteps: [0],
@@ -28,7 +29,7 @@ function makeInput(overrides: Partial<BugReportInput> = {}): BugReportInput {
     trigger: GUIDE_AHEAD,
     build: { sourceId: 'deadbeef', displayId: 'deadbeefcafe', dirty: false },
     page: { url: 'https://lab.example/', userAgent: 'UA-TEST', language: 'zh-CN', isSecureContext: true },
-    labState: { currentLevel: 2, mode: 'guided', completedLevels: [1] },
+    labState: { module: 'seclab', currentLevel: 2, mode: 'guided', completedLevels: [1] },
     progressRaw: '{"schemaVersion":4}',
     uiPreferencesRaw: null,
     storageDegraded: false,
@@ -42,11 +43,16 @@ describe('buildBugReport（纯组装）', () => {
   it('按契约组装各字段，触发异常原样透传', () => {
     const report = buildBugReport(makeInput())
     expect(report.kind).toBe('hashteam-bug-report')
-    expect(report.reportVersion).toBe(1)
+    expect(report.reportVersion).toBe(2)
     expect(report.trigger).toEqual(GUIDE_AHEAD)
     expect(report.build.displayId).toBe('deadbeefcafe')
     expect(report.page.isSecureContext).toBe(true)
-    expect(report.labState).toEqual({ currentLevel: 2, mode: 'guided', completedLevels: [1] })
+    expect(report.labState).toEqual({
+      module: 'seclab',
+      currentLevel: 2,
+      mode: 'guided',
+      completedLevels: [1],
+    })
     expect(report.progressRaw).toBe('{"schemaVersion":4}')
     expect(report.uiPreferencesRaw).toBeNull()
     expect(report.truncated).toBe(false)
@@ -94,6 +100,7 @@ describe('collectBugReportInput（现场采集）', () => {
     window.localStorage.setItem(UI_PREFERENCES_STORAGE_KEY, '{"mode":"guided"}')
     bootLog('test-source', '测试日志行')
     const input = collectBugReportInput(GUIDE_AHEAD, {
+      module: 'seclab',
       currentLevel: 2,
       mode: 'guided',
       completedLevels: [1, 2],
@@ -111,16 +118,18 @@ describe('collectBugReportInput（现场采集）', () => {
   it('labState 是拷贝而非引用，调用方后续修改不影响报告', () => {
     const levels = [1, 2]
     const input = collectBugReportInput(GUIDE_AHEAD, {
+      module: 'seclab',
       currentLevel: 2,
       mode: 'guided',
       completedLevels: levels,
     })
     levels.push(3)
-    expect(input.labState.completedLevels).toEqual([1, 2])
+    expect(input.labState).toMatchObject({ module: 'seclab', completedLevels: [1, 2] })
   })
 
   it('存储无数据时原始字段为 null', () => {
     const input = collectBugReportInput(GUIDE_AHEAD, {
+      module: 'seclab',
       currentLevel: 1,
       mode: null,
       completedLevels: [],
@@ -129,6 +138,33 @@ describe('collectBugReportInput（现场采集）', () => {
     expect(input.uiPreferencesRaw).toBeNull()
   })
 })
+
+  it('PwnHub 报告保留稳定实验与章节状态的独立拷贝', () => {
+    const completedLabIds = ['memory-addresses-01']
+    const trigger = {
+      kind: 'lab-guide-ahead-of-evidence',
+      module: 'pwnhub',
+      labId: 'memory-layout-01',
+      guideStep: 2,
+      missingPrefixSteps: [2],
+      truncated: false,
+    } satisfies BlockingAnomaly
+    const input = collectBugReportInput(trigger, {
+      module: 'pwnhub',
+      currentLabId: 'memory-layout-01',
+      currentChapterId: 'memory-model',
+      mode: 'guided',
+      completedLabIds,
+    })
+    completedLabIds.push('memory-layout-01')
+    expect(input.labState).toEqual({
+      module: 'pwnhub',
+      currentLabId: 'memory-layout-01',
+      currentChapterId: 'memory-model',
+      mode: 'guided',
+      completedLabIds: ['memory-addresses-01'],
+    })
+  })
 
 describe('downloadBugReport（下载通道）', () => {
   beforeEach(() => {
@@ -148,6 +184,7 @@ describe('downloadBugReport（下载通道）', () => {
   it('成功时触发一次下载，文件名带时间戳，返回 true', async () => {
     const { clickSpy } = stubDownloadChannel()
     const ok = await downloadBugReport(GUIDE_AHEAD, {
+      module: 'seclab',
       currentLevel: 2,
       mode: 'guided',
       completedLevels: [1],
@@ -161,7 +198,12 @@ describe('downloadBugReport（下载通道）', () => {
   it('下载内容为可解析的报告 JSON', async () => {
     stubDownloadChannel()
     window.localStorage.setItem(PROGRESS_STORAGE_KEY, '{"schemaVersion":4}')
-    await downloadBugReport(GUIDE_AHEAD, { currentLevel: 2, mode: 'guided', completedLevels: [1] })
+    await downloadBugReport(GUIDE_AHEAD, {
+      module: 'seclab',
+      currentLevel: 2,
+      mode: 'guided',
+      completedLevels: [1],
+    })
     const blob = vi.mocked(URL.createObjectURL).mock.calls[0][0] as Blob
     // jsdom 的 Blob 没有 .text()，用 FileReader 读回文本
     const text = await new Promise<string>((resolve, reject) => {
@@ -172,7 +214,7 @@ describe('downloadBugReport（下载通道）', () => {
     })
     const parsed = JSON.parse(text) as Record<string, unknown>
     expect(parsed.kind).toBe('hashteam-bug-report')
-    expect(parsed.reportVersion).toBe(1)
+    expect(parsed.reportVersion).toBe(2)
     expect(parsed.trigger).toEqual(GUIDE_AHEAD)
     expect(parsed.progressRaw).toBe('{"schemaVersion":4}')
   })
@@ -183,6 +225,7 @@ describe('downloadBugReport（下载通道）', () => {
       throw new Error('blob disabled')
     })
     const ok = await downloadBugReport(GUIDE_AHEAD, {
+      module: 'seclab',
       currentLevel: 2,
       mode: 'guided',
       completedLevels: [1],

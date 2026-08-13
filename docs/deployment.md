@@ -99,10 +99,11 @@ Environment 必须在 GitHub 仓库设置中配置 deployment branch rule，只�
 
 ## 发布过程
 
-1. `verify` 安装 lockfile 中的依赖，运行 `scripts/verify-build.sh`，包括完整测试、
-   浏览器生产依赖的 `pnpm audit --prod --audit-level low`、构建和
-   `verify-dist`。精确锁定的 EO CLI 是只在隔离部署 job 使用的
-   devDependency，不进入浏览器产物。
+1. `verify` 安装 lockfile 中的依赖，运行 `scripts/verify-build.sh` 的 11 个门禁：
+   浏览器生产依赖审计、SUID/initramfs、前端 Vitest、独立 Node 环境的 telemetry
+   backend 测试、VM shell 检查、binary profile、部署锁与 backend 部署脚本语法、
+   真实 v86 集成、生产构建和 `verify-dist`。
+   精确锁定的 EO CLI 是只在隔离部署 job 使用的 devDependency，不进入浏览器产物。
 2. Vite 将根目录 `edgeone.json` 原样输出到 `dist/edgeone.json`，同时把完整 Git
    SHA 写入 `vm-assets.json.sourceId` 和两份法律声明。
 3. workflow 直接把 `dist/` 打成确定性 tar，计算 SHA-256，上传保留一天的
@@ -137,6 +138,11 @@ Environment 必须在 GitHub 仓库设置中配置 deployment branch rule，只�
    `vm-assets.json.sourceId` 等于 workflow Git SHA。
 9. EO 验收逐字节比对首页、VM 清单、两份法律声明和六个 VM 文件，并验证所有安全
    头、缓存策略、WASM MIME、Range 以及法律声明中的固定 Git commit URL。
+
+PwnHub 首次生产发布还有一个独立前置：按
+[`docs/telemetry.md`](telemetry.md#backend-部署腾讯云-vm) 先部署兼容 v1+v2 的
+telemetry backend，并完成 SQLite 备份和双协议冒烟，再合并触发静态站生产发布。
+backend 升级保持旧 SecLab v1 兼容；顺序反转会造成 PwnHub v2 事件静默丢失。
 
 ## EdgeOne 响应策略
 

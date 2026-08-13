@@ -10,9 +10,9 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  /** 按异常种类的修复动作：A → 重置本关（终端环境 + 引导进度）；E1/E2 → 重启实验环境 */
+  /** 进度异常 → 重置当前关/实验；密钥异常 → 重启实验环境。 */
   (e: 'primary-action'): void
-  /** 仅 A 类有的次要出口：切到挑战模式绕开步骤校验 */
+  /** 进度异常可切到挑战模式绕开步骤校验。 */
   (e: 'secondary-action'): void
   (e: 'download'): void
   /** 「先自己看看」：未修复主动关闭，本会话不再弹同 key */
@@ -50,6 +50,20 @@ const copy = computed<DialogCopy>(() => {
         detail: `缺失完成记录：${missing}${anomaly.truncated ? '（进度还越过了本关最后一步）' : ''}`,
         primaryLabel: '重置本关，满血复活',
         secondaryLabel: '切到挑战模式，继续闯关',
+      }
+    }
+    case 'lab-guide-ahead-of-evidence': {
+      const missing = anomaly.missingPrefixSteps.map((id) => `第 ${id + 1} 步`).join('、')
+      return {
+        title: 'Wow，你挖出了一个稀有 Bug',
+        intro:
+          `别慌，不是你的操作问题——浏览器存档显示实验 ${anomaly.labId} 正在第 ${anomaly.guideStep + 1} 步，` +
+          '但前面步骤的完成记录缺失，右侧教学步骤被卡死了。' +
+          '点「重置本实验」会让终端环境和教学步骤一起回到当前实验起点；' +
+          '急的话也可以切到挑战模式，只凭 check 通关。',
+        detail: `缺失完成记录：${missing}${anomaly.truncated ? '（进度还越过了实验最后一步）' : ''}`,
+        primaryLabel: '重置本实验，满血复活',
+        secondaryLabel: '切到挑战模式，继续实验',
       }
     }
     case 'missing-session-key':

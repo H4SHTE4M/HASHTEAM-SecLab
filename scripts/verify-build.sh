@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-echo "==> 1/10 检查源码文件权限"
+echo "==> 1/11 检查源码文件权限"
 permission_errors=0
 while IFS= read -r -d '' file; do
     [ -f "$file" ] || continue
@@ -46,13 +46,13 @@ while IFS= read -r -d '' file; do
 done < <(git ls-files --cached --others --exclude-standard -z)
 [ "$permission_errors" -eq 0 ]
 
-echo "==> 2/10 审计浏览器生产依赖漏洞"
+echo "==> 2/11 审计浏览器生产依赖漏洞"
 # EdgeOne CLI 是精确锁定、只在隔离部署 job 使用的 devDependency；其上游
 # 1.6.18 仍包含已弃用且无可升级修复的 request 依赖。这里对实际交付给浏览器的
 # dependencies/optionalDependencies 保持 low 门禁，CLI 图则由 frozen lockfile 固定。
 pnpm audit --prod --audit-level low
 
-echo "==> 3/10 检查虚拟机静态资源"
+echo "==> 3/11 检查虚拟机静态资源"
 missing=0
 for f in \
     public/v86/libv86.js \
@@ -70,25 +70,29 @@ for f in \
 done
 [ "$missing" -eq 0 ]
 
-echo "==> 4/10 SUID BusyBox 边界检查"
+echo "==> 4/11 SUID BusyBox 边界检查"
 pnpm test:suid
 
-echo "==> 5/10 前端单元测试（vitest）"
+echo "==> 5/11 前端单元测试（vitest）"
 pnpm test
 
-echo "==> 6/10 Linux 检查脚本测试"
+echo "==> 6/11 遥测后端测试（独立 Node 环境）"
+pnpm test:backend
+
+echo "==> 7/11 Linux 检查脚本测试"
 pnpm test:vm
 
-echo "==> 7/10 离线 i386 binary profile smoke test"
+echo "==> 8/11 离线 i386 binary profile smoke test"
 pnpm test:binary-profile
 
-echo "==> 8/10 部署锁租约测试"
+echo "==> 9/11 部署锁租约与后端部署脚本检查"
 bash scripts/test-deploy-lock.sh
+bash -n backend/deploy.sh
 
-echo "==> 9/10 端到端集成测试（Node 无头启动真实虚拟机）"
+echo "==> 10/11 端到端集成测试（Node 无头启动真实虚拟机）"
 node scripts/integration-test.mjs
 
-echo "==> 10/10 前端生产构建"
+echo "==> 11/11 前端生产构建"
 pnpm build
 pnpm verify:dist
 

@@ -32,6 +32,8 @@ vi.mock('../src/components/PwnHubLabTerminal.vue', () => ({
 
 import { useLabPreferences } from '../src/composables/useLabPreferences'
 import { useLabProgress } from '../src/composables/useLabProgress'
+import { useAnomalyCenter } from '../src/services/anomaly-center'
+import type { BlockingAnomaly } from '../src/services/progress-anomaly'
 import PwnHubWorkspace from '../src/views/PwnHubWorkspace.vue'
 
 beforeEach(() => {
@@ -42,6 +44,18 @@ beforeEach(() => {
   preferences.state.onboardingComplete = true
   vmMock.stage.value = 'idle'
   vmMock.errorMessage.value = null
+  const anomalyCenter = useAnomalyCenter()
+  ;[...anomalyCenter.detected.value].forEach((anomaly) => anomalyCenter.resolve(anomaly))
+  anomalyCenter.resolve({
+    kind: 'missing-session-key',
+    module: 'pwnhub',
+    keyPresent: false,
+  })
+  anomalyCenter.resolve({
+    kind: 'missing-session-key',
+    module: 'seclab',
+    keyPresent: false,
+  })
   vi.clearAllMocks()
 })
 
@@ -70,5 +84,67 @@ describe('PwnHub workspace integration', () => {
 
     wrapper.unmount()
     expect(vmMock.dispose).toHaveBeenCalledOnce()
+  })
+
+  it('只显示 PwnHub 异常，并可从密钥故障直接重启环境', async () => {
+    const testRouter = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', component: { template: '<div />' } },
+        { path: '/labs/pwnhub', component: { template: '<div />' } },
+      ],
+    })
+    await testRouter.push('/labs/pwnhub')
+    await testRouter.isReady()
+    vmMock.stage.value = 'ready'
+    const wrapper = mount(PwnHubWorkspace, {
+      attachTo: document.body,
+      global: { plugins: [testRouter] },
+    })
+    const center = useAnomalyCenter()
+    center.report({
+      kind: 'missing-session-key',
+      module: 'seclab',
+      keyPresent: false,
+    })
+    await nextTick()
+    expect(wrapper.find('.report-card').exists()).toBe(false)
+
+    center.report({
+      kind: 'missing-session-key',
+      module: 'pwnhub',
+      keyPresent: false,
+    })
+    await nextTick()
+    expect(wrapper.get('.report-card').text()).toContain('裁判忘带哨子')
+    await wrapper.get('.btn-primary').trigger('click')
+    expect(vmMock.restart).toHaveBeenCalledOnce()
+    expect(center.pendingFor('pwnhub')).toBeNull()
+    wrapper.unmount()
+  })
+
+  it('PwnHub 进度异常可重置当前稳定实验', async () => {
+    const testRouter = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/labs/pwnhub', component: { template: '<div />' } }],
+    })
+    await testRouter.push('/labs/pwnhub')
+    await testRouter.isReady()
+    vmMock.stage.value = 'ready'
+    const wrapper = mount(PwnHubWorkspace, { global: { plugins: [testRouter] } })
+    const anomaly = {
+      kind: 'lab-guide-ahead-of-evidence',
+      module: 'pwnhub',
+      labId: 'memory-addresses-01',
+      guideStep: 2,
+      missingPrefixSteps: [2],
+      truncated: false,
+    } satisfies BlockingAnomaly
+    useAnomalyCenter().report(anomaly)
+    await nextTick()
+    await wrapper.get('.btn-primary').trigger('click')
+    expect(vmMock.resetCurrentLevel).toHaveBeenCalledOnce()
+    expect(useAnomalyCenter().pendingFor('pwnhub')).toBeNull()
+    wrapper.unmount()
   })
 })

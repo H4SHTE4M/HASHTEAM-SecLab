@@ -366,6 +366,7 @@ describe('Telemetry Backend', () => {
     expect(pwnhub['check_fail']).toEqual({ [activityId]: 1 })
     expect(pwnhub['vm_boot_outcome']).toEqual({ ready: 1 })
     expect(pwnhub['vm_boot_duration']).toEqual({ '5-10s': 1 })
+    expect(pwnhub['vm_boot_cache']).toEqual({ cold: 1 })
   })
 
   it('严格校验 module 协议版本、命令 allowlist 与 activityId', async () => {
@@ -386,6 +387,17 @@ describe('Telemetry Backend', () => {
     expect((await sendEvents(token, 5, [
       { type: 'hint', level: 1 },
     ], 'seclab', 2)).status).toBe(400)
+  })
+
+  it('session 首批事件绑定 module，后续不能跨模块复用 token', async () => {
+    const token = randomToken()
+    await createSession(token)
+    expect(
+      (await sendEvents(token, 1, [{ type: 'command', command: 'readelf' }], 'pwnhub')).status,
+    ).toBe(200)
+    expect(
+      (await sendEvents(token, 2, [{ type: 'command', command: 'ls' }], 'seclab')).status,
+    ).toBe(400)
   })
 
   describe('Dashboard & Admin', () => {
@@ -412,10 +424,12 @@ describe('Telemetry Backend', () => {
       expect(result.text).toContain('遥测看板')
     })
 
-    it('GET /dashboard/admin.html 返回管理页', async () => {
+    it('GET /dashboard/admin.html 返回带模块选择的管理页', async () => {
       const result = await httpFetch('/dashboard/admin.html')
       expect(result.status).toBe(200)
       expect(result.text).toContain('管理登录')
+      expect(result.text).toContain('data-module="seclab"')
+      expect(result.text).toContain('data-module="pwnhub"')
     })
 
     it('dashboard 白名单之外的路径一律 404', async () => {
@@ -499,6 +513,52 @@ describe('Telemetry Backend', () => {
       const today = ts[ts.length - 1]
       expect(today['session_create']).toBe(1)
       expect(today['command']).toBe(1)
+    })
+
+    it('PwnHub overview 隔离会话、实验完成和 activity 时间序列', async () => {
+      const token = randomToken()
+      await createSession(token)
+      await sendEvents(token, 1, [
+        {
+          type: 'activity_complete',
+          activityId: 'memory-addresses-01',
+          path: 'guided',
+        },
+        {
+          type: 'vm_boot',
+          outcome: 'ready',
+          duration: '5-10s',
+          cache: 'warm',
+        },
+      ], 'pwnhub')
+
+      const login = await adminLogin(ADMIN_PASSWORD)
+      const cookiePair = (login.headers.get('set-cookie') || '').split(';')[0]
+      const overview = await httpFetch('/api/admin/overview?module=pwnhub', {
+        headers: { Cookie: cookiePair },
+      })
+      const body = requireBody(overview)
+      expect(body['activeModule']).toBe('pwnhub')
+      expect(body['completions']).toEqual({ total: 1, uniqueTokens: 1 })
+      expect(body['sessions']).toMatchObject({ total: 1, active: 1 })
+      const modules = body['modules'] as Record<string, Record<string, Record<string, number>>>
+      expect(modules['pwnhub']['complete']['memory-addresses-01']).toBe(1)
+      expect(modules['seclab']).toBeUndefined()
+      const timeseries = body['timeseries'] as Array<Record<string, number>>
+      expect(timeseries.at(-1)).toMatchObject({
+        session_create: 1,
+        level_complete: 1,
+      })
+    })
+
+    it('管理 overview 拒绝非法 module', async () => {
+      const login = await adminLogin(ADMIN_PASSWORD)
+      const cookiePair = (login.headers.get('set-cookie') || '').split(';')[0]
+      expect(
+        (await httpFetch('/api/admin/overview?module=evil-lab', {
+          headers: { Cookie: cookiePair },
+        })).status,
+      ).toBe(400)
     })
 
     it('GET /api/public/stats?module= 非法 module 返回 400', async () => {
