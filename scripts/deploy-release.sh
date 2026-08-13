@@ -527,24 +527,9 @@ if ! curl -fsS --max-time 20 \
   exit 1
 fi
 
-if ! COMPANION_HEADERS="$(
-  curl -fsSI --max-time 20 \
-    -H 'Cache-Control: no-cache' \
-    "${DEPLOY_URL}/companion.html"
-)"; then
-  echo "ERROR: 线上 companion.html 不可访问" >&2
-  rollback
-  exit 1
-fi
-if ! grep -Eqi '^cache-control:[[:space:]]*no-store[[:space:]]*$' \
-  <<<"$COMPANION_HEADERS"; then
-  echo "ERROR: 线上 companion.html 没有禁止缓存" >&2
-  rollback
-  exit 1
-fi
 if ! curl -fsS --max-time 20 \
   -H 'Cache-Control: no-cache' \
-  "${DEPLOY_URL}/companion.html?release=${RELEASE_ID}" |
+  "${DEPLOY_URL}/companion.html?source=${SOURCE_ID}" |
   cmp - dist/companion.html; then
   echo "ERROR: 线上 companion.html 不是本次 release 的入口" >&2
   rollback

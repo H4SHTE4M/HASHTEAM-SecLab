@@ -49,6 +49,17 @@ export interface CompanionSync {
   dispose(): void
 }
 
+export function createCompanionUrl(
+  currentLocation: string,
+  labId: string,
+  sourceId: string = __SOURCE_ID__,
+): URL {
+  const url = new URL('companion.html', currentLocation)
+  url.searchParams.set('lab', labId)
+  url.searchParams.set('source', sourceId)
+  return url
+}
+
 function fail(source: string, message: string): never {
   throw new Error(`外部工具伴侣配置无效（${source}）：${message}`)
 }

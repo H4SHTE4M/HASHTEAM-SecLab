@@ -150,7 +150,7 @@ fi
 echo "==> 逐字节核对首页、伴侣页、清单、法律声明、VM 文件与可下载样本"
 fetch_and_compare "/?release=${SOURCE_ID}" dist/index.html
 fetch_and_compare "/index.html?release=${SOURCE_ID}" dist/index.html
-fetch_and_compare "/companion.html?release=${SOURCE_ID}" dist/companion.html
+fetch_and_compare "/companion.html?source=${SOURCE_ID}" dist/companion.html
 fetch_and_compare "/vm-assets.json?release=${SOURCE_ID}" dist/vm-assets.json
 for legal_file in SOURCE_CODE.md THIRD_PARTY_NOTICES.md; do
   fetch_and_compare \
