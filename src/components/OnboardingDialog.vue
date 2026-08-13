@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import AppIcon from './AppIcon.vue'
 import type { LabMode } from '../types/lab'
 
 const props = defineProps<{
@@ -39,13 +40,13 @@ const FOCUSABLE_SELECTOR =
 function selectMode(mode: LabMode): void {
   emit('select-mode', mode)
   tutorialStep.value = 0
-  void nextTick(() => primaryRef.value?.focus())
+  void nextTick(() => primaryRef.value?.focus({ preventScroll: true }))
 }
 
 function nextStep(): void {
   if (tutorialStep.value === 2 && !demoRun.value) return
   tutorialStep.value = Math.min(tutorialStep.value + 1, 4)
-  void nextTick(() => primaryRef.value?.focus())
+  void nextTick(() => primaryRef.value?.focus({ preventScroll: true }))
 }
 
 function runDemo(): void {
@@ -87,7 +88,7 @@ onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
   updateHighlight()
   window.addEventListener('resize', updateHighlight)
-  void nextTick(() => primaryRef.value?.focus())
+  void nextTick(() => primaryRef.value?.focus({ preventScroll: true }))
 })
 
 onBeforeUnmount(() => {
@@ -161,6 +162,15 @@ onBeforeUnmount(() => {
           </div>
           <span class="step-count">{{ tutorialStep + 1 }} / 5</span>
         </header>
+        <div class="replay-notice" role="note">
+          <AppIcon class="replay-notice-icon" name="help-circle" :size="21" />
+          <span class="replay-notice-copy">
+            <strong>无需记忆，可以直接开始</strong>
+            <span>
+              这 5 步只是操作示范，不要求一次记住。跳过后，点击右上角的问号「操作帮助」即可随时重新打开。
+            </span>
+          </span>
+        </div>
 
         <div v-if="tutorialStep === 0" class="tutorial-body">
           <div class="prompt-demo">
@@ -250,7 +260,13 @@ onBeforeUnmount(() => {
         </div>
 
         <footer class="tutorial-footer">
-          <button type="button" class="btn-skip" @click="complete">跳过剩余教学</button>
+          <div class="skip-support">
+            <button type="button" class="btn-skip" @click="complete">跳过并开始</button>
+            <span>
+              <AppIcon name="help-circle" :size="14" />
+              右上角问号可随时重看
+            </span>
+          </div>
           <button
             v-if="tutorialStep < 4"
             ref="primaryRef"
@@ -434,6 +450,40 @@ h2 {
   background: var(--accent-cyan-soft);
   border-radius: 999px;
 }
+.replay-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 14px 3px 0;
+  padding: 12px 14px;
+  color: var(--text-secondary);
+  background: var(--accent-cyan-soft);
+  border: 1px solid var(--accent-cyan-border);
+  border-left: 4px solid var(--accent-cyan);
+  border-radius: 8px;
+  box-shadow: 0 0 0 3px var(--accent-cyan-soft);
+}
+
+.replay-notice-icon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--accent-cyan);
+}
+
+.replay-notice-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.replay-notice-copy > strong {
+  color: var(--accent-cyan);
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.35;
+}
 
 .tutorial-body {
   min-height: 300px;
@@ -603,10 +653,27 @@ kbd {
 
 .tutorial-footer {
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding-top: 15px;
   border-top: var(--hairline) solid var(--border-subtle);
+}
+
+.skip-support {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.skip-support span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .btn-skip,
@@ -618,9 +685,16 @@ kbd {
 }
 
 .btn-skip {
-  color: var(--text-muted);
-  background: transparent;
-  border: 1px solid transparent;
+  color: var(--accent-cyan);
+  font-weight: 750;
+  background: var(--accent-cyan-soft);
+  border: 1px solid var(--accent-cyan-border);
+  white-space: nowrap;
+}
+
+.btn-skip:hover {
+  background: var(--surface-3);
+  border-color: var(--accent-cyan);
 }
 
 .btn-primary {
@@ -657,6 +731,19 @@ kbd {
 
   .key-grid {
     grid-template-columns: 1fr;
+  }
+  .tutorial-footer,
+  .skip-support {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .skip-support {
+    gap: 2px;
+  }
+
+  .skip-support span {
+    text-align: center;
   }
 
   .demo-command,
