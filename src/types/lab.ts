@@ -126,6 +126,8 @@ export interface VerificationDef {
   instruction: string
   placeholders: VerificationPlaceholder[]
   feedback: VerificationFeedback
+  /** debugger-state 实验中可由图形控制区直接使用的锁定符号。 */
+  debuggerCheckpoint?: string
 }
 
 export interface CompletionSummary {
@@ -188,6 +190,7 @@ export type VerificationType =
   | 'answer'
   | 'payload-replay'
   | 'external-observation'
+  | 'debugger-state'
 
 export interface LabArtifact {
   path: string
@@ -197,12 +200,8 @@ export interface LabArtifact {
   downloadable: boolean
 }
 
-export interface LabVerification {
+export interface LabVerification extends VerificationDef {
   type: VerificationType
-  usage: string
-  instruction: string
-  placeholders: VerificationPlaceholder[]
-  feedback: VerificationFeedback
 }
 
 export interface ChapterDef {
@@ -252,6 +251,8 @@ export interface CourseLabManifest {
   labId: string
   title: string
   summary: string
+  /** 可选的展开背景；未提供时由 summary 兼容填充。 */
+  story?: string
   goals: string[]
   prerequisites: string[]
   kind: LabKind
@@ -335,6 +336,7 @@ export type ProtocolMessage =
   | { type: 'hint-request'; level?: number; labId?: string }
   | { type: 'progress'; level: number; value: number }
   | { type: 'telemetry-command'; command: string }
+  | { type: 'debugger-state'; state: 'ready' | 'stopped' | 'running' | 'exited'; eip?: string }
   | { type: 'error'; message: string }
 
 /** 前端持久化的关卡进度 */
@@ -400,8 +402,12 @@ export interface VirtualMachineController {
   reset(): Promise<void>
   restoreLevel(level: number): Promise<void>
   restoreLab(labId: string): Promise<void>
+  /** 退出可能仍在前台的调试器并重建当前实验。 */
+  resetLevel?(): Promise<void>
   /** 运行面板提供的命令；旧控制器实现可省略，调用方会回退到 sendSerial。 */
   runCommand?(command: string): void
+  /** 将浏览器终端测得的尺寸传给 guest；无独立通道的旧控制器可忽略。 */
+  setTerminalSize?(cols: number, rows: number): void
   sendSerial(input: string): void
   onSerialOutput(callback: (data: string) => void): () => void
 }

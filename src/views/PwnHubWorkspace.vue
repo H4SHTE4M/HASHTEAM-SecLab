@@ -120,6 +120,13 @@ const debugUnlockedLabIds = ref<string[]>([])
 const debugUnlockedChapterIds = ref<string[]>([])
 let resizeStartX = 0
 let resizeStartWidth = 0
+const PANEL_TOGGLE_DRAG_THRESHOLD = 5
+let panelTogglePointerId: number | null = null
+let panelToggleStartX = 0
+let panelToggleStartWidth = 0
+let panelToggleDragging = false
+let suppressNextPanelToggleClick = false
+let panelToggleClickResetTimer: number | null = null
 let themeTransitionTimer: number | null = null
 let bootOverlayTimer: number | null = null
 let bootOverlayShownAt = performance.now()
@@ -304,6 +311,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', handleViewportResize)
   window.visualViewport?.removeEventListener('resize', handleViewportResize)
   stopPanelResize()
+  cancelPanelToggleGesture()
+  if (panelToggleClickResetTimer !== null) window.clearTimeout(panelToggleClickResetTimer)
   clearBootOverlayTimer()
   if (themeTransitionTimer !== null) window.clearTimeout(themeTransitionTimer)
   document.documentElement.classList.remove('theme-changing')
@@ -370,6 +379,63 @@ function startPanelResize(event: PointerEvent): void {
   event.preventDefault()
 }
 
+function startPanelToggleGesture(event: PointerEvent): void {
+  if (event.button !== 0) return
+  const button = event.currentTarget
+  if (!(button instanceof HTMLElement)) return
+
+  panelTogglePointerId = event.pointerId
+  panelToggleStartX = event.clientX
+  panelToggleStartWidth = effectiveMissionPanelWidth.value
+  panelToggleDragging = false
+  button.setPointerCapture?.(event.pointerId)
+}
+
+function movePanelToggleGesture(event: PointerEvent): void {
+  if (
+    event.pointerId !== panelTogglePointerId ||
+    isMissionPanelVisuallyCollapsed.value
+  ) return
+
+  if (!panelToggleDragging) {
+    if (Math.abs(event.clientX - panelToggleStartX) < PANEL_TOGGLE_DRAG_THRESHOLD) return
+    panelToggleDragging = true
+    resizeStartX = panelToggleStartX
+    resizeStartWidth = panelToggleStartWidth
+    isPanelResizing.value = true
+    document.documentElement.classList.add('is-panel-resizing')
+  }
+
+  movePanelResize(event)
+  event.preventDefault()
+}
+
+function resetPanelToggleGesture(): void {
+  panelTogglePointerId = null
+  panelToggleDragging = false
+}
+
+function finishPanelToggleGesture(event: PointerEvent): void {
+  if (event.pointerId !== panelTogglePointerId) return
+  if (panelToggleDragging) {
+    movePanelResize(event)
+    stopPanelResize()
+    suppressNextPanelToggleClick = true
+    if (panelToggleClickResetTimer !== null) window.clearTimeout(panelToggleClickResetTimer)
+    panelToggleClickResetTimer = window.setTimeout(() => {
+      suppressNextPanelToggleClick = false
+      panelToggleClickResetTimer = null
+    }, 0)
+  }
+  resetPanelToggleGesture()
+}
+
+function cancelPanelToggleGesture(event?: PointerEvent): void {
+  if (event !== undefined && event.pointerId !== panelTogglePointerId) return
+  if (panelToggleDragging) stopPanelResize()
+  resetPanelToggleGesture()
+}
+
 function movePanelResize(event: PointerEvent): void {
   if (!isPanelResizing.value) return
   const nextWidth = resizeStartWidth - (event.clientX - resizeStartX)
@@ -424,8 +490,23 @@ function toggleMissionPanel(): void {
   )
 }
 
+function handlePanelToggleClick(event: MouseEvent): void {
+  if (suppressNextPanelToggleClick) {
+    event.preventDefault()
+    suppressNextPanelToggleClick = false
+    if (panelToggleClickResetTimer !== null) window.clearTimeout(panelToggleClickResetTimer)
+    panelToggleClickResetTimer = null
+    return
+  }
+  toggleMissionPanel()
+}
+
 function handleTerminalInput(data: string): void {
   vm.sendSerial(data)
+}
+
+function handleTerminalResize(size: { cols: number; rows: number }): void {
+  vm.setTerminalSize(size.cols, size.rows)
 }
 
 function adjustTerminalFontSize(delta: number): void {
@@ -434,6 +515,16 @@ function adjustTerminalFontSize(delta: number): void {
 
 function handleRunCommand(command: string): void {
   // runCommand 会先清空终端未提交的输入，避免与已有内容拼接
+  vm.runCommand(command)
+  terminalRef.value?.focus()
+}
+
+function handleDebuggerLaunch(): void {
+  vm.runCommand('debugger')
+  terminalRef.value?.focus()
+}
+
+function handleDebuggerCommand(command: string): void {
   vm.runCommand(command)
   terminalRef.value?.focus()
 }
@@ -718,6 +809,7 @@ async function handleBugReportDownload(): Promise<void> {
                 :font-size="preferences.state.terminalFontSize"
                 :auto-focus="!backgroundInert"
                 @input="handleTerminalInput"
+                @resize="handleTerminalResize"
               />
             </div>
           </section>
@@ -755,7 +847,11 @@ async function handleBugReportDownload(): Promise<void> {
               aria-controls="mission-panel"
               :data-tooltip="isMissionPanelVisuallyCollapsed ? '展开任务栏' : '收起任务栏'"
               data-tooltip-placement="left"
-              @click="toggleMissionPanel"
+              @pointerdown="startPanelToggleGesture"
+              @pointermove="movePanelToggleGesture"
+              @pointerup="finishPanelToggleGesture"
+              @pointercancel="cancelPanelToggleGesture"
+              @click="handlePanelToggleClick"
             >
               <AppIcon name="chevron-right" :size="16" />
             </button>
@@ -776,12 +872,15 @@ async function handleBugReportDownload(): Promise<void> {
               :guide-step="currentGuideStep"
               :completed-steps="currentCompletedSteps"
               :completion-record="currentCompletionRecord"
+              :debugger-state="vm.debuggerState.value"
               @next="handleNextLevel"
               @use-hint="progress.useLabHint"
               @run-command="handleRunCommand"
               @advance-guide="progress.advanceLabGuide"
               @complete-step="progress.completeLabStep"
               @change-mode="handleChangeMode"
+              @debugger-launch="handleDebuggerLaunch"
+              @debugger-command="handleDebuggerCommand"
             />
           </div>
         </main>
@@ -1031,7 +1130,7 @@ async function handleBugReportDownload(): Promise<void> {
 }
 
 .panel-collapse-toggle {
-  z-index: 1;
+  z-index: 2;
   width: 24px;
   height: 40px;
   align-self: center;
@@ -1044,13 +1143,18 @@ async function handleBugReportDownload(): Promise<void> {
   border: 0;
   border-radius: 0;
   cursor: pointer;
-  touch-action: manipulation;
+  touch-action: none;
   transition: color var(--duration-normal) ease;
 }
 
 .panel-collapse-toggle:hover,
 .panel-collapse-toggle:focus-visible {
   color: var(--accent-cyan);
+}
+
+.workspace.is-resizing .panel-collapse-toggle {
+  color: var(--accent-cyan);
+  cursor: col-resize;
 }
 
 .panel-collapse-toggle svg {

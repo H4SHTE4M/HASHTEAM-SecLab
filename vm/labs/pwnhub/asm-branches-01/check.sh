@@ -4,7 +4,7 @@ set -eu
 LAB_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROGRAM="$LAB_DIR/asm-branches"
 ANSWER_HASH="$LAB_DIR/answer.sha256"
-EXPECTED_SHA256='14b3db09dacc71c4ced0e2a81a5408ca7b3794e44ee56f20f62a24c35ceaa6bb'
+EXPECTED_SHA256='e54508261abc8dbc007e42fc06be8236e6d44966a6a327945e5ba28e5e177959'
 
 if [ "$#" -ne 5 ]; then
     echo '需要五个观察值：三个分支结果、je 依据和 jg 的符号条件。' >&2

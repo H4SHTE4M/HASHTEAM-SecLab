@@ -147,10 +147,10 @@
       "path": "vm/labs/pwnhub/memory-addresses-01/memory-addresses",
       "architecture": "i386",
       "endianness": "little",
-      "size": 9424,
-      "sha256": "ef9beb6b8c9ce744d867d9df12983fe74dc5847c7aff223f000a59d88ad303b8",
+      "size": 9468,
+      "sha256": "0bd88729bc6b5f3119f6024ff924b90acdcf8cb7001f139009fb924eb65a5c3b",
       "source": "vm/binary-profile/memory-addresses-01/memory-addresses.c",
-      "sourceSha256": "b3612033bbb071b85643fe958625981aa474db639c288ec0767f211921ea9fd2",
+      "sourceSha256": "054e8ea08e24b6ed1a78baeb70ca50b78f501d9d532a7b4fe2897e979d3bbb70",
       "buildScript": "vm/binary-profile/build-memory-addresses.sh",
       "toolchainLock": "vm/binary-profile/memory-addresses-01/toolchain.lock",
       "profile": "binary-i386",
@@ -166,14 +166,37 @@
       }
     },
     {
+      "id": "memory-layout-01",
+      "path": "vm/labs/pwnhub/memory-layout-01/memory-layout",
+      "architecture": "i386",
+      "endianness": "little",
+      "size": 9136,
+      "sha256": "653724b4c98eec5ddd6c9e5aea5d7799c94d38756333bb5838c5192266db8ad9",
+      "source": "vm/binary-profile/memory-layout-01/memory-layout.c",
+      "sourceSha256": "9735984be32452ffb895e3ca82a42eb9a7f5dd4a72ccea7fd316f0194266f2a8",
+      "buildScript": "vm/binary-profile/build-memory-layout.sh",
+      "toolchainLock": "vm/binary-profile/memory-layout-01/toolchain.lock",
+      "profile": "binary-i386",
+      "license": "PwnHub project source; no third party runtime",
+      "purpose": "固定、离线的 i386 代码、数据、堆和栈动态观察目标",
+      "downloadable": true,
+      "expected": {
+        "elfType": "EXEC",
+        "nx": true,
+        "pie": false,
+        "canary": false,
+        "relro": "none"
+      }
+    },
+    {
       "id": "memory-register-stack-01",
       "path": "vm/labs/pwnhub/memory-register-stack-01/memory-register-stack",
       "architecture": "i386",
       "endianness": "little",
-      "size": 9788,
-      "sha256": "39088feedfa54f33289fd875a5ccd7a8094a5e17a239f1122928243c55a1e74a",
+      "size": 9820,
+      "sha256": "77fe3707ba4e34a52bbfa297e915a7b66f964bddec40784810428c349b9dc692",
       "source": "vm/binary-profile/memory-register-stack-01/memory-register-stack.c",
-      "sourceSha256": "f5e1903078f2a57c7aea2ce2807e11a5b28584dea5ea8b85a84fde54f50e1272",
+      "sourceSha256": "166477e6be7f1b47896e6c8f013214eae5ca9ad252bcaf9bb81798c07cba6673",
       "buildScript": "vm/binary-profile/build-memory-register-stack.sh",
       "toolchainLock": "vm/binary-profile/memory-register-stack-01/toolchain.lock",
       "profile": "binary-i386",
@@ -193,10 +216,10 @@
       "path": "vm/labs/pwnhub/asm-registers-01/asm-registers",
       "architecture": "i386",
       "endianness": "little",
-      "size": 9640,
-      "sha256": "66bc1629d0e30810add25434272188290a6ab19db76432dbba5de2e1b9aaa4e1",
+      "size": 9680,
+      "sha256": "ab2122285db34dbe4e3c6b96879113b4dba2246396965dad3bc8ba262e503115",
       "source": "vm/binary-profile/asm-registers-01/asm-registers.c",
-      "sourceSha256": "f0448209d9ea195f98c4b8a5be416af036b0c96feda59f879c30aa5667b32c45",
+      "sourceSha256": "e60b19b8e3896b2eacf49e9f809828ed393405ab2a6e5bb9d346e196286399ea",
       "buildScript": "vm/binary-profile/build-asm-registers.sh",
       "toolchainLock": "vm/binary-profile/asm-registers-01/toolchain.lock",
       "profile": "binary-i386",
@@ -216,10 +239,10 @@
       "path": "vm/labs/pwnhub/asm-arithmetic-01/asm-arithmetic",
       "architecture": "i386",
       "endianness": "little",
-      "size": 9492,
-      "sha256": "8c30413bbc6fa5a4a76c1834b0cf43f49a4421c687f80a7a60a3d7a26bd1ac5c",
+      "size": 9528,
+      "sha256": "c7d1958a0c25812b7ffe1f4a90348fcced1bd3f65f3a0fba98e4132aede92dd0",
       "source": "vm/binary-profile/asm-arithmetic-01/asm-arithmetic.c",
-      "sourceSha256": "14e1b991073d004e0e50ab579b99e5275f10eb90bcd79c30c24f6f4b96001f32",
+      "sourceSha256": "1e977511f1f2f1364094a8d6715a2d52f409231afadba4c4c250529f4e0e774f",
       "buildScript": "vm/binary-profile/build-asm-arithmetic.sh",
       "toolchainLock": "vm/binary-profile/asm-arithmetic-01/toolchain.lock",
       "profile": "binary-i386",
@@ -239,10 +262,10 @@
       "path": "vm/labs/pwnhub/asm-stack-ops-01/asm-stack-ops",
       "architecture": "i386",
       "endianness": "little",
-      "size": 9540,
-      "sha256": "bd3b56a443f0059f57bd3af13f9e0ca1b2fe4ee6ebff60b64cefb9d57e398dbb",
+      "size": 9576,
+      "sha256": "f9cacce544588e61133416667bd6f8ccde415489d88633e71c5395ba78b717fb",
       "source": "vm/binary-profile/asm-stack-ops-01/asm-stack-ops.c",
-      "sourceSha256": "62141ae15fd305f34019a4898c8738757f08c27e898ebcd915b754170ee22ee5",
+      "sourceSha256": "07ccf40cae4447bfa11ab416eac6c4acbab0f06a4ddd036da56a720b585608b2",
       "buildScript": "vm/binary-profile/build-asm-stack-ops.sh",
       "toolchainLock": "vm/binary-profile/asm-stack-ops-01/toolchain.lock",
       "profile": "binary-i386",
@@ -262,10 +285,10 @@
       "path": "vm/labs/pwnhub/asm-branches-01/asm-branches",
       "architecture": "i386",
       "endianness": "little",
-      "size": 9556,
-      "sha256": "14b3db09dacc71c4ced0e2a81a5408ca7b3794e44ee56f20f62a24c35ceaa6bb",
+      "size": 9592,
+      "sha256": "e54508261abc8dbc007e42fc06be8236e6d44966a6a327945e5ba28e5e177959",
       "source": "vm/binary-profile/asm-branches-01/asm-branches.c",
-      "sourceSha256": "5a477fef6f0d44d10956cbfd50a28f574dd9f6ac28b4a1a6e94ee87b3ec64cdf",
+      "sourceSha256": "5de23bf89b7a1b2307358e091dfcb0dcc9e4b046b486a01ecbba9863c18ed303",
       "buildScript": "vm/binary-profile/build-asm-branches.sh",
       "toolchainLock": "vm/binary-profile/asm-branches-01/toolchain.lock",
       "profile": "binary-i386",
@@ -285,10 +308,10 @@
       "path": "vm/labs/pwnhub/asm-call-stack-01/asm-call-stack",
       "architecture": "i386",
       "endianness": "little",
-      "size": 10088,
-      "sha256": "1fd5e07c8b83e5d681164dde7ab590c50a1b8028c26b9405d9304279913de5c0",
+      "size": 10128,
+      "sha256": "bc8371c0e3f9645844bfe71320c01e004ec7015070db8fc87697b49a78187bd0",
       "source": "vm/binary-profile/asm-call-stack-01/asm-call-stack.c",
-      "sourceSha256": "6e9e2236a79928776e1f4c9615172ce1d5f945e893dae3b35030dfaaee8e3ee2",
+      "sourceSha256": "892363c8e6c28c8b75075ee64f3db8b1252ff9fe6df34cf28d28bc62a6fed453",
       "buildScript": "vm/binary-profile/build-asm-call-stack.sh",
       "toolchainLock": "vm/binary-profile/asm-call-stack-01/toolchain.lock",
       "profile": "binary-i386",
@@ -534,7 +557,221 @@
       }
     }
   ],
+  "debuggerBundles": [
+    {
+      "labId": "memory-addresses-01",
+      "binaryArtifactId": "memory-addresses-01",
+      "disassembly": {
+        "path": "vm/labs/pwnhub/memory-addresses-01/memory-addresses.disasm",
+        "size": 14278,
+        "sha256": "c73d1edba1d4c58676cad3cd995b456fe029c5f7d8b9486e03ac08508c463005"
+      },
+      "symbols": {
+        "path": "vm/labs/pwnhub/memory-addresses-01/memory-addresses.symbols",
+        "size": 360,
+        "sha256": "8e7ae898aac3d16658c78253c9692723e143fbf689ae26d8dd6df8a952efb8f2"
+      },
+      "config": {
+        "path": "vm/labs/pwnhub/memory-addresses-01/debugger.json",
+        "size": 798,
+        "sha256": "1f9741ee20a27be51fe99a0677d9beb8a53d03b29d325e36b04576fdf106475a"
+      },
+      "check": {
+        "path": "vm/labs/pwnhub/memory-addresses-01/debugger-check.sh",
+        "size": 189,
+        "sha256": "6d458b59b030776d340c28e2b7f84a7f3f2d59d7c59de4cbb6e746a68e98f52d"
+      }
+    },
+    {
+      "labId": "memory-layout-01",
+      "binaryArtifactId": "memory-layout-01",
+      "disassembly": {
+        "path": "vm/labs/pwnhub/memory-layout-01/memory-layout.disasm",
+        "size": 5473,
+        "sha256": "de2f049c597659a860390c760a236061576af62313bbceff72c00c43b05ab0e0"
+      },
+      "symbols": {
+        "path": "vm/labs/pwnhub/memory-layout-01/memory-layout.symbols",
+        "size": 251,
+        "sha256": "e690288e86defee90c7f8f5dc4f76c1ed7eae4d5192ef1a5f354be0dc677c9d2"
+      },
+      "config": {
+        "path": "vm/labs/pwnhub/memory-layout-01/debugger.json",
+        "size": 690,
+        "sha256": "5d8e59278e3342abaee5e1e0e01e128e3b20d121992a5c23d8c9ab0153d1afab"
+      },
+      "check": {
+        "path": "vm/labs/pwnhub/memory-layout-01/debugger-check.sh",
+        "size": 186,
+        "sha256": "17c96f4e2881e0c2b6c8907dd0ca29297f509743768259846506fafe1ee3c527"
+      }
+    },
+    {
+      "labId": "memory-register-stack-01",
+      "binaryArtifactId": "memory-register-stack-01",
+      "disassembly": {
+        "path": "vm/labs/pwnhub/memory-register-stack-01/memory-register-stack.disasm",
+        "size": 14368,
+        "sha256": "f1e1f57c77ce99a03472005b039b0970fbe7134b9f805baa5c74e3bb43e5115e"
+      },
+      "symbols": {
+        "path": "vm/labs/pwnhub/memory-register-stack-01/memory-register-stack.symbols",
+        "size": 640,
+        "sha256": "e8bcf8c07f4221e99f974d98658b19a0db37e90f920d1cf495b4b902c2dad6c3"
+      },
+      "config": {
+        "path": "vm/labs/pwnhub/memory-register-stack-01/debugger.json",
+        "size": 878,
+        "sha256": "0863ac697c9afb3fdab4b6df1eec1ebed2d35fe88a6de41f930eb32d036b541d"
+      },
+      "check": {
+        "path": "vm/labs/pwnhub/memory-register-stack-01/debugger-check.sh",
+        "size": 194,
+        "sha256": "4e57a875e347d07e11f063765162e13b077b75db04269e2ff5e501cae43ba6a7"
+      }
+    },
+    {
+      "labId": "asm-registers-01",
+      "binaryArtifactId": "asm-registers-01",
+      "disassembly": {
+        "path": "vm/labs/pwnhub/asm-registers-01/asm-registers.disasm",
+        "size": 15346,
+        "sha256": "5a3671b5c579499270d7434d283fea29ce9af05be3be0a6ac2c9ae5c61476ba2"
+      },
+      "symbols": {
+        "path": "vm/labs/pwnhub/asm-registers-01/asm-registers.symbols",
+        "size": 407,
+        "sha256": "e1b695e2992f344e5c878ead8946ccdc7f5e70dbb814a98e523e5ed298b0b7fb"
+      },
+      "config": {
+        "path": "vm/labs/pwnhub/asm-registers-01/debugger.json",
+        "size": 608,
+        "sha256": "7e48fd9f2b7a25a3251e24734c9668fff8780d894af66de9cbd38c0c5ef0f691"
+      },
+      "check": {
+        "path": "vm/labs/pwnhub/asm-registers-01/debugger-check.sh",
+        "size": 186,
+        "sha256": "9d6e8fc4629d736e193e44da9f9ec70761a480547d11427d705739f11d9145a7"
+      }
+    },
+    {
+      "labId": "asm-arithmetic-01",
+      "binaryArtifactId": "asm-arithmetic-01",
+      "disassembly": {
+        "path": "vm/labs/pwnhub/asm-arithmetic-01/asm-arithmetic.disasm",
+        "size": 11750,
+        "sha256": "3b932098d87745c7a0f1bda70500dc99473ac3db966be17ac5b5f49c869f2a1b"
+      },
+      "symbols": {
+        "path": "vm/labs/pwnhub/asm-arithmetic-01/asm-arithmetic.symbols",
+        "size": 441,
+        "sha256": "b8dd8566ee9e1b125cabd2e97ad8822139dd709dba2b1e3279245e54c0411c6c"
+      },
+      "config": {
+        "path": "vm/labs/pwnhub/asm-arithmetic-01/debugger.json",
+        "size": 721,
+        "sha256": "8dd7c95a55da58b98ea95223aec2b0144e1708abccf38ead34fe9ba129505fc7"
+      },
+      "check": {
+        "path": "vm/labs/pwnhub/asm-arithmetic-01/debugger-check.sh",
+        "size": 187,
+        "sha256": "b89386f3a86837eb19a59415e926580aa7fcc64ff88fbff093a586cf902ff1fd"
+      }
+    },
+    {
+      "labId": "asm-stack-ops-01",
+      "binaryArtifactId": "asm-stack-ops-01",
+      "disassembly": {
+        "path": "vm/labs/pwnhub/asm-stack-ops-01/asm-stack-ops.disasm",
+        "size": 11832,
+        "sha256": "d69f449a8b0da268051a1649383d4bc4b41fe4c8a182a486a77b045ae9486b1a"
+      },
+      "symbols": {
+        "path": "vm/labs/pwnhub/asm-stack-ops-01/asm-stack-ops.symbols",
+        "size": 534,
+        "sha256": "1a803e162454bb9a29e942220a3a1502a9718b817b548686fd842c567d41a6b8"
+      },
+      "config": {
+        "path": "vm/labs/pwnhub/asm-stack-ops-01/debugger.json",
+        "size": 619,
+        "sha256": "e6adc6de087a036ecad3945affd57a142cbed77b96470b201802f34978d83fbb"
+      },
+      "check": {
+        "path": "vm/labs/pwnhub/asm-stack-ops-01/debugger-check.sh",
+        "size": 186,
+        "sha256": "0a04ec8dfce98b058d20173c9874b3adb5f654d01762075491e3f42a119e3c5b"
+      }
+    },
+    {
+      "labId": "asm-branches-01",
+      "binaryArtifactId": "asm-branches-01",
+      "disassembly": {
+        "path": "vm/labs/pwnhub/asm-branches-01/asm-branches.disasm",
+        "size": 13447,
+        "sha256": "f2bc42af0058772155c3ea45e2ad173d363065bd94370ad7edb376dbb7b112c7"
+      },
+      "symbols": {
+        "path": "vm/labs/pwnhub/asm-branches-01/asm-branches.symbols",
+        "size": 514,
+        "sha256": "23ff16cec1b2714883cc20ac75568b3d57adfdccdf18cc805e3866e67dc9cc24"
+      },
+      "config": {
+        "path": "vm/labs/pwnhub/asm-branches-01/debugger.json",
+        "size": 728,
+        "sha256": "dca67cf290558fdf37744f90aee2fdc86e75d10ad632c225f4a80e7e12dd1e3b"
+      },
+      "check": {
+        "path": "vm/labs/pwnhub/asm-branches-01/debugger-check.sh",
+        "size": 185,
+        "sha256": "c789a38e0d8748faea095ee52998fe29646f1625d30ce703da44bf5db1fd0e7e"
+      }
+    },
+    {
+      "labId": "asm-call-stack-01",
+      "binaryArtifactId": "asm-call-stack-01",
+      "disassembly": {
+        "path": "vm/labs/pwnhub/asm-call-stack-01/asm-call-stack.disasm",
+        "size": 21701,
+        "sha256": "e9f39d760d1d1055e523cf4672346aa742e152c27f14073464643ec6fb7d123d"
+      },
+      "symbols": {
+        "path": "vm/labs/pwnhub/asm-call-stack-01/asm-call-stack.symbols",
+        "size": 669,
+        "sha256": "40343c0abc28b9b149c6404d02d8f7ee0ca32840bb729f10e2b9f1e50dc7bdd2"
+      },
+      "config": {
+        "path": "vm/labs/pwnhub/asm-call-stack-01/debugger.json",
+        "size": 802,
+        "sha256": "41f072a0d993634a816322334419db7d6750b1e41b55a639a7aab9b31b185de8"
+      },
+      "check": {
+        "path": "vm/labs/pwnhub/asm-call-stack-01/debugger-check.sh",
+        "size": 187,
+        "sha256": "51f2382f421f33268a43dfc11b4ac1008e19bc7b2f3d0594f56fa1a393dfe5a3"
+      }
+    }
+  ],
   "tools": [
+    {
+      "id": "pwnhub-debugger-i386",
+      "command": "debugger",
+      "path": "vm/binary-tools/staged/debugger",
+      "architecture": "i386",
+      "endianness": "little",
+      "size": 750216,
+      "sha256": "4a28618efb50830a34274d6daeb32cb578f52d79e02e9c6289d3ba5f406809bf",
+      "upstreamVersion": "1",
+      "source": "vm/toolchain-source/debugger/debugger.c",
+      "sourceSha256": "1b22609ffe9290128438c65ab3199d90ec757750661eef785afebb5b410157b1",
+      "projectSource": true,
+      "buildScript": "vm/binary-tools/build-debugger.sh",
+      "toolchainLock": "vm/toolchain-source/debugger/toolchain.lock",
+      "profile": "binary-i386",
+      "license": "PwnHub project source; statically linked glibc LGPL-2.1-or-later",
+      "purpose": "在真实 i386 tracee 上交互观察和修改寄存器、内存、断点与执行状态",
+      "static": true,
+      "stripped": true
+    },
     {
       "id": "gnu-readelf-242-i386",
       "command": "readelf",

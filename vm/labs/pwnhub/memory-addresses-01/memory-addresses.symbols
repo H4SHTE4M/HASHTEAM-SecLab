@@ -1,0 +1,17 @@
+08049000|syscall3
+08049020|append_text
+0804904b|display_width
+080490b2|append_padded
+080490f6|append_hex32
+08049137|format_hex32
+08049175|append_signed32
+08049213|append_memory_row
+080492cd|_start
+08049357|memory_addresses_checkpoint
+0804a12c|digits.0
+0804b140|cell
+0804b144|signed_cell
+0804b148|cell_pointer
+0804b14c|__bss_start
+0804b14c|_edata
+0804b14c|_end

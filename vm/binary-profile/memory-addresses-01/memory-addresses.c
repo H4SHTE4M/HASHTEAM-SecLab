@@ -111,6 +111,11 @@ __attribute__((noreturn, noinline, used)) void _start(void) {
     format_hex32(pointer_value, pointer);
     format_hex32(pointed_text, pointed_value);
 
+    __asm__ volatile("memory_addresses_checkpoint:\n\t nop\n\t"
+                     : "+a"(pointed_value)
+                     :
+                     : "memory");
+
     cursor = append_text(cursor, "memory-addresses-01（i386 小端快照）\n");
     cursor = append_text(cursor, "地址       | 变量名           | 变量值       | 原始位模式   | 含义\n");
     cursor = append_memory_row(cursor, address, "cell", cell_value, cell,

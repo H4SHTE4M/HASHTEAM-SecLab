@@ -46,6 +46,10 @@ __attribute__((naked, noinline, used)) static void capture_stack_ops(void) {
         "ret\n\t");
 }
 
+__attribute__((naked, noinline, used)) static void stack_ops_checkpoint(void) {
+    __asm__ volatile("ret\n\t");
+}
+
 static char *append_text(char *cursor, const char *text) {
     while (*text != '\0') *cursor++ = *text++;
     return cursor;
@@ -101,6 +105,12 @@ __attribute__((noreturn, noinline, used)) void _start(void) {
     char output[1536];
     char *cursor = output;
     capture_stack_ops();
+    __asm__ volatile("movl %[first], %%eax\n\t"
+                     "movl %[second], %%ebx\n\t"
+                     "call stack_ops_checkpoint\n\t"
+                     :
+                     : [first] "m"(first_pop_value), [second] "m"(second_pop_value)
+                     : "eax", "ebx", "memory");
 
     cursor = append_text(cursor, "asm-stack-ops-01（i386 固定快照）\n");
     cursor = append_padded(cursor, "执行后", 18);

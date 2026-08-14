@@ -39,6 +39,10 @@ __attribute__((noinline, used)) static void capture_registers(void) {
         : "eax", "ebx", "ecx", "cc", "memory");
 }
 
+__attribute__((naked, noinline, used)) static void registers_checkpoint(void) {
+    __asm__ volatile("ret\n\t");
+}
+
 static char *append_text(char *cursor, const char *text) {
     while (*text != '\0') *cursor++ = *text++;
     return cursor;
@@ -98,6 +102,12 @@ __attribute__((noreturn, noinline, used)) void _start(void) {
     char output[2048];
     char *cursor = output;
     capture_registers();
+    __asm__ volatile("movl %[eax_value], %%eax\n\t"
+                     "movl %[ecx_value], %%ecx\n\t"
+                     "call registers_checkpoint\n\t"
+                     :
+                     : [eax_value] "m"(mov_eax_after), [ecx_value] "m"(lea_ecx_after)
+                     : "eax", "ecx", "memory");
 
     cursor = append_text(cursor, "asm-registers-01（i386 固定快照）\n");
     cursor = append_padded(cursor, "职责", 4);

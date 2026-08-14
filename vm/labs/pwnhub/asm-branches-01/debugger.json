@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "target": "/opt/pwnhub/labs/asm-branches-01/asm-branches",
+  "disassembly": "/opt/pwnhub/labs/asm-branches-01/asm-branches.disasm",
+  "symbols": "/opt/pwnhub/labs/asm-branches-01/asm-branches.symbols",
+  "views": [{ "type": "memory", "address": "test_flags", "size": 44 }],
+  "success": {
+    "type": "all",
+    "conditions": [
+      { "type": "reached-address", "address": "branches_checkpoint", "op": "eq" },
+      { "type": "memory-u32", "address": "test_taken", "op": "eq", "value": "0x00000001" },
+      { "type": "memory-u32", "address": "equal_taken", "op": "eq", "value": "0x00000001" },
+      { "type": "memory-u32", "address": "greater_taken", "op": "eq", "value": "0x00000001" }
+    ]
+  }
+}

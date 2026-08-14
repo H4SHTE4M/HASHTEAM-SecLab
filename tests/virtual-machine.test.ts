@@ -107,6 +107,10 @@ class FakeController implements VirtualMachineController {
     this.sent.push(`goto-lab:${labId}`)
   }
 
+  async resetLevel(): Promise<void> {
+    this.sent.push('reset-level')
+  }
+
   sendSerial(input: string): void {
     this.sent.push(input)
   }
@@ -327,7 +331,7 @@ describe('virtual machine lifecycle', () => {
     await vm.dispose()
   })
 
-  it('重置关卡后把学生 shell 带回 HOME，避免停留在被重建的子目录', async () => {
+  it('重置当前实验后把学生 shell 带回 HOME，避免停留在被重建的子目录', async () => {
     let controller: FakeController | undefined
     const vm = createVirtualMachine({
       createController: (onStageChange) => {
@@ -340,8 +344,7 @@ describe('virtual machine lifecycle', () => {
     controller?.emit(readyLine())
     vm.resetCurrentLevel()
 
-    expect(controller?.sent).toContain('\x03')
-    expect(controller?.sent).toContain('reset-level\ncd "$HOME"\n')
+    expect(controller?.sent).toContain('reset-level')
     await vm.dispose()
   })
 

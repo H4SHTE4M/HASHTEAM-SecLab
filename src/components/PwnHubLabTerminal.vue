@@ -6,6 +6,7 @@ import '@xterm/xterm/css/xterm.css'
 
 const emit = defineEmits<{
   (e: 'input', data: string): void
+  (e: 'resize', size: { cols: number; rows: number }): void
 }>()
 
 const props = withDefaults(defineProps<{
@@ -21,6 +22,7 @@ let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
 let resizeObserver: ResizeObserver | null = null
 let resizeFrame: number | null = null
+let lastEmittedSize: { cols: number; rows: number } | null = null
 
 function scheduleFit(): void {
   if (resizeFrame !== null) return
@@ -28,6 +30,13 @@ function scheduleFit(): void {
     resizeFrame = null
     try {
       fitAddon?.fit()
+      if (terminal !== null && terminal.cols > 0 && terminal.rows > 0) {
+        const size = { cols: terminal.cols, rows: terminal.rows }
+        if (lastEmittedSize?.cols !== size.cols || lastEmittedSize.rows !== size.rows) {
+          lastEmittedSize = size
+          emit('resize', size)
+        }
+      }
       if (terminal !== null && terminal.rows > 0) terminal.refresh(0, terminal.rows - 1)
     } catch {
       // 容器隐藏或可视视口切换中时，下一次观察会重新测量。
@@ -193,6 +202,7 @@ onBeforeUnmount(() => {
   terminal?.dispose()
   terminal = null
   fitAddon = null
+  lastEmittedSize = null
 })
 
 defineExpose({ write, focus })

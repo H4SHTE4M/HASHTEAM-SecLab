@@ -6,3 +6,8 @@ architecture=i386
 endianness=little
 source_date_epoch=0
 compile_flags=-m32 -O0 -fno-pie -no-pie -fno-stack-protector -fno-omit-frame-pointer -mpreferred-stack-boundary=2 -fno-builtin -fno-asynchronous-unwind-tables -fno-unwind-tables -nostdlib -static -Wl,-e,_start -Wl,--build-id=none -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now
+output_sha256=bc8371c0e3f9645844bfe71320c01e004ec7015070db8fc87697b49a78187bd0
+debugger_disassembly_sha256=e9f39d760d1d1055e523cf4672346aa742e152c27f14073464643ec6fb7d123d
+debugger_symbols_sha256=40343c0abc28b9b149c6404d02d8f7ee0ca32840bb729f10e2b9f1e50dc7bdd2
+debugger_config_sha256=41f072a0d993634a816322334419db7d6750b1e41b55a639a7aab9b31b185de8
+debugger_check_sha256=51f2382f421f33268a43dfc11b4ac1008e19bc7b2f3d0594f56fa1a393dfe5a3

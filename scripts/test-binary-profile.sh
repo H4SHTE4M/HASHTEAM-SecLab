@@ -8,6 +8,7 @@ READELF_TOOL="$ROOT/vm/binary-tools/staged/readelf"
 NM_TOOL="$ROOT/vm/binary-tools/staged/nm"
 OBJDUMP_TOOL="$ROOT/vm/binary-tools/staged/objdump"
 GDB_TOOL="$ROOT/vm/binary-tools/staged/gdb"
+DEBUGGER_TOOL="$ROOT/vm/binary-tools/staged/debugger"
 WORK="$(mktemp -d)"
 trap 'rm -rf -- "$WORK"' EXIT
 
@@ -58,6 +59,14 @@ file "$GDB_TOOL" | grep -Fq 'statically linked'
 file "$GDB_TOOL" | grep -Fq 'stripped'
 LC_ALL=C "$GDB_TOOL" --version | grep -Fq 'GNU gdb (GDB) 15.1'
 ! LC_ALL=C "$READELF_TOOL" -l "$GDB_TOOL" | grep -q INTERP
+
+chmod +x "$DEBUGGER_TOOL"
+[ "$(sha256sum "$DEBUGGER_TOOL" | cut -d ' ' -f 1)" = \
+    4a28618efb50830a34274d6daeb32cb578f52d79e02e9c6289d3ba5f406809bf ]
+file "$DEBUGGER_TOOL" | grep -Eq 'ELF 32-bit LSB executable, Intel (80386|i386)'
+file "$DEBUGGER_TOOL" | grep -Fq 'statically linked'
+file "$DEBUGGER_TOOL" | grep -Fq 'stripped'
+! LC_ALL=C "$READELF_TOOL" -l "$DEBUGGER_TOOL" | grep -q INTERP
 
 # Git worktrees on Windows do not preserve executable bits for downloaded ELF files;
 # normalize the copy before replaying it on Linux.
@@ -238,7 +247,7 @@ MEMORY_LAB="$ROOT/vm/labs/pwnhub/memory-addresses-01"
 MEMORY_ELF="$MEMORY_LAB/memory-addresses"
 chmod +x "$MEMORY_ELF"
 [ "$(sha256sum "$MEMORY_ELF" | cut -d ' ' -f 1)" = \
-    ef9beb6b8c9ce744d867d9df12983fe74dc5847c7aff223f000a59d88ad303b8 ]
+    0bd88729bc6b5f3119f6024ff924b90acdcf8cb7001f139009fb924eb65a5c3b ]
 MEMORY_OUTPUT="$($MEMORY_ELF)"
 MEMORY_ADDRESS="$(printf '%s\n' "$MEMORY_OUTPUT" | awk -F '|' '$2 ~ /cell/ { for (i = 1; i <= 5; i++) gsub(/^[ \t]+|[ \t]+$/, "", $i); if ($2 == "cell") { print $1; exit } }')"
 MEMORY_VALUE="$(printf '%s\n' "$MEMORY_OUTPUT" | awk -F '|' '$2 ~ /cell/ { for (i = 1; i <= 5; i++) gsub(/^[ \t]+|[ \t]+$/, "", $i); if ($2 == "cell") { print $3; exit } }')"
@@ -299,7 +308,7 @@ MEMORY_REGISTER_STACK_LAB="$ROOT/vm/labs/pwnhub/memory-register-stack-01"
 MEMORY_REGISTER_STACK_ELF="$MEMORY_REGISTER_STACK_LAB/memory-register-stack"
 chmod +x "$MEMORY_REGISTER_STACK_ELF"
 [ "$(sha256sum "$MEMORY_REGISTER_STACK_ELF" | cut -d ' ' -f 1)" = \
-    39088feedfa54f33289fd875a5ccd7a8094a5e17a239f1122928243c55a1e74a ]
+    77fe3707ba4e34a52bbfa297e915a7b66f964bddec40784810428c349b9dc692 ]
 MEMORY_REGISTER_STACK_OUTPUT="$($MEMORY_REGISTER_STACK_ELF)"
 stack_field() {
     printf '%s\n' "$MEMORY_REGISTER_STACK_OUTPUT" | awk -F '|' -v stage="$1" -v field="$2" '
@@ -331,7 +340,7 @@ ASM_LAB="$ROOT/vm/labs/pwnhub/asm-registers-01"
 ASM_ELF="$ASM_LAB/asm-registers"
 chmod +x "$ASM_ELF"
 [ "$(sha256sum "$ASM_ELF" | cut -d ' ' -f 1)" = \
-    66bc1629d0e30810add25434272188290a6ab19db76432dbba5de2e1b9aaa4e1 ]
+    ab2122285db34dbe4e3c6b96879113b4dba2246396965dad3bc8ba262e503115 ]
 ASM_OUTPUT="$($ASM_ELF)"
 asm_operation_field() {
     printf '%s\n' "$ASM_OUTPUT" | awk -F '|' -v operation="$1" -v field="$2" '
@@ -374,7 +383,7 @@ ARITHMETIC_LAB="$ROOT/vm/labs/pwnhub/asm-arithmetic-01"
 ARITHMETIC_ELF="$ARITHMETIC_LAB/asm-arithmetic"
 chmod +x "$ARITHMETIC_ELF"
 [ "$(sha256sum "$ARITHMETIC_ELF" | cut -d ' ' -f 1)" = \
-    8c30413bbc6fa5a4a76c1834b0cf43f49a4421c687f80a7a60a3d7a26bd1ac5c ]
+    c7d1958a0c25812b7ffe1f4a90348fcced1bd3f65f3a0fba98e4132aede92dd0 ]
 ARITHMETIC_OUTPUT="$($ARITHMETIC_ELF)"
 arithmetic_value() {
     printf '%s\n' "$ARITHMETIC_OUTPUT" | awk -F '|' -v instruction="$1" '
@@ -419,7 +428,7 @@ STACK_OPS_LAB="$ROOT/vm/labs/pwnhub/asm-stack-ops-01"
 STACK_OPS_ELF="$STACK_OPS_LAB/asm-stack-ops"
 chmod +x "$STACK_OPS_ELF"
 [ "$(sha256sum "$STACK_OPS_ELF" | cut -d ' ' -f 1)" = \
-    bd3b56a443f0059f57bd3af13f9e0ca1b2fe4ee6ebff60b64cefb9d57e398dbb ]
+    f9cacce544588e61133416667bd6f8ccde415489d88633e71c5395ba78b717fb ]
 STACK_OPS_OUTPUT="$($STACK_OPS_ELF)"
 stack_ops_field() {
     printf '%s\n' "$STACK_OPS_OUTPUT" | awk -F '|' -v instruction="$1" -v field="$2" '
@@ -456,7 +465,7 @@ BRANCHES_LAB="$ROOT/vm/labs/pwnhub/asm-branches-01"
 BRANCHES_ELF="$BRANCHES_LAB/asm-branches"
 chmod +x "$BRANCHES_ELF"
 [ "$(sha256sum "$BRANCHES_ELF" | cut -d ' ' -f 1)" = \
-    14b3db09dacc71c4ced0e2a81a5408ca7b3794e44ee56f20f62a24c35ceaa6bb ]
+    e54508261abc8dbc007e42fc06be8236e6d44966a6a327945e5ba28e5e177959 ]
 BRANCHES_OUTPUT="$($BRANCHES_ELF)"
 branch_row() {
     printf '%s\n' "$BRANCHES_OUTPUT" | awk -F '|' -v name="$1" '
@@ -485,7 +494,7 @@ CALL_STACK_LAB="$ROOT/vm/labs/pwnhub/asm-call-stack-01"
 CALL_STACK_ELF="$CALL_STACK_LAB/asm-call-stack"
 chmod +x "$CALL_STACK_ELF"
 [ "$(sha256sum "$CALL_STACK_ELF" | cut -d ' ' -f 1)" = \
-    1fd5e07c8b83e5d681164dde7ab590c50a1b8028c26b9405d9304279913de5c0 ]
+    bc8371c0e3f9645844bfe71320c01e004ec7015070db8fc87697b49a78187bd0 ]
 CALL_STACK_OUTPUT="$($CALL_STACK_ELF)"
 RETURN_ADDRESS="$(printf '%s\n' "$CALL_STACK_OUTPUT" | awk -F '|' '$1 ~ /stack/ { for (i = 1; i <= 4; i++) gsub(/^[ \t]+|[ \t]+$/, "", $i); if ($3 ~ /返回地址/) { print $4; exit } }')"
 ARGUMENT_VALUE="$(printf '%s\n' "$CALL_STACK_OUTPUT" | awk -F '|' '$1 ~ /stack/ { for (i = 1; i <= 4; i++) gsub(/^[ \t]+|[ \t]+$/, "", $i); if ($3 ~ /参数/) { print $4; exit } }')"

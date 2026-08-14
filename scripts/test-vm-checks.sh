@@ -37,6 +37,7 @@ BUSYBOX="$(realpath "$BUSYBOX")"
 
 WORK="$(mktemp -d)"
 export PWNHUB_LABS_DIR="$WORK/labs"
+export PWNHUB_COURSE_ORDER="$OVERLAY/opt/pwnhub/course-order"
 mkdir -p "$PWNHUB_LABS_DIR/runtime-smoke-01"
 cp -R "$ROOT/vm/labs/pwnhub/memory-addresses-01" "$PWNHUB_LABS_DIR/"
 cp -R "$ROOT/vm/labs/pwnhub/memory-layout-01" "$PWNHUB_LABS_DIR/"
@@ -138,6 +139,12 @@ if ! gcc -O2 -Wall -Werror -o "$HTCHECK" "$ROOT/vm/toolchain-source/htcheck/htch
     exit 1
 fi
 "$HTCHECK" selftest >/dev/null || { echo "错误：htcheck 自检失败" >&2; exit 1; }
+if OUT=$("$HTCHECK" debugger-reset 2>&1); then RC=0; else RC=$?; fi
+expect_eq "非 SUID 调用不能生成 debugger token" "$RC" "2"
+expect_not_contains "$OUT" "非 SUID debugger-reset 不泄漏 token" "/tmp/.pwnhub-debugger-"
+if OUT=$("$HTCHECK" debugger-complete 2>&1); then RC=0; else RC=$?; fi
+expect_eq "非 SUID 调用不能完成 debugger 判题" "$RC" "2"
+expect_contains "$OUT" "非受信任调用得到明确拒绝" "调用者不受信任"
 
 # 测试会话密钥（等价于 VM 内 init 生成的 32 字节密钥）；签名期望由 python3 现算。
 TEST_KEY="$WORK/protocol.key"
@@ -316,6 +323,7 @@ else
 fi
 expect_eq "内存实验可独立进入" "$RC" "0"
 expect_contains "$OUT" "内存实验发出稳定 ready" '"type":"lab-ready","labId":"memory-addresses-01"'
+expect_contains "$OUT" "稳定实验显示全局序号与标题" '第 11 关 · 地址、值与指针'
 [ -x "$MEMORY_SB/home/guest/memory-addresses" ] \
     && ok "内存实验样本已复制到 HOME" \
     || bad "内存实验样本未复制到 HOME"

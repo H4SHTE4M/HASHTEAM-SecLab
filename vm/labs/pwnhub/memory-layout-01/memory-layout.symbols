@@ -1,0 +1,13 @@
+08049000|syscall1
+0804901c|syscall3
+0804903c|append_text
+08049067|append_hex32
+080490bb|_start
+08049101|layout_checkpoint
+0804a040|digits.0
+0804b054|layout_data
+0804b058|__bss_start
+0804b058|_edata
+0804b058|heap_base
+0804b05c|heap_limit
+0804b060|_end

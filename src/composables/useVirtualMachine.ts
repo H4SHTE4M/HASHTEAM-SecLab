@@ -100,6 +100,7 @@ function isKnownLab(labId: string): boolean {
  */
 export function createVirtualMachine(options: VirtualMachineOptions = {}) {
   const stage = ref<BootStage>('idle')
+  const debuggerState = ref<'idle' | Extract<ProtocolMessage, { type: 'debugger-state' }>['state']>('idle')
   const errorMessage = ref<string | null>(null)
   const defaultOwner: VirtualMachineOwner = Symbol('default-vm-owner')
   const displayCallbacks = new Map<
@@ -122,6 +123,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
 
   let controller: VirtualMachineController | null = null
   let protocol: SerialProtocol | null = null
+  let terminalSize: { cols: number; rows: number } | null = null
   let readyTimer: number | null = null
   let bootTask: {
     generation: number
@@ -412,6 +414,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
           break
         }
         progress.setLab(message.labId)
+        debuggerState.value = 'idle'
         break
       }
       case 'lab-result': {
@@ -454,6 +457,9 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
         }
         break
       }
+      case 'debugger-state':
+        debuggerState.value = message.state
+        break
       case 'telemetry-command':
         // VM wrapper 上报命令执行；allowlist 由 telemetry 层校验，非白名单静默忽略
         getTelemetry().trackCommand(message.command)
@@ -504,6 +510,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     errorMessage.value = null
     clearBootLog()
     stage.value = 'loading-assets'
+    debuggerState.value = 'idle'
     log('stage', '阶段：loading-assets')
     bootStartedAt = Date.now()
 
@@ -514,6 +521,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
       stage.value = nextStage
     })
     controller = nextController
+    if (terminalSize !== null) nextController.setTerminalSize?.(terminalSize.cols, terminalSize.rows)
     protocol = useSerialProtocol(nextController)
     protocol.onDisplay((data) => {
       if (generation === currentGeneration) emitDisplay(data)
@@ -659,8 +667,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
 
   function gotoLevel(level: number): void {
     if (!isKnownLevel(level) || !canNavigateToLevel(level)) return
-    interruptForeground()
-    clearLine()
+    debuggerState.value = 'idle'
     const lab = getCourseLab(legacyLabId(level))
     if (lab !== undefined) syncTemporaryUnlockToVm(lab)
     progress.setLevel(level)
@@ -674,8 +681,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
       gotoLevel(lab.legacyLevel)
       return
     }
-    interruptForeground()
-    clearLine()
+    debuggerState.value = 'idle'
     syncTemporaryUnlockToVm(lab)
     progress.setLab(labId)
     void controller?.restoreLab(labId)
@@ -687,10 +693,15 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
   }
 
   function resetCurrentLevel(): void {
-    interruptForeground()
-    // 与切关保持一致：reset-level 的 init 是子进程，改不了交互 shell 的 cwd，
-    // 重建环境后补一行 cd 把学生 shell 带回 HOME。
-    sendSerial('reset-level\ncd "$HOME"\n')
+    debuggerState.value = 'idle'
+    if (controller?.resetLevel !== undefined) {
+      void controller.resetLevel()
+    } else {
+      interruptForeground()
+      // 与切关保持一致：reset-level 的 init 是子进程，改不了交互 shell 的 cwd，
+      // 重建环境后补一行 cd 把学生 shell 带回 HOME。
+      sendSerial('reset-level\ncd "$HOME"\n')
+    }
     if (activeModule === 'pwnhub') {
       getTelemetry().trackActivityReset(progress.state.currentLabId)
     } else {
@@ -727,6 +738,11 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     interruptForeground()
     clearLine()
     sendSerial(`${command}\n`)
+  }
+
+  function setTerminalSize(cols: number, rows: number): void {
+    terminalSize = { cols, rows }
+    controller?.setTerminalSize?.(cols, rows)
   }
 
   /**
@@ -766,11 +782,13 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
       return
     }
     stage.value = 'idle'
+    debuggerState.value = 'idle'
     errorMessage.value = null
   }
 
   return {
     stage,
+    debuggerState,
     errorMessage,
     boot,
     restart,
@@ -779,6 +797,7 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     sendSerial,
     gotoLevel,
     gotoLab,
+    setTerminalSize,
     temporarilyUnlockLab,
     handoff,
     setModule,

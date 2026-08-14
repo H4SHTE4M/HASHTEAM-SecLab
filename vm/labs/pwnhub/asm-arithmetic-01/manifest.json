@@ -20,7 +20,7 @@
     {
       "path": "/opt/pwnhub/labs/asm-arithmetic-01/asm-arithmetic",
       "architecture": "i386",
-      "sha256": "8c30413bbc6fa5a4a76c1834b0cf43f49a4421c687f80a7a60a3d7a26bd1ac5c",
+      "sha256": "c7d1958a0c25812b7ffe1f4a90348fcced1bd3f65f3a0fba98e4132aede92dd0",
       "purpose": "固定、离线的 add、sub、imul、idiv、and、or、xor 观察样本",
       "downloadable": true
     }
@@ -171,7 +171,8 @@
     { "level": 3, "kind": "structure", "text": "最终结构是 check <加减结果> <乘积> <商> <余数> <位运算结果>。" }
   ],
   "verification": {
-    "type": "answer",
+    "type": "debugger-state",
+    "debuggerCheckpoint": "arithmetic_checkpoint",
     "usage": "check <加减结果> <乘积> <商> <余数> <位运算结果>",
     "instruction": "依次填入 sub、imul、除法商、除法余数和 xor 行的后值。",
     "placeholders": [

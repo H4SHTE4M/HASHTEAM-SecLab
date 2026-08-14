@@ -28,10 +28,13 @@ const answerHash = (answer) =>
 // Node 端 libv86 使用 fs 直接读取所有资源路径
 
 const decoder = new TextDecoder('utf-8')
+const controlDecoder = new TextDecoder('utf-8')
 const ANSI_SGR = String.raw`(?:\x1b\[[0-9;]*m)*`
 const GUEST_PROMPT = new RegExp(`guest@hashteam${ANSI_SGR}:${ANSI_SGR}`)
 let buffer = ''
 let cursor = 0
+let controlBuffer = ''
+let controlCursor = 0
 
 const emulator = new V86({
   // Node 端：wasm 走文件系统读取，镜像走 fetch（本地静态服务）
@@ -42,12 +45,17 @@ const emulator = new V86({
   bios: { url: path.join(root, 'public/v86/bios/seabios-256k.bin') },
   bzimage: { url: path.join(root, 'public/vm/bzImage') },
   initrd: { url: path.join(root, 'public/vm/rootfs.cpio.gz') },
-  cmdline: 'console=ttyS0,115200n8 quiet loglevel=3',
+  cmdline: 'console=ttyS0,115200n8 quiet loglevel=3 lsm=yama',
+  uart1: true,
   autostart: true,
 })
 
 emulator.add_listener('serial0-output-byte', (byte) => {
   buffer += decoder.decode(new Uint8Array([byte]), { stream: true })
+})
+
+emulator.add_listener('serial1-output-byte', (byte) => {
+  controlBuffer += controlDecoder.decode(new Uint8Array([byte]), { stream: true })
 })
 
 function send(line) {
@@ -79,6 +87,37 @@ function waitFor(re, timeout = 30000, label = String(re)) {
   })
 }
 
+function assertProtocolSignature(actual, message, label) {
+  const expected = createHmac('sha256', Buffer.from(sessionKeyB64, 'base64'))
+    .update(message, 'utf8')
+    .digest('hex')
+  if (actual !== expected) {
+    throw new Error(`${label} 签名不符：${actual} != ${expected}`)
+  }
+}
+
+function waitForControl(re, timeout = 5000, label = String(re)) {
+  return new Promise((resolve, reject) => {
+    const started = Date.now()
+    const timer = setInterval(() => {
+      const slice = controlBuffer.slice(controlCursor)
+      const match = slice.match(re)
+      if (match !== null) {
+        controlCursor += match.index + match[0].length
+        clearInterval(timer)
+        resolve(match)
+      } else if (Date.now() - started > timeout) {
+        clearInterval(timer)
+        reject(new Error(`超时等待 UART1 ${label}\n-- 最近控制输出 --\n${controlBuffer.slice(-500)}`))
+      }
+    }, 25)
+  })
+}
+
+function sendTerminalSize(cols, rows) {
+  emulator.serial_send_bytes(1, new TextEncoder().encode(`PwnHubSize;${cols};${rows}\n`))
+}
+
 const results = []
 async function step(name, fn) {
   try {
@@ -108,6 +147,14 @@ async function main() {
   await step('进入第 1 关（签名的 level-ready 协议）', async () => {
     goToLevel(1)
     await waitFor(/@@HASHTEAM:\{"type":"level-ready","level":1,"sig":"[0-9a-f]{64}"\}/)
+  })
+
+  await step('UART1 尺寸通道更新 ttyS0，且不污染终端命令流', async () => {
+    await waitForControl(/PwnHubSizeReady\r?\n/, 10000, 'PwnHubSizeReady')
+    sendTerminalSize(132, 43)
+    send("stty size && printf '\\nWINSIZE_OK\\n'")
+    await waitFor(/\r?\n43 132\r?\n/)
+    await waitFor(/WINSIZE_OK/)
   })
 
   await step('基本命令可用：whoami / pwd / ls / cat', async () => {
@@ -375,10 +422,59 @@ async function main() {
     await waitFor(/debug=true/)
   })
 
+  await step('debugger 信任边界：官方工具与目标只读，动态签名入口不能直调', async () => {
+    send("stat -c 'DEBUGGER=%a:%u:%g' /usr/local/bin/debugger")
+    await waitFor(/DEBUGGER=755:0:0/)
+    send("sha256sum /usr/local/bin/debugger | cut -d ' ' -f 1")
+    await waitFor(/4a28618efb50830a34274d6daeb32cb578f52d79e02e9c6289d3ba5f406809bf/)
+    send("stat -c 'DEBUG_TARGET=%a:%u:%g' /opt/pwnhub/labs/asm-call-stack-01/asm-call-stack")
+    await waitFor(/DEBUG_TARGET=755:0:0/)
+    send('test ! -r /etc/hashteam/protocol.key && test ! -e ./asm-call-stack.disasm && printf "\\nDEBUGGER_BOUNDARY_OK\\n"')
+    await waitFor(/DEBUGGER_BOUNDARY_OK/)
+    send("htcheck debugger-reset >/dev/null 2>&1; printf 'DIRECT_DEBUGGER_RESET_RC=%s\\n' \"$?\"")
+    await waitFor(/DIRECT_DEBUGGER_RESET_RC=2/)
+    send("htcheck debugger-complete >/dev/null 2>&1; printf 'DIRECT_DEBUGGER_COMPLETE_RC=%s\\n' \"$?\"")
+    await waitFor(/DIRECT_DEBUGGER_COMPLETE_RC=2/)
+  })
+
+  const debuggerLabs = [
+    ['memory-addresses-01', 'memory_addresses_checkpoint'],
+    ['memory-layout-01', 'layout_checkpoint'],
+    ['memory-register-stack-01', 'stack_checkpoint'],
+    ['asm-registers-01', 'registers_checkpoint'],
+    ['asm-arithmetic-01', 'arithmetic_checkpoint'],
+    ['asm-stack-ops-01', 'stack_ops_checkpoint'],
+    ['asm-branches-01', 'branches_checkpoint'],
+    ['asm-call-stack-01', 'call_stack_checkpoint'],
+  ]
+  for (const [labId, checkpoint] of debuggerLabs) {
+    await step(`debugger ${labId}：实时状态、条件文件与动态 key 闭环`, async () => {
+      goToLab(labId)
+      const ready = await waitFor(
+        new RegExp(`@@HASHTEAM:\\{"type":"lab-ready","labId":"${labId}","sig":"([0-9a-f]{64})"\\}`),
+      )
+      assertProtocolSignature(ready[1], `lab-ready:${labId}`, `${labId} debugger lab-ready`)
+      send('debugger')
+      await waitFor(/@@HASHTEAM:\{"type":"debugger-state","state":"ready"\}/)
+      await waitFor(/dbg>/)
+      send('check')
+      await waitFor(new RegExp('当前 CPU/内存状态还没有满足本关条件。'))
+      send(`until ${checkpoint}`)
+      await waitFor(/状态满足，正在使用一次性动态 key 验证实验。/)
+      const passed = await waitFor(
+        new RegExp(`@@HASHTEAM:\\{"type":"lab-result","labId":"${labId}","status":"passed","sig":"([0-9a-f]{64})"\\}`),
+      )
+      assertProtocolSignature(passed[1], `lab-result:${labId}:passed`, `${labId} debugger lab-result`)
+      await waitFor(/@@HASHTEAM:\{"type":"debugger-state","state":"exited"\}/)
+      await waitFor(GUEST_PROMPT, 30000, `${labId} debugger 退出后的 guest 提示符`)
+      send(`test ! -e /tmp/.pwnhub-debugger-${labId} && printf '\\nDEBUGGER_TOKEN_CLEAN_${labId}\\n'`)
+      await waitFor(new RegExp(`DEBUGGER_TOKEN_CLEAN_${labId}`))
+    })
+  }
+
   console.log('\n—— 集成测试结果 ——')
   for (const [mark, name] of results) console.log(`${mark} ${name}`)
   console.log(`\n全部 ${results.length} 项通过`)
-  emulator.stop()
   process.exit(0)
 }
 

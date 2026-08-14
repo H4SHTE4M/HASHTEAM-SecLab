@@ -316,6 +316,7 @@ for (const requiredSourceReference of [
   'vm/binary-tools/binutils-2.42.lock',
   'vm/binary-tools/build-gdb.sh',
   'vm/binary-tools/gdb-15.1.lock',
+  'vm/binary-tools/gdb-15.1-ascii-casefold.patch',
   'vm/toolchain-source/aosc-glibc32/',
   'vm/toolchain-source/aosc-glibc32/SHA256SUMS',
 ]) {

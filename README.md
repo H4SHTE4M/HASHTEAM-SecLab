@@ -43,7 +43,7 @@ Linux 虚拟机、引导/挑战模式和本地进度存档。
 │  └─ 32 位 Linux：定制内核 bzImage + 统一 initramfs（BusyBox + 实验系统）     │
 │       ├─ 自动登录 guest@hashteam（cttyhack + su）                             │
 │       ├─ /usr/local/bin：check / hint / status / help / reset-level /         │
-│       │   hashteamctl / readelf / nm / objdump / payload 教学工具             │
+│       │   hashteamctl / readelf / nm / objdump / debugger / payload 教学工具     │
 │       ├─ /opt/hashteam/levels/level-N：SecLab 数字关卡                        │
 │       └─ /opt/pwnhub/labs/<labId>：PwnHub 稳定实验标识                        │
 │            串口输出签名的 level-result 或 lab-result 协议                     │
@@ -62,6 +62,9 @@ Linux 虚拟机、引导/挑战模式和本地进度存档。
   虚拟机只能访问自己的 `127.0.0.1`。
 - **内存环境 = 免快照还原**：rootfs 是 initramfs（内存文件系统），
   整机重启即回到初始状态；「重置本关」通过重跑幂等的关卡初始化脚本实现。
+- **debugger 操作真实进程状态**：内存和汇编八个实验可启动项目自带的静态 i386
+  `ptrace` debugger，实时读取寄存器、反汇编、相关内存和映射，并支持单步、继续、断点、
+  跳转以及受限的寄存器/内存修改。右侧 GUI 只发送同一组终端命令，不维护第二份模拟状态。
 
 ## 3. 为什么选择 v86
 
@@ -140,6 +143,7 @@ pnpm verify:dist        # 校验 VM、companion、发布实验下载物与法律
 | 内核 bzImage | 自构建：kernel.org `linux-6.12.98`，`tinyconfig` + 最小特性集（串口控制台 / initramfs / tmpfs / IPv4 回环 / **无网卡驱动**） | GPLv2 | ≈ 1.3 MB |
 | 用户态 busybox | Debian `busybox-static` 1.38.0-3（i386，静态链接 Debian glibc 2.42-17） | GPLv2 / LGPLv2.1+ | ≈ 1.0 MB（打进 initramfs） |
 | SUID helper | 源码构建 BusyBox 1.38.0（i386，静态链接 AOSC glibc 2.42，严格仅含 `su`，口令数据库保持锁定） | GPLv2 / LGPLv2.1+ | ≈ 1.0 MB（打进 initramfs） |
+| PwnHub debugger | 项目源码构建的静态、剥离 i386 `ptrace` 调试器 | 项目源码 / LGPLv2.1+（静态 glibc） | ≈ 0.8 MB（打进 initramfs） |
 | initramfs | 本项目 `vm/rootfs-overlay/` + 两个 busybox，`scripts/pack-initramfs.py` 打包（确定性、显式权限） | 本项目 | ≈ 1.6 MB（gzip） |
 | v86 运行时 | npm `v86` 包（libv86.js / v86.wasm） | BSD-2-Clause | ≈ 2.5 MB |
 | SeaBIOS | Debian `seabios` 包（bios-256k.bin） | LGPLv3 | 256 KB |
@@ -279,8 +283,8 @@ GitHub Environment、密钥轮换和故障恢复见
 - **工具差异**：`curl` 是基于 busybox wget 的兼容层（仅支持本实验的基本
   用法），`file` 是简化的魔数识别脚本，没有 `objdump` 和 Python 3
   （控制体积的取舍，见后续规划）。
-- **关卡切换依赖串口命令**：若用户正在终端里运行其他程序，
-  前端发送的切换命令会进入该程序的输入（边缘情况，重置即可恢复）。
+- **关卡切换依赖串口命令**：前端会先退出已知的 GDB、debugger 和汇编 TUI 会话再切换；
+  若用户自行运行了其他持续占用前台的交互程序，切换命令仍可能进入该程序的输入。
 - **移动端**：可以查看任务说明与页面，但终端操作体验针对桌面优化；
   窄屏会显示提示横幅，建议桌面浏览器完成实验。
 - **中文输入法**：在终端内输入命令前请切换到英文输入状态——全角引号、
@@ -318,8 +322,8 @@ GitHub Environment、密钥轮换和故障恢复见
    页面加载即恢复，消除每次的完整引导（接口已预留）。
 2. **每关独立快照**：`restoreLevel()` 切换到快照恢复，实现真正的
    关卡级环境隔离与秒级重置。
-3. **更丰富的用户态**：评估加入 Python 3（micropython 或精简 CPython）、
-   `objdump`，用于程序分析类新关卡。
+3. **更丰富的用户态**：仅在独立 profile 的体积、Python ABI 与启动预算通过审计后，
+   再评估精简 Python 3 或其他程序分析工具。
 4. **关卡扩展**：计划中的方向包括简易二进制逆向与逆向工程基础、
    安全开发小练习（修复一个有 bug 的脚本）。
 5. **资源优化**：Brotli 预压缩静态资源、Service Worker 离线缓存。
@@ -351,7 +355,7 @@ hashteam-web-lab/
 │   └── vm/             # bzImage / rootfs.cpio.gz（预构建产物）
 ├── src/
 │   ├── main.ts / App.vue
-│   ├── components/     # TopBar / LabTerminal / MissionPanel /
+│   ├── components/     # TopBar / LabTerminal / MissionPanel / DebuggerControls /
 │   │                   # LoadingScreen / CompletionPage / AboutModal
 │   ├── composables/    # useVirtualMachine / useLabProgress / useSerialProtocol
 │   ├── services/       # VM、协议、存储与 challenge manifest 校验
@@ -363,9 +367,11 @@ hashteam-web-lab/
 ├── vm/
 │   ├── build.sh        # 虚拟机资源构建（内核 + initramfs + v86 资源）
 │   ├── busybox-suid.config # 仅启用 su 的最小 BusyBox 配置
+│   ├── toolchain-source/debugger/ # ptrace debugger 源码与工具链锁
 │   └── rootfs-overlay/ # initramfs 内容；每关目录含 manifest、脚本和素材
 └── scripts/
     ├── validate-challenges.mjs # 构建前校验关卡配置和目录完整性
+    ├── generate-debugger-index.sh # 从锁定 ELF 生成指令与符号索引
     ├── pack-initramfs.py    # 确定性 cpio 打包（显式权限位）
     ├── verify-suid-initramfs.py # 校验 SUID 权限与 applet 白名单
     ├── test-vm-checks.sh    # Linux 检查脚本与绕过回归测试

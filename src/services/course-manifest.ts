@@ -44,6 +44,7 @@ const VERIFICATION_TYPES = new Set<VerificationType>([
   'answer',
   'payload-replay',
   'external-observation',
+  'debugger-state',
 ])
 const EXTENDED_STEP_TYPES = new Set([
   'concept',
@@ -396,6 +397,9 @@ function readPayloadPreset(value: unknown, source: string): PayloadWorkbenchPres
       }
       return segment
     }
+    if (entry.kind === 'text') {
+      return { id, label, kind: 'text', value: nonEmpty(entry.value, 'value', entrySource) }
+    }
     if (entry.kind === 'cyclic') {
       return {
         id,
@@ -591,7 +595,23 @@ function readVerification(value: unknown, source: string): LabVerification {
     verification: legacyVerification,
     completionSummary: { solved: 'solved', mastered: ['mastered'], next: 'next' },
   })
-  return { type: type as VerificationType, ...legacy.verification }
+  const debuggerCheckpoint = optionalText(
+    item.debuggerCheckpoint,
+    'debuggerCheckpoint',
+    `${source}#verification`,
+  )
+  if (type === 'debugger-state') {
+    if (debuggerCheckpoint === undefined || !/^[A-Za-z_.$][A-Za-z0-9_.$@]*$/.test(debuggerCheckpoint)) {
+      fail(source, 'debugger-state verification 必须提供合法的 debuggerCheckpoint')
+    }
+  } else if (debuggerCheckpoint !== undefined) {
+    fail(source, '只有 debugger-state verification 可以提供 debuggerCheckpoint')
+  }
+  return {
+    type: type as VerificationType,
+    ...legacy.verification,
+    ...(debuggerCheckpoint === undefined ? {} : { debuggerCheckpoint }),
+  }
 }
 
 export function parseCourseLabManifest(raw: unknown, source = 'unknown'): CourseLabManifest {
@@ -665,6 +685,7 @@ export function parseCourseLabManifest(raw: unknown, source = 'unknown'): Course
     labId,
     title: nonEmpty(item.title, 'title', source),
     summary: nonEmpty(item.summary, 'summary', source),
+    story: item.story === undefined ? undefined : nonEmpty(item.story, 'story', source),
     goals: stringList(item.goals, 'goals', source),
     prerequisites: stringList(item.prerequisites, 'prerequisites', source, true),
     kind: kind as LabKind,

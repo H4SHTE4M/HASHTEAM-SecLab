@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ChapterDef, CourseDef, LevelCompletionRecord } from '../types/lab'
 import { isChapterUnlocked, isLabUnlocked } from '../services/course-progress'
 import AppIcon from './AppIcon.vue'
@@ -28,6 +28,7 @@ const chapterMenuOpen = ref(false)
 const recentlyCompleted = ref<string | null>(null)
 const recentlyUnlocked = ref<string | null>(null)
 const levelListRef = ref<HTMLElement | null>(null)
+const railRef = ref<HTMLElement | null>(null)
 let feedbackTimer: number | null = null
 let debugClickTimer: number | null = null
 let debugClickTarget = ''
@@ -143,6 +144,21 @@ function clearFeedbackTimer(): void {
   feedbackTimer = null
 }
 
+function closeChapterMenuFromOutside(event: PointerEvent): void {
+  const target = event.target
+  if (!chapterMenuOpen.value || !(target instanceof Node)) return
+  if (!railRef.value?.contains(target)) chapterMenuOpen.value = false
+}
+
+function closeChapterMenuOnEscape(event: KeyboardEvent): void {
+  if (event.key === 'Escape') chapterMenuOpen.value = false
+}
+
+onMounted(() => {
+  document.addEventListener('pointerdown', closeChapterMenuFromOutside)
+  document.addEventListener('keydown', closeChapterMenuOnEscape)
+})
+
 watch(
   () => [...props.completedLabIds],
   (next, previous) => {
@@ -175,6 +191,8 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', closeChapterMenuFromOutside)
+  document.removeEventListener('keydown', closeChapterMenuOnEscape)
   clearFeedbackTimer()
   resetDebugClickSequence()
 })
@@ -182,6 +200,7 @@ onBeforeUnmount(() => {
 
 <template>
   <nav
+    ref="railRef"
     class="course-rail level-rail"
     :class="{ 'short-landscape-split': shortLandscapeSplit }"
     aria-label="章节与实验导航"

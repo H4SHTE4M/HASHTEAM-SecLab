@@ -23,6 +23,7 @@ defineProps<{
     | 'moon'
     | 'minus'
     | 'palette'
+    | 'play'
     | 'plus'
     | 'rotate-ccw'
     | 'save'
@@ -94,6 +95,9 @@ defineProps<{
     <template v-else-if="name === 'terminal'">
       <polyline points="4 17 10 11 4 5" />
       <line x1="12" x2="20" y1="19" y2="19" />
+    </template>
+    <template v-else-if="name === 'play'">
+      <polygon points="6 3 20 12 6 21 6 3" />
     </template>
     <template v-else-if="name === 'lock'">
       <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />

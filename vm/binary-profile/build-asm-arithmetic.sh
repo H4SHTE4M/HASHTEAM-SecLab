@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 LAB="$ROOT/vm/binary-profile/asm-arithmetic-01"
+RUNTIME_LAB="$ROOT/vm/rootfs-overlay/opt/pwnhub/labs/asm-arithmetic-01"
+LOCK="$LAB/toolchain.lock"
 OUT="${1:-$ROOT/vm/rootfs-overlay/opt/pwnhub/labs/asm-arithmetic-01/asm-arithmetic}"
 CC="${CC:-i686-linux-gnu-gcc}"
 EXPECTED_VERSION='i686-linux-gnu-gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0'
@@ -46,6 +48,9 @@ for mnemonic in add sub imul idiv and or xor; do
         exit 1
     }
 done
+
+"$ROOT/scripts/generate-debugger-index.sh" "$OUT" "${OUT}.disasm" "${OUT}.symbols" \
+    "$LOCK" "$RUNTIME_LAB/debugger.json" "$RUNTIME_LAB/debugger-check.sh"
 
 sha256sum "$OUT"
 "$OUT"

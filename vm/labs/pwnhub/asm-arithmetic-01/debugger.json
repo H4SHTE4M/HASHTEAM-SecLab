@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "target": "/opt/pwnhub/labs/asm-arithmetic-01/asm-arithmetic",
+  "disassembly": "/opt/pwnhub/labs/asm-arithmetic-01/asm-arithmetic.disasm",
+  "symbols": "/opt/pwnhub/labs/asm-arithmetic-01/asm-arithmetic.symbols",
+  "views": [{ "type": "memory", "address": "quotient", "size": 20 }],
+  "success": {
+    "type": "all",
+    "conditions": [
+      { "type": "reached-address", "address": "arithmetic_checkpoint", "op": "eq" },
+      { "type": "memory-u32", "address": "quotient", "op": "eq", "value": "0x00000008" },
+      { "type": "memory-u32", "address": "remainder", "op": "eq", "value": "0x00000003" },
+      { "type": "register", "name": "eax", "op": "eq", "value": "0x00000022" }
+    ]
+  }
+}

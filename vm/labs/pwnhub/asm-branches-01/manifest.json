@@ -20,7 +20,7 @@
     {
       "path": "/opt/pwnhub/labs/asm-branches-01/asm-branches",
       "architecture": "i386",
-      "sha256": "14b3db09dacc71c4ced0e2a81a5408ca7b3794e44ee56f20f62a24c35ceaa6bb",
+      "sha256": "e54508261abc8dbc007e42fc06be8236e6d44966a6a327945e5ba28e5e177959",
       "purpose": "固定、离线的 test、cmp、je、jg 与 flags 条件跳转观察样本",
       "downloadable": true
     }
@@ -156,7 +156,8 @@
     { "level": 3, "kind": "structure", "text": "最终结构是 check <TEST后JE> <CMP后JE> <CMP后JG> <JE依据> <JG符号关系>；跳转填 1/0，关系写 FLAG=FLAG。" }
   ],
   "verification": {
-    "type": "answer",
+    "type": "debugger-state",
+    "debuggerCheckpoint": "branches_checkpoint",
     "usage": "check <TEST后JE> <CMP后JE> <CMP后JG> <JE依据> <JG符号关系>",
     "instruction": "依次把三个跳转结果写成 1/0，再填 je 依据和 jg 要求相等的两个符号 flag。",
     "placeholders": [

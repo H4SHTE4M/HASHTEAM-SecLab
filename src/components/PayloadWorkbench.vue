@@ -79,6 +79,8 @@ function addSegment(): void {
     segments.value.push({ id, kind: 'p32', label, value: '0x00000000' })
   } else if (segmentKind.value === 'hex') {
     segments.value.push({ id, kind: 'hex', label, value: '00' })
+  } else if (segmentKind.value === 'text') {
+    segments.value.push({ id, kind: 'text', label, value: '' })
   } else {
     segments.value.push({ id, kind: 'cyclic', label, length: 32 })
   }
@@ -156,6 +158,10 @@ function findCyclicOffset(): void {
           十六进制字节
           <input v-model="segment.value" autocomplete="off" spellcheck="false" placeholder="41 42 43" />
         </label>
+        <label v-else-if="segment.kind === 'text'">
+          输入字符串
+          <input v-model="segment.value" autocomplete="off" placeholder="例如 ACCESS-GRANTED" />
+        </label>
         <span class="segment-kind">{{ segment.kind }}</span>
         <button type="button" class="remove-segment" title="删除分段" :aria-label="`删除 ${segment.label} 分段`" @click="removeSegment(segment.id)">
           <AppIcon name="trash-2" :size="15" />
@@ -170,6 +176,7 @@ function findCyclicOffset(): void {
           <option value="padding">重复填充</option>
           <option value="p32">p32 小端整数</option>
           <option value="hex">十六进制字节</option>
+          <option value="text">输入字符串</option>
           <option value="cyclic">cyclic pattern</option>
         </select>
       </label>
@@ -230,17 +237,19 @@ h4 { color: var(--text-primary); font-size: 13px; }
 .payload-header output { min-width: 96px; color: var(--accent-green); font: 650 11px/1 var(--font-mono); text-align: right; }
 .payload-header output.invalid { color: var(--accent-red); }
 .segment-list { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
-.segment-list li { min-height: 62px; display: grid; grid-template-columns: 30px minmax(100px, 1fr) minmax(120px, 1.5fr) 62px 34px; align-items: end; gap: 8px; padding: 8px; background: var(--surface-2); border-left: 3px solid var(--border-strong); border-radius: 6px; }
+.segment-list li { min-height: 62px; display: grid; grid-template-columns: 30px minmax(90px, 1fr) minmax(80px, 0.8fr) minmax(90px, 1fr) 58px 34px; align-items: end; gap: 8px; padding: 8px; background: var(--surface-2); border-left: 3px solid var(--border-strong); border-radius: 6px; }
 .segment-list li[data-kind='padding'] { border-left-color: var(--accent-cyan); }
 .segment-list li[data-kind='p32'] { border-left-color: var(--accent-violet); }
 .segment-list li[data-kind='hex'] { border-left-color: var(--accent-amber); }
 .segment-list li[data-kind='cyclic'] { border-left-color: var(--accent-coral); }
+.segment-list li[data-kind='text'] { border-left-color: var(--accent-green); }
 .segment-index { align-self: center; color: var(--text-faint); font: 650 10px/1 var(--font-mono); }
 label { min-width: 0; display: flex; flex-direction: column; gap: 4px; color: var(--text-faint); font-size: 10px; }
 input,
 select { width: 100%; height: 34px; min-width: 0; padding: 5px 7px; color: var(--text-primary); font: 12px/1 var(--font-mono); background: var(--surface-1); border: var(--hairline) solid var(--border-strong); border-radius: 5px; }
-.segment-kind { align-self: center; color: var(--text-muted); font: 10px/1 var(--font-mono); }
-.remove-segment { width: 34px; height: 34px; display: grid; place-items: center; padding: 0; color: var(--text-faint); background: transparent; border: 0; border-radius: 5px; cursor: pointer; }
+.segment-list li:not([data-kind='padding']) > label:nth-of-type(2) { grid-column: 3 / 5; }
+.segment-kind { grid-column: 5; align-self: center; color: var(--text-muted); font: 10px/1 var(--font-mono); }
+.remove-segment { grid-column: 6; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; color: var(--text-faint); background: transparent; border: 0; border-radius: 5px; cursor: pointer; }
 .remove-segment:hover { color: var(--accent-red); background: color-mix(in srgb, var(--accent-red) 10%, transparent); }
 .add-segment { display: grid; grid-template-columns: minmax(150px, 1fr) auto; align-items: end; gap: 8px; margin-top: 8px; }
 .add-segment button,
@@ -270,6 +279,7 @@ select { width: 100%; height: 34px; min-width: 0; padding: 5px 7px; color: var(-
 @media (max-width: 680px) {
   .segment-list li { grid-template-columns: 30px minmax(0, 1fr) 34px; }
   .segment-list li > label { grid-column: 2; }
+  .segment-list li:not([data-kind='padding']) > label:nth-of-type(2) { grid-column: 2; }
   .segment-list li > .segment-kind { grid-column: 1; }
   .remove-segment { grid-column: 3; grid-row: 1; }
   .payload-output { grid-template-columns: 1fr 1fr; }

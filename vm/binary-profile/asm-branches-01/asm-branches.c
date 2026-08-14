@@ -78,6 +78,10 @@ __attribute__((noinline, used)) static void capture_branches(void) {
         : "eax", "ebx", "cc", "memory");
 }
 
+__attribute__((naked, noinline, used)) static void branches_checkpoint(void) {
+    __asm__ volatile("ret\n\t");
+}
+
 static char *append_text(char *cursor, const char *text) {
     while (*text != '\0') *cursor++ = *text++;
     return cursor;
@@ -137,6 +141,7 @@ __attribute__((noreturn, noinline, used)) void _start(void) {
     char output[2048];
     char *cursor = output;
     capture_branches();
+    branches_checkpoint();
 
     cursor = append_text(cursor, "asm-branches-01（i386 固定快照）\n");
     cursor = append_padded(cursor, "情形", 12);

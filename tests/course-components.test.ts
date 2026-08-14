@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import type { CourseLabDef } from '../src/types/lab'
+import { parseCourseLabManifest } from '../src/services/course-manifest'
 import CourseRail from '../src/components/CourseRail.vue'
 import EvidenceForm from '../src/components/EvidenceForm.vue'
 import MissionPanel from '../src/components/PwnHubMissionPanel.vue'
@@ -38,6 +41,31 @@ describe('chapter-first course components', () => {
     expect(wrapper.emitted('select')?.[0]).toEqual(['memory-addresses-01'])
   })
 
+  it('章节菜单点击外部或按 Escape 即关闭', async () => {
+    const wrapper = mount(CourseRail, {
+      attachTo: document.body,
+      props: {
+        course: COURSE,
+        currentLabId: 'memory-addresses-01',
+        completedLabIds: [],
+        completedLevels: [],
+        completionRecords: {},
+      },
+    })
+
+    await wrapper.get('.chapter-button').trigger('click')
+    expect(wrapper.find('.chapter-menu').exists()).toBe(true)
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.chapter-menu').exists()).toBe(false)
+
+    await wrapper.get('.chapter-button').trigger('click')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.chapter-menu').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('连续点击五次可临时放行锁定的实验或可用章节', async () => {
     const wrapper = mount(CourseRail, {
       props: {
@@ -65,6 +93,64 @@ describe('chapter-first course components', () => {
       debugUnlockedChapterIds: ['asm-reading'],
     })
     expect(lockedLab.attributes('aria-disabled')).toBeUndefined()
+  })
+
+  it('外部逆向实验在任务简介顶部直接提供锁定样本下载', () => {
+    const manifestPath = 'vm/labs/pwnhub/rev-strings-xrefs-01/manifest.json'
+    const manifest = parseCourseLabManifest(
+      JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>,
+      manifestPath,
+    )
+    const { type: verificationType, ...verification } = manifest.verification
+    const lab = {
+      ...manifest,
+      id: 1,
+      name: manifest.title,
+      tagline: manifest.summary,
+      storySummary: manifest.summary,
+      story: manifest.story ?? manifest.summary,
+      newConcepts: manifest.concepts.map((concept: { term: string }) => concept.term),
+      verificationType,
+      verification,
+      legacyLevel: 1,
+    }
+    const wrapper = mount(MissionPanel, {
+      props: {
+        level: lab as unknown as CourseLabDef,
+        completed: false,
+        hintsUsed: 0,
+        isLast: false,
+        mode: 'guided',
+        guideStep: 0,
+        completedSteps: [],
+      },
+    })
+
+    const download = wrapper.get('.sample-download')
+    expect(download.attributes('href')).toBe(
+      '/artifacts/a1d48129804d6eee16ddf44e8697b780dc47a9b2b088503bc5a41fe7543d66cb/reverse-companion',
+    )
+    expect(download.attributes('download')).toBe('')
+    expect(download.text()).toContain('a1d48129804d6eee16ddf44e8697b780dc47a9b2b088503bc5a41fe7543d66cb')
+    wrapper.unmount()
+  })
+
+  it('任务摘要与展开背景相同时只显示一次', () => {
+    const lab = getCourseLab('memory-addresses-01')!
+    const wrapper = mount(MissionPanel, {
+      props: {
+        level: { ...lab, story: lab.storySummary },
+        completed: false,
+        hintsUsed: 0,
+        isLast: false,
+        mode: 'guided',
+        guideStep: 0,
+        completedSteps: [],
+      },
+    })
+
+    expect(wrapper.get('.story-details').findAll('p')).toHaveLength(1)
+    wrapper.unmount()
   })
 
   it('章节菜单用圆环显示本章进度，完成后改为对勾', async () => {

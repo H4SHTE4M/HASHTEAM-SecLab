@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "target": "/opt/pwnhub/labs/memory-addresses-01/memory-addresses",
+  "disassembly": "/opt/pwnhub/labs/memory-addresses-01/memory-addresses.disasm",
+  "symbols": "/opt/pwnhub/labs/memory-addresses-01/memory-addresses.symbols",
+  "views": [
+    { "type": "memory", "address": "cell", "size": 16 },
+    { "type": "stack", "address": "$esp", "size": 32 }
+  ],
+  "success": {
+    "type": "all",
+    "conditions": [
+      { "type": "reached-address", "address": "memory_addresses_checkpoint", "op": "eq" },
+      { "type": "memory-u32", "address": "cell", "op": "eq", "value": "0xdec0de42" },
+      { "type": "memory-u32", "address": "cell_pointer", "op": "eq", "value": "0x0804b140" },
+      { "type": "register", "name": "eax", "op": "eq", "value": "0xdec0de42" }
+    ]
+  }
+}

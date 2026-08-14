@@ -6,12 +6,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const vmMock = vi.hoisted(() => ({
   stage: { value: 'idle' },
+  debuggerState: { value: 'idle' },
   errorMessage: { value: null },
   boot: vi.fn(async () => undefined),
   dispose: vi.fn(async () => undefined),
   restart: vi.fn(async () => undefined),
   onDisplay: vi.fn(() => () => undefined),
   sendSerial: vi.fn(),
+  setTerminalSize: vi.fn(),
   handoff: vi.fn(),
   setModule: vi.fn(),
   gotoLab: vi.fn(),

@@ -64,6 +64,7 @@ def collect_entries(
     busybox_path: str | None,
     busybox_suid_path: str | None = None,
     htcheck_path: str | None = None,
+    debugger_path: str | None = None,
     pwnhub_labs_root: str | None = None,
     pwnhub_lab_ids: tuple[str, ...] = (),
     binary_tools_root: str | None = None,
@@ -115,6 +116,10 @@ def collect_entries(
             uid, gid = owner_for(rel)
             add(rel, mode_for(rel, True), uid, gid)
         else:
+            # debugger 也是显式注入、缓存校验过的资产：保留 overlay 中的审计副本
+            # 供 manifest 校验，但构建运行时归档时只发射注入的字节。
+            if debugger_path is not None and rel == "usr/local/bin/debugger":
+                continue
             uid, gid = owner_for(rel)
             with open(ap, "rb") as fh:
                 add(rel, mode_for(rel, False), uid, gid, normalize_overlay_data(fh.read()))
@@ -181,6 +186,10 @@ def collect_entries(
         with open(htcheck_path, "rb") as fh:
             add("usr/local/bin/htcheck", stat.S_IFREG | 0o4755, 0, 0, fh.read())
 
+    if debugger_path is not None:
+        with open(debugger_path, "rb") as fh:
+            add("usr/local/bin/debugger", stat.S_IFREG | 0o755, 0, 0, fh.read())
+
     # 空的挂载点/系统目录：没有文件所以 os.walk 看不到、git 也不跟踪空目录，
     # 但 init 需要 /dev /proc /sys /tmp /root 存在才能 mount 成功。
     for empty_dir in ("dev", "proc", "root", "sys", "tmp"):
@@ -240,6 +249,7 @@ def main() -> int:
     parser.add_argument("--busybox", default=None, help="busybox 静态二进制路径（完整的 applet 集合）")
     parser.add_argument("--busybox-suid", default=None, help="最小 SUID busybox 路径（仅含 su）")
     parser.add_argument("--htcheck", default=None, help="SUID 签名评分检查器路径")
+    parser.add_argument("--debugger", default=None, help="原生 i386 ptrace debugger 路径")
     parser.add_argument("--profile", default=None, help="生产 rootfs 内容 allowlist JSON")
     parser.add_argument("--labs-root", default=None, help="PwnHub 实验源码根目录")
     parser.add_argument("--binary-tools-root", default=None, help="锁定二进制工具目录")
@@ -277,6 +287,7 @@ def main() -> int:
         args.busybox,
         args.busybox_suid,
         args.htcheck,
+        args.debugger,
         args.labs_root,
         pwnhub_lab_ids,
         args.binary_tools_root,

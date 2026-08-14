@@ -60,6 +60,10 @@ __attribute__((noinline, used)) static void capture_arithmetic(void) {
         : "eax", "ebx", "edx", "cc", "memory");
 }
 
+__attribute__((naked, noinline, used)) static void arithmetic_checkpoint(void) {
+    __asm__ volatile("ret\n\t");
+}
+
 static char *append_text(char *cursor, const char *text) {
     while (*text != '\0') *cursor++ = *text++;
     return cursor;
@@ -106,6 +110,11 @@ __attribute__((noreturn, noinline, used)) void _start(void) {
     char output[2048];
     char *cursor = output;
     capture_arithmetic();
+    __asm__ volatile("movl %[result], %%eax\n\t"
+                     "call arithmetic_checkpoint\n\t"
+                     :
+                     : [result] "m"(xor_after)
+                     : "eax", "memory");
 
     cursor = append_text(cursor, "asm-arithmetic-01（i386 固定快照）\n");
     cursor = append_padded(cursor, "分组", 10);

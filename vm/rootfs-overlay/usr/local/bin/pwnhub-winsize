@@ -1,0 +1,21 @@
+#!/bin/sh
+# Receive browser terminal dimensions on UART1 without writing commands to ttyS0.
+set -eu
+
+CONTROL_TTY=/dev/ttyS1
+TARGET_TTY=/dev/ttyS0
+
+[ -c "$CONTROL_TTY" ] || exit 0
+stty -F "$CONTROL_TTY" 115200 raw -echo 2>/dev/null || exit 0
+printf 'PwnHubSizeReady\n' > "$CONTROL_TTY"
+
+while IFS=';' read -r tag cols rows extra; do
+    [ "$tag" = PwnHubSize ] || continue
+    [ -z "$extra" ] || continue
+    case "$cols:$rows" in
+        *[!0-9:]*|:|*:|:* ) continue ;;
+    esac
+    [ "$cols" -ge 1 ] && [ "$cols" -le 240 ] || continue
+    [ "$rows" -ge 1 ] && [ "$rows" -le 120 ] || continue
+    stty -F "$TARGET_TTY" cols "$cols" rows "$rows" 2>/dev/null || true
+done < "$CONTROL_TTY"
