@@ -22,6 +22,7 @@ const emit = defineEmits<{
   (e: 'reset-all'): void
   (e: 'about', trigger: HTMLElement): void
   (e: 'help', trigger: HTMLElement): void
+  (e: 'shortcuts'): void
   (e: 'change-mode', mode: LabMode): void
   (e: 'change-accent', accent: AccentName): void
   (e: 'change-custom-accent', source: string): void
@@ -35,6 +36,10 @@ function handleAbout(event: MouseEvent): void {
 
 function handleHelp(event: MouseEvent): void {
   if (event.currentTarget instanceof HTMLElement) emit('help', event.currentTarget)
+}
+
+function handleShortcuts(): void {
+  emit('shortcuts')
 }
 
 /** 「重新开始」需要二次确认：第一次点击后按钮进入确认态 */
@@ -185,6 +190,17 @@ onBeforeUnmount(() => {
               >
                 <AppIcon name="help-circle" />
                 <span class="btn-label">操作帮助</span>
+              </button>
+              <button
+                type="button"
+                class="icon-btn"
+                aria-label="键盘快捷键"
+                data-tooltip="键盘快捷键"
+                data-tooltip-placement="bottom"
+                @click="handleShortcuts"
+              >
+                <AppIcon name="terminal" :size="15" />
+                <span class="btn-label">快捷键</span>
               </button>
               <button
                 type="button"

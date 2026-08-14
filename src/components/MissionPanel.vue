@@ -7,6 +7,7 @@ import type {
   LevelCompletionRecord,
   LevelDef,
 } from '../types/lab'
+import { copyText } from '../services/clipboard'
 
 const props = defineProps<{
   level: LevelDef
@@ -42,6 +43,8 @@ const manualCommand = ref('')
 const lastExecutedCommand = ref('')
 const verificationCommand = ref('')
 const verificationError = ref('')
+const copyStatus = ref('')
+let copyStatusTimer: number | null = null
 const fieldValues = reactive<Record<string, string>>({})
 
 const visibleHints = computed(() => props.level.hints.slice(0, props.hintsUsed))
@@ -177,6 +180,17 @@ function runObservation(): void {
   lastExecutedCommand.value = command
   actionPerformed.value = true
   commandError.value = ''
+}
+
+async function copyCommand(command: string): Promise<void> {
+  if (!command) return
+  await copyText(command)
+  copyStatus.value = '已复制'
+  if (copyStatusTimer !== null) window.clearTimeout(copyStatusTimer)
+  copyStatusTimer = window.setTimeout(() => {
+    copyStatus.value = ''
+    copyStatusTimer = null
+  }, 2000)
 }
 
 function buildStructuredCommand(): string | null {
@@ -410,14 +424,23 @@ function stepTypeLabel(type: LearningStep['type']): string {
           </div>
 
           <template v-if="currentStep.type === 'observe'">
-            <button
-              type="button"
-              class="command-run"
-              @click="runObservation"
-            >
-              <span>运行观察示例</span>
-              <code>{{ currentStep.command }}</code>
-            </button>
+            <div class="command-row">
+              <button
+                type="button"
+                class="command-run"
+                @click="runObservation"
+              >
+                <span>运行观察示例</span>
+                <code>{{ currentStep.command }}</code>
+              </button>
+              <button
+                type="button"
+                class="command-copy"
+                @click="copyCommand(currentStep.command ?? '')"
+              >
+                {{ copyStatus || '复制命令' }}
+              </button>
+            </div>
           </template>
 
           <template v-else-if="currentStep.type === 'partial-command'">
@@ -963,6 +986,38 @@ input {
 .command-run code {
   font-size: 14px;
   line-height: 1.5;
+}
+
+.command-row {
+  margin-top: 13px;
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.command-row .command-run {
+  margin-top: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.command-copy {
+  flex-shrink: 0;
+  align-self: center;
+  min-height: 34px;
+  padding: 0 10px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 650;
+  background: var(--surface-0);
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.command-copy:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-cyan);
 }
 
 .structured-form,

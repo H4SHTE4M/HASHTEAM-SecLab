@@ -11,6 +11,7 @@ import CompletionPage from '../components/CompletionPage.vue'
 import AboutModal from '../components/AboutModal.vue'
 import OnboardingDialog from '../components/OnboardingDialog.vue'
 import BugReportDialog from '../components/BugReportDialog.vue'
+import ShortcutReference from '../components/ShortcutReference.vue'
 import { useVirtualMachine } from '../composables/useVirtualMachine'
 import { useLabProgress } from '../composables/useLabProgress'
 import { useLabPreferences } from '../composables/useLabPreferences'
@@ -23,6 +24,7 @@ import {
   shouldSplitShortLandscape,
 } from '../services/workspace-layout'
 import {
+  TERMINAL_FONT_SIZE_DEFAULT,
   TERMINAL_FONT_SIZE_MAX,
   TERMINAL_FONT_SIZE_MIN,
 } from '../services/ui-preferences-store'
@@ -93,6 +95,7 @@ function hasCompletedAvailableCourse(): boolean {
 
 const terminalRef = ref<InstanceType<typeof LabTerminal> | null>(null)
 const showAbout = ref(false)
+const showShortcuts = ref(false)
 const showOnboarding = ref(
   !preferences.state.onboardingComplete ||
     preferences.state.mode === null ||
@@ -182,6 +185,7 @@ const backgroundInert = computed(
   () =>
     showBootOverlay.value ||
     showAbout.value ||
+    showShortcuts.value ||
     showOnboardingDialog.value ||
     activeBlockingAnomaly.value !== null,
 )
@@ -513,6 +517,14 @@ function adjustTerminalFontSize(delta: number): void {
   preferences.setTerminalFontSize(preferences.state.terminalFontSize + delta)
 }
 
+function handleFontSizeDelta(delta: number): void {
+  if (delta === 0) {
+    preferences.setTerminalFontSize(TERMINAL_FONT_SIZE_DEFAULT)
+    return
+  }
+  adjustTerminalFontSize(delta)
+}
+
 function handleRunCommand(command: string): void {
   // runCommand 会先清空终端未提交的输入，避免与已有内容拼接
   vm.runCommand(command)
@@ -645,6 +657,16 @@ function closeAbout(): void {
   restoreFocusAfterOverlayClose()
 }
 
+function openShortcuts(): void {
+  showAbout.value = false
+  showShortcuts.value = true
+}
+
+function closeShortcuts(): void {
+  showShortcuts.value = false
+  restoreFocusAfterOverlayClose()
+}
+
 function openHelp(trigger: HTMLElement): void {
   overlayReturnFocus = trigger
   showAbout.value = false
@@ -724,6 +746,7 @@ async function handleBugReportDownload(): Promise<void> {
         @reset-all="handleResetAll"
         @about="openAbout"
         @help="openHelp"
+        @shortcuts="openShortcuts"
         @change-mode="handleChangeMode"
         @change-theme="applyTheme($event, true)"
         @change-accent="applyAccent"
@@ -810,6 +833,7 @@ async function handleBugReportDownload(): Promise<void> {
                 :auto-focus="!backgroundInert"
                 @input="handleTerminalInput"
                 @resize="handleTerminalResize"
+                @font-size-delta="handleFontSizeDelta"
               />
             </div>
           </section>
@@ -907,6 +931,9 @@ async function handleBugReportDownload(): Promise<void> {
     </Transition>
     <Transition name="overlay-fade">
       <AboutModal v-if="showAbout" @close="closeAbout" />
+    </Transition>
+    <Transition name="overlay-fade">
+      <ShortcutReference v-if="showShortcuts" @close="closeShortcuts" />
     </Transition>
     <Transition name="overlay-fade">
       <OnboardingDialog
