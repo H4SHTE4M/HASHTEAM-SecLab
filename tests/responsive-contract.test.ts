@@ -271,7 +271,7 @@ describe('responsive layout contract', () => {
     const terminal = source('src/components/LabTerminal.vue')
 
     expect(terminal).toMatch(
-      /class="lab-terminal">\s*<div ref="containerRef" class="terminal-viewport"/,
+      /class="lab-terminal">[\s\S]*?<div ref="containerRef" class="terminal-viewport"/,
     )
     expect(terminal).toMatch(
       /\.terminal-viewport\s*\{[\s\S]*?height:\s*100%;[\s\S]*?overflow:\s*hidden;/,

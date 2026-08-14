@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+import { useTerminalShortcuts } from '../composables/useTerminalShortcuts'
 
 const emit = defineEmits<{
   (e: 'input', data: string): void
+  (e: 'font-size-delta', delta: number): void
 }>()
 
 const props = withDefaults(defineProps<{
@@ -17,10 +19,28 @@ const props = withDefaults(defineProps<{
 })
 
 const containerRef = ref<HTMLElement | null>(null)
+const searchInputRef = ref<HTMLInputElement | null>(null)
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
 let resizeObserver: ResizeObserver | null = null
 let resizeFrame: number | null = null
+
+const {
+  isSearchOpen,
+  searchQuery,
+  handleTerminalKey,
+  handleKeydownCapture,
+  attach: attachSearch,
+  closeSearch,
+  searchNext,
+  searchPrevious,
+  searchLive,
+} = useTerminalShortcuts({
+  getTerminal: () => terminal,
+  getContainer: () => containerRef.value,
+  onPaste: (text) => emit('input', text),
+  onFontSizeDelta: (delta) => emit('font-size-delta', delta),
+})
 
 function scheduleFit(): void {
   if (resizeFrame !== null) return
@@ -59,6 +79,10 @@ watch(
   },
   { flush: 'post' },
 )
+
+watch(isSearchOpen, (open) => {
+  if (open) void nextTick(() => searchInputRef.value?.focus())
+})
 
 onMounted(() => {
   const container = containerRef.value
@@ -107,15 +131,16 @@ onMounted(() => {
   })
   fitAddon = new FitAddon()
   terminal.loadAddon(fitAddon)
+  attachSearch(terminal)
   terminal.open(container)
   scheduleFit()
 
-  // 保留 xterm 的 ClipboardEvent 处理：有选区时复制，否则 Ctrl+C 透传给 tty。
-  // 不直接调用 navigator.clipboard，避免权限拒绝时破坏原生降级路径。
+  terminal.attachCustomKeyEventHandler(handleTerminalKey)
 
   terminal.onData((data) => emit('input', data))
   if (props.autoFocus) terminal.focus()
   container.addEventListener('click', focus)
+  window.addEventListener('keydown', handleKeydownCapture, true)
 
   resizeObserver = new ResizeObserver(scheduleFit)
   resizeObserver.observe(container)
@@ -127,6 +152,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', scheduleFit)
   window.visualViewport?.removeEventListener('resize', scheduleFit)
+  window.removeEventListener('keydown', handleKeydownCapture, true)
   if (resizeFrame !== null) window.cancelAnimationFrame(resizeFrame)
   resizeFrame = null
   resizeObserver?.disconnect()
@@ -141,12 +167,30 @@ defineExpose({ write, focus })
 
 <template>
   <div class="lab-terminal">
+    <div v-if="isSearchOpen" class="terminal-search" role="search">
+      <input
+        ref="searchInputRef"
+        v-model="searchQuery"
+        type="text"
+        placeholder="搜索终端输出…"
+        autocomplete="off"
+        spellcheck="false"
+        @input="searchLive"
+        @keydown.enter.prevent="searchNext"
+        @keydown.shift.enter.prevent="searchPrevious"
+        @keydown.esc.prevent="closeSearch"
+      />
+      <button type="button" class="search-btn" aria-label="上一个匹配" @click="searchPrevious">↑</button>
+      <button type="button" class="search-btn" aria-label="下一个匹配" @click="searchNext">↓</button>
+      <button type="button" class="search-btn" aria-label="关闭搜索" @click="closeSearch">×</button>
+    </div>
     <div ref="containerRef" class="terminal-viewport" aria-label="Linux 终端" />
   </div>
 </template>
 
 <style scoped>
 .lab-terminal {
+  position: relative;
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -156,6 +200,55 @@ defineExpose({ write, focus })
   overflow: hidden;
   contain: layout paint;
   touch-action: pan-y;
+}
+
+.terminal-search {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: #0f1517;
+  border: 1px solid #2a3639;
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
+.terminal-search input {
+  width: 220px;
+  min-width: 120px;
+  padding: 4px 8px;
+  color: #dce3e1;
+  font: 12px/1.4 var(--font-mono);
+  background: transparent;
+  border: 0;
+  outline: 0;
+}
+
+.terminal-search input::placeholder {
+  color: #71807d;
+}
+
+.search-btn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: #9db0ad;
+  font-size: 13px;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.search-btn:hover {
+  color: #dce3e1;
+  background: #1b2427;
 }
 
 .terminal-viewport {

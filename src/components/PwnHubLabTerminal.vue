@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+import { useTerminalShortcuts } from '../composables/useTerminalShortcuts'
 
 const emit = defineEmits<{
   (e: 'input', data: string): void
   (e: 'resize', size: { cols: number; rows: number }): void
+  (e: 'font-size-delta', delta: number): void
 }>()
 
 const props = withDefaults(defineProps<{
@@ -18,11 +20,29 @@ const props = withDefaults(defineProps<{
 })
 
 const containerRef = ref<HTMLElement | null>(null)
+const searchInputRef = ref<HTMLInputElement | null>(null)
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
 let resizeObserver: ResizeObserver | null = null
 let resizeFrame: number | null = null
 let lastEmittedSize: { cols: number; rows: number } | null = null
+
+const {
+  isSearchOpen,
+  searchQuery,
+  handleTerminalKey,
+  handleKeydownCapture,
+  attach: attachSearch,
+  closeSearch,
+  searchNext,
+  searchPrevious,
+  searchLive,
+} = useTerminalShortcuts({
+  getTerminal: () => terminal,
+  getContainer: () => containerRef.value,
+  onPaste: (text) => emit('input', text),
+  onFontSizeDelta: (delta) => emit('font-size-delta', delta),
+})
 
 function scheduleFit(): void {
   if (resizeFrame !== null) return
@@ -52,64 +72,6 @@ function focus(): void {
   terminal?.focus()
 }
 
-function isCopyShortcut(event: KeyboardEvent): boolean {
-  return event.type === 'keydown' &&
-    event.ctrlKey &&
-    event.shiftKey &&
-    !event.altKey &&
-    !event.metaKey &&
-    event.key.toLowerCase() === 'c'
-}
-
-function copyWithTextArea(text: string): void {
-  if (typeof document.execCommand !== 'function') return
-
-  const textArea = document.createElement('textarea')
-  textArea.value = text
-  textArea.setAttribute('aria-hidden', 'true')
-  textArea.style.position = 'fixed'
-  textArea.style.inset = '0 auto auto -9999px'
-  document.body.appendChild(textArea)
-  textArea.select()
-  try {
-    document.execCommand('copy')
-  } finally {
-    textArea.remove()
-    terminal?.focus()
-  }
-}
-
-async function copyTerminalSelection(text: string): Promise<void> {
-  try {
-    if (navigator.clipboard === undefined) throw new Error('Clipboard API unavailable')
-    await navigator.clipboard.writeText(text)
-  } catch {
-    copyWithTextArea(text)
-  }
-}
-
-function handleTerminalKey(event: KeyboardEvent): boolean {
-  if (!isCopyShortcut(event)) return true
-
-  event.preventDefault()
-  event.stopPropagation()
-  if (terminal?.hasSelection()) void copyTerminalSelection(terminal.getSelection())
-  return false
-}
-
-/** Chrome reserves Ctrl+Shift+C for the inspector before xterm receives it.
- *  仅当终端容器拥有焦点时拦截，避免影响页面其他输入和快捷键。 */
-function handleCopyShortcutCapture(event: KeyboardEvent): void {
-  if (!isCopyShortcut(event)) return
-  const container = containerRef.value
-  const active = document.activeElement
-  // 终端 xterm 内部的 textarea 获得焦点时才拦截；否则放行给页面和 DevTools。
-  if (container === null || (active !== null && !container.contains(active))) return
-  event.preventDefault()
-  event.stopImmediatePropagation()
-  if (terminal?.hasSelection()) void copyTerminalSelection(terminal.getSelection())
-}
-
 watch(
   () => props.fontSize,
   (fontSize) => {
@@ -126,6 +88,10 @@ watch(
   },
   { flush: 'post' },
 )
+
+watch(isSearchOpen, (open) => {
+  if (open) void nextTick(() => searchInputRef.value?.focus())
+})
 
 onMounted(() => {
   const container = containerRef.value
@@ -174,6 +140,7 @@ onMounted(() => {
   })
   fitAddon = new FitAddon()
   terminal.loadAddon(fitAddon)
+  attachSearch(terminal)
   terminal.open(container)
   scheduleFit()
 
@@ -182,7 +149,7 @@ onMounted(() => {
   terminal.onData((data) => emit('input', data))
   if (props.autoFocus) terminal.focus()
   container.addEventListener('click', focus)
-  window.addEventListener('keydown', handleCopyShortcutCapture, true)
+  window.addEventListener('keydown', handleKeydownCapture, true)
 
   resizeObserver = new ResizeObserver(scheduleFit)
   resizeObserver.observe(container)
@@ -194,7 +161,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', scheduleFit)
   window.visualViewport?.removeEventListener('resize', scheduleFit)
-  window.removeEventListener('keydown', handleCopyShortcutCapture, true)
+  window.removeEventListener('keydown', handleKeydownCapture, true)
   if (resizeFrame !== null) window.cancelAnimationFrame(resizeFrame)
   resizeFrame = null
   resizeObserver?.disconnect()
@@ -210,12 +177,30 @@ defineExpose({ write, focus })
 
 <template>
   <div class="lab-terminal">
+    <div v-if="isSearchOpen" class="terminal-search" role="search">
+      <input
+        ref="searchInputRef"
+        v-model="searchQuery"
+        type="text"
+        placeholder="搜索终端输出…"
+        autocomplete="off"
+        spellcheck="false"
+        @input="searchLive"
+        @keydown.enter.prevent="searchNext"
+        @keydown.shift.enter.prevent="searchPrevious"
+        @keydown.esc.prevent="closeSearch"
+      />
+      <button type="button" class="search-btn" aria-label="上一个匹配" @click="searchPrevious">↑</button>
+      <button type="button" class="search-btn" aria-label="下一个匹配" @click="searchNext">↓</button>
+      <button type="button" class="search-btn" aria-label="关闭搜索" @click="closeSearch">×</button>
+    </div>
     <div ref="containerRef" class="terminal-viewport" aria-label="Linux 终端" />
   </div>
 </template>
 
 <style scoped>
 .lab-terminal {
+  position: relative;
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -225,6 +210,55 @@ defineExpose({ write, focus })
   overflow: hidden;
   contain: layout paint;
   touch-action: pan-y;
+}
+
+.terminal-search {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: #0f1517;
+  border: 1px solid #2a3639;
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
+.terminal-search input {
+  width: 220px;
+  min-width: 120px;
+  padding: 4px 8px;
+  color: #dce3e1;
+  font: 12px/1.4 var(--font-mono);
+  background: transparent;
+  border: 0;
+  outline: 0;
+}
+
+.terminal-search input::placeholder {
+  color: #71807d;
+}
+
+.search-btn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: #9db0ad;
+  font-size: 13px;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.search-btn:hover {
+  color: #dce3e1;
+  background: #1b2427;
 }
 
 .terminal-viewport {
