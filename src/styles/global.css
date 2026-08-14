@@ -227,7 +227,8 @@ body,
 }
 
 body {
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   color: var(--text-primary);
   font-family: var(--font-ui);
   font-size: 15px;
