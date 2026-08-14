@@ -132,6 +132,16 @@ export class SerialProtocolParser {
                 ...(value.sig === undefined ? {} : { sig: value.sig }),
               }
             : null
+        case 'debugger-state':
+          return (value.state === 'ready' || value.state === 'stopped' ||
+            value.state === 'running' || value.state === 'exited') &&
+            (value.eip === undefined || (typeof value.eip === 'string' && /^0x[0-9a-f]{8}$/.test(value.eip)))
+            ? {
+                type: 'debugger-state',
+                state: value.state,
+                ...(value.eip === undefined ? {} : { eip: value.eip }),
+              }
+            : null
         case 'telemetry-command':
           return typeof value.command === 'string' && value.command.length > 0
             ? { type: 'telemetry-command', command: value.command }

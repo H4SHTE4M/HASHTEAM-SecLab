@@ -140,11 +140,17 @@ export interface CyclicPayloadSegment extends PayloadSegmentBase {
   length: number
 }
 
+export interface TextPayloadSegment extends PayloadSegmentBase {
+  kind: 'text'
+  value: string
+}
+
 export type PayloadSegmentDefinition =
   | PaddingPayloadSegment
   | P32PayloadSegment
   | HexPayloadSegment
   | CyclicPayloadSegment
+  | TextPayloadSegment
 
 export interface PayloadWorkbenchPreset {
   outputPath: string

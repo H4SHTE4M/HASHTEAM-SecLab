@@ -82,6 +82,7 @@ def verify_overlay_manifest(entries: dict[str, Entry], repository: Path) -> None
         None,
         None,
         None,
+        None,
         str(repository / "vm" / "labs" / "pwnhub"),
         tuple(profile["pwnhubLabs"]),
         str(repository / "vm" / "binary-tools" / "prebuilt"),

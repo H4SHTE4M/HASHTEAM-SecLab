@@ -16,11 +16,13 @@ import {
 class FakeEmulator implements V86Emulator {
   static latest: FakeEmulator | null = null
 
-  private serialListener: ((byte: number) => void) | null = null
+  private serial0Listener: ((byte: number) => void) | null = null
+  private serial1Listener: ((byte: number) => void) | null = null
   private readyListener: (() => void) | null = null
   private running = true
   static autoReady = true
   readonly sent: string[] = []
+  readonly controlSent: Array<{ serial: number; data: string }> = []
   destroyCount = 0
   destroyPromise: Promise<void> = Promise.resolve()
 
@@ -29,27 +31,32 @@ class FakeEmulator implements V86Emulator {
     if (FakeEmulator.autoReady) queueMicrotask(() => this.emitReady())
   }
 
-  add_listener(event: 'serial0-output-byte', callback: (byte: number) => void): void
+  add_listener(event: 'serial0-output-byte' | 'serial1-output-byte', callback: (byte: number) => void): void
   add_listener(event: 'emulator-ready', callback: () => void): void
   add_listener(
-    event: 'serial0-output-byte' | 'emulator-ready',
+    event: 'serial0-output-byte' | 'serial1-output-byte' | 'emulator-ready',
     callback: ((byte: number) => void) | (() => void),
   ): void {
     if (event === 'serial0-output-byte') {
-      this.serialListener = callback as (byte: number) => void
+      this.serial0Listener = callback as (byte: number) => void
+    } else if (event === 'serial1-output-byte') {
+      this.serial1Listener = callback as (byte: number) => void
     } else {
       this.readyListener = callback as () => void
     }
   }
 
-  remove_listener(event: 'serial0-output-byte', callback: (byte: number) => void): void
+  remove_listener(event: 'serial0-output-byte' | 'serial1-output-byte', callback: (byte: number) => void): void
   remove_listener(event: 'emulator-ready', callback: () => void): void
   remove_listener(
-    event: 'serial0-output-byte' | 'emulator-ready',
+    event: 'serial0-output-byte' | 'serial1-output-byte' | 'emulator-ready',
     callback: ((byte: number) => void) | (() => void),
   ): void {
-    if (event === 'serial0-output-byte' && this.serialListener === callback) {
-      this.serialListener = null
+    if (event === 'serial0-output-byte' && this.serial0Listener === callback) {
+      this.serial0Listener = null
+    }
+    if (event === 'serial1-output-byte' && this.serial1Listener === callback) {
+      this.serial1Listener = null
     }
     if (event === 'emulator-ready' && this.readyListener === callback) {
       this.readyListener = null
@@ -58,6 +65,9 @@ class FakeEmulator implements V86Emulator {
 
   serial0_send(data: string): void {
     this.sent.push(data)
+  }
+  serial_send_bytes(serial: number, data: Uint8Array): void {
+    this.controlSent.push({ serial, data: new TextDecoder().decode(data) })
   }
   async run(): Promise<void> {
     this.running = true
@@ -75,8 +85,9 @@ class FakeEmulator implements V86Emulator {
     return this.running
   }
 
-  emit(text: string): void {
-    for (const byte of new TextEncoder().encode(text)) this.serialListener?.(byte)
+  emit(text: string, event: 'serial0-output-byte' | 'serial1-output-byte' = 'serial0-output-byte'): void {
+    const listener = event === 'serial1-output-byte' ? this.serial1Listener : this.serial0Listener
+    for (const byte of new TextEncoder().encode(text)) listener?.(byte)
   }
 
   emitReady(): void {
@@ -131,17 +142,55 @@ describe('V86Controller serial diagnostics', () => {
     await controller.stop()
   })
 
-  it('切关前中断前台程序，再补发 goto 和 cd "$HOME"', async () => {
+  it('仅在 guest 尺寸通道就绪后发送最新终端行列数', async () => {
+    const controller = new V86Controller()
+    controller.setTerminalSize(132, 43)
+    await controller.start()
+    vi.useFakeTimers()
+
+    expect(FakeEmulator.latest?.controlSent).toEqual([])
+    FakeEmulator.latest?.emit('PwnHubSizeReady\n', 'serial1-output-byte')
+    expect(FakeEmulator.latest?.controlSent).toEqual([
+      { serial: 1, data: 'PwnHubSize;132;43\n' },
+    ])
+
+    controller.setTerminalSize(118, 39)
+    controller.setTerminalSize(111, 37)
+    controller.setTerminalSize(111, 37)
+    expect(FakeEmulator.latest?.controlSent).toHaveLength(1)
+    vi.advanceTimersByTime(119)
+    expect(FakeEmulator.latest?.controlSent).toHaveLength(1)
+    vi.advanceTimersByTime(1)
+    expect(FakeEmulator.latest?.controlSent.at(-1)).toEqual({
+      serial: 1,
+      data: 'PwnHubSize;111;37\n',
+    })
+    expect(FakeEmulator.latest?.controlSent).toHaveLength(2)
+    expect(FakeEmulator.latest?.sent).toEqual([])
+
+    controller.setTerminalSize(111, 37)
+    vi.advanceTimersByTime(120)
+    expect(FakeEmulator.latest?.controlSent).toHaveLength(2)
+    await controller.stop()
+    vi.useRealTimers()
+  })
+
+  it('切关前退出前台调试器，再补发 goto 和 cd "$HOME"', async () => {
     const controller = new V86Controller()
     await controller.start()
 
     await controller.restoreLevel(3)
 
-    expect(FakeEmulator.latest?.sent).toEqual(['\u0003', '\u0015', 'hashteamctl goto 3\ncd "$HOME"\n'])
+    expect(FakeEmulator.latest?.sent).toEqual([
+      '\u0003',
+      '\u0015',
+      'quit\n',
+      'hashteamctl goto 3\ncd "$HOME"\n',
+    ])
     await controller.stop()
   })
 
-  it('切换稳定实验前中断前台程序，并补发 cd "$HOME"', async () => {
+  it('切换稳定实验前退出前台调试器，并补发 cd "$HOME"', async () => {
     const controller = new V86Controller()
     await controller.start()
 
@@ -150,6 +199,7 @@ describe('V86Controller serial diagnostics', () => {
     expect(FakeEmulator.latest?.sent).toEqual([
       '\u0003',
       '\u0015',
+      'quit\n',
       'hashteamctl goto-lab memory-addresses-01\ncd "$HOME"\n',
     ])
     await controller.stop()
@@ -162,6 +212,21 @@ describe('V86Controller serial diagnostics', () => {
     controller.runCommand('echo ready')
 
     expect(FakeEmulator.latest?.sent).toEqual(['\u0003', '\u0015', 'echo ready\n'])
+    await controller.stop()
+  })
+
+  it('重置当前实验前退出前台调试器并回到 HOME', async () => {
+    const controller = new V86Controller()
+    await controller.start()
+
+    await controller.resetLevel()
+
+    expect(FakeEmulator.latest?.sent).toEqual([
+      '\u0003',
+      '\u0015',
+      'quit\n',
+      'reset-level\ncd "$HOME"\n',
+    ])
     await controller.stop()
   })
 

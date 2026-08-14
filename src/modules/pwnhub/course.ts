@@ -27,7 +27,7 @@ function courseLabFromManifest(manifest: CourseLabManifest, id: number): CourseL
     name: manifest.title,
     tagline: manifest.summary,
     storySummary: manifest.summary,
-    story: manifest.summary,
+    story: manifest.story ?? manifest.summary,
     goals: manifest.goals,
     prerequisites: manifest.prerequisites,
     newConcepts: manifest.concepts.map((concept) => concept.term),

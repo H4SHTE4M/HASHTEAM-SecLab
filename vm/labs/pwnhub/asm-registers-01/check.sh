@@ -4,7 +4,7 @@ set -eu
 LAB_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROGRAM="$LAB_DIR/asm-registers"
 ANSWER_HASH="$LAB_DIR/answer.sha256"
-EXPECTED_SHA256='66bc1629d0e30810add25434272188290a6ab19db76432dbba5de2e1b9aaa4e1'
+EXPECTED_SHA256='ab2122285db34dbe4e3c6b96879113b4dba2246396965dad3bc8ba262e503115'
 
 if [ "$#" -ne 3 ]; then
     echo '需要三个观察值：mov 后 EAX、lea 后 ECX、指向栈顶的寄存器。' >&2

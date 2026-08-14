@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "target": "/opt/pwnhub/labs/asm-registers-01/asm-registers",
+  "disassembly": "/opt/pwnhub/labs/asm-registers-01/asm-registers.disasm",
+  "symbols": "/opt/pwnhub/labs/asm-registers-01/asm-registers.symbols",
+  "views": [{ "type": "stack", "address": "$esp", "size": 32 }],
+  "success": {
+    "type": "all",
+    "conditions": [
+      { "type": "reached-address", "address": "registers_checkpoint", "op": "eq" },
+      { "type": "register", "name": "eax", "op": "eq", "value": "0x11223344" },
+      { "type": "register", "name": "ecx", "op": "eq", "value": "0x0000100c" }
+    ]
+  }
+}

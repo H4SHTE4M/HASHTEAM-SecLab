@@ -4,7 +4,7 @@ set -eu
 LAB_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROGRAM="$LAB_DIR/asm-stack-ops"
 ANSWER_HASH="$LAB_DIR/answer.sha256"
-EXPECTED_SHA256='bd3b56a443f0059f57bd3af13f9e0ca1b2fe4ee6ebff60b64cefb9d57e398dbb'
+EXPECTED_SHA256='f9cacce544588e61133416667bd6f8ccde415489d88633e71c5395ba78b717fb'
 
 if [ "$#" -ne 4 ]; then
     echo '需要四个观察值：两次 push 后的 ESP，以及两次 pop 取出的值。' >&2

@@ -16,6 +16,10 @@ hostname -F /etc/hostname
 # 仅启用回环：训练中的 Web 服务都只能在虚拟机本机访问。
 ifconfig lo 127.0.0.1 up
 
+# Browser terminal dimensions arrive over the auxiliary UART. The listener
+# updates ttyS0 out of band, so an active gdb/debugger cannot consume resize data.
+/usr/local/bin/pwnhub-winsize </dev/null >/dev/null 2>&1 &
+
 # 评分会话密钥：每次启动随机生成，仅 root 可读。
 # htcheck（SUID）在 check 通过时用它签名结果，前端据签名防伪；
 # su 已被 passwd 锁定（无 shadow），学生无法读取此密钥。

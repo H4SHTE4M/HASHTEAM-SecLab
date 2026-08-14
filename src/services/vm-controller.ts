@@ -1,13 +1,14 @@
 import type { BootStage, VirtualMachineController } from '../types/lab'
 import { log } from './boot-logger'
 
-/** v86 模拟器的最小类型声明（libv86.js 无官方 d.ts，仅声明我们用到的 API） */
+const TERMINAL_SIZE_DEBOUNCE_MS = 120
 export interface V86Emulator {
-  add_listener(event: 'serial0-output-byte', callback: (byte: number) => void): void
+  add_listener(event: 'serial0-output-byte' | 'serial1-output-byte', callback: (byte: number) => void): void
   add_listener(event: 'emulator-ready', callback: () => void): void
-  remove_listener(event: 'serial0-output-byte', callback: (byte: number) => void): void
+  remove_listener(event: 'serial0-output-byte' | 'serial1-output-byte', callback: (byte: number) => void): void
   remove_listener(event: 'emulator-ready', callback: () => void): void
   serial0_send(data: string): void
+  serial_send_bytes?(serial: number, data: Uint8Array): void
   run(): Promise<void>
   stop(): Promise<void>
   destroy(): Promise<void>
@@ -143,6 +144,11 @@ export class V86Controller implements VirtualMachineController {
   /** 串口原始输出行缓冲（仅用于日志，不影响显示/协议解析） */
   private serialLogLine = ''
   private serialLogLineTruncated = false
+  private terminalControlLine = ''
+  private terminalControlReady = false
+  private terminalSize: { cols: number; rows: number } | null = null
+  private lastSentTerminalSize: { cols: number; rows: number } | null = null
+  private terminalSizeSendTimer: ReturnType<typeof setTimeout> | null = null
   private stopRequested = false
   private startAbortController: AbortController | null = null
   /** 当前 start/stop 任务身份；stop 会等待已取消的 start 收口，start 会等待完整销毁。 */
@@ -182,6 +188,20 @@ export class V86Controller implements VirtualMachineController {
       }
       this.serialLogLineTruncated = false
     }
+  }
+
+  private readonly terminalControlByteHandler = (byte: number): void => {
+    const character = String.fromCharCode(byte & 0xff)
+    if (character === '\n') {
+      if (this.terminalControlLine.replace(/\r$/, '') === 'PwnHubSizeReady') {
+        this.terminalControlReady = true
+        this.lastSentTerminalSize = null
+        this.sendTerminalSize()
+      }
+      this.terminalControlLine = ''
+      return
+    }
+    if (this.terminalControlLine.length < 128) this.terminalControlLine += character
   }
 
   constructor(
@@ -248,7 +268,9 @@ export class V86Controller implements VirtualMachineController {
         disable_keyboard: true,
         disable_mouse: true,
         disable_speaker: true,
-        // autostart:true 让 v86 在 wasm 实例化完成后自行启动 CPU。
+        // UART1 is a private browser-to-guest control channel for TTY size.
+        // It is not a network device and is never exposed as a login shell.
+        uart1: true,
         // 不能用 autostart:false + 立即 run()：v86 的 run() 内部执行
         // this.v86.run()，而此时 wasm 异步加载尚未完成、this.v86 仍为
         // undefined，会抛 "Cannot read properties of undefined (reading 'run')"
@@ -266,6 +288,7 @@ export class V86Controller implements VirtualMachineController {
       }
       emulator.add_listener('emulator-ready', handleReady)
       emulator.add_listener('serial0-output-byte', this.byteHandler)
+      emulator.add_listener('serial1-output-byte', this.terminalControlByteHandler)
       log('boot', 'v86 已构造（autostart），等待 Linux 内核引导与 init 发出 ready 协议…')
       this.onStageChange('preparing-env')
     } finally {
@@ -344,6 +367,7 @@ export class V86Controller implements VirtualMachineController {
     try {
       if (emulator === null) return
       emulator.remove_listener('serial0-output-byte', this.byteHandler)
+      emulator.remove_listener('serial1-output-byte', this.terminalControlByteHandler)
       if (emulatorReady !== null) {
         let resolveTimeout!: (ready: boolean) => void
         const timeout = new Promise<boolean>((resolve) => {
@@ -378,6 +402,10 @@ export class V86Controller implements VirtualMachineController {
     } finally {
       this.serialLogLine = ''
       this.serialLogLineTruncated = false
+      this.clearTerminalSizeSendTimer()
+      this.terminalControlLine = ''
+      this.terminalControlReady = false
+      this.lastSentTerminalSize = null
       this.onStageChange('idle')
     }
   }
@@ -393,6 +421,10 @@ export class V86Controller implements VirtualMachineController {
       return
     }
     this.onStageChange('starting-linux')
+    this.clearTerminalSizeSendTimer()
+    this.terminalControlLine = ''
+    this.terminalControlReady = false
+    this.lastSentTerminalSize = null
     this.emulator.restart()
     this.onStageChange('preparing-env')
   }
@@ -403,7 +435,7 @@ export class V86Controller implements VirtualMachineController {
    * 后续可替换为 v86 save_state/restore_state 快照实现，接口保持不变。
    */
   async restoreLevel(level: number): Promise<void> {
-    this.prepareCommand()
+    this.prepareNavigationCommand()
     // hashteamctl 的 init 是子进程，改变不了学生交互 shell 的 cwd。
     // 学生可能在上一关 cd 进了子目录，goto 之后补一行 cd 把 shell 带回 HOME，
     // 避免新关卡的相对路径命令错误地作用于旧目录。
@@ -412,10 +444,14 @@ export class V86Controller implements VirtualMachineController {
 
   /** 恢复到使用稳定身份的 v3 实验，不经过数字关卡兼容层。 */
   async restoreLab(labId: string): Promise<void> {
-    this.prepareCommand()
+    this.prepareNavigationCommand()
     this.sendSerial(`hashteamctl goto-lab ${labId}\ncd "$HOME"\n`)
   }
 
+  async resetLevel(): Promise<void> {
+    this.prepareNavigationCommand()
+    this.sendSerial('reset-level\ncd "$HOME"\n')
+  }
   runCommand(command: string): void {
     this.prepareCommand()
     this.sendSerial(`${command}\n`)
@@ -426,11 +462,67 @@ export class V86Controller implements VirtualMachineController {
     this.sendSerial('\u0015')
   }
 
+  /**
+   * 章节切换必须离开可能仍在前台的交互式调试器。Ctrl+C 先停止 inferior，
+   * Ctrl+U 清掉当前输入，再用调试器和 Shell 都支持的 quit 回到干净提示符。
+   */
+  private prepareNavigationCommand(): void {
+    this.sendSerial('\u0003')
+    this.sendSerial('\u0015')
+    this.sendSerial('quit\n')
+  }
+
   sendSerial(input: string): void {
     if (this.emulator === null || !this.emulator.is_running()) return
     this.emulator.serial0_send(input)
   }
 
+  setTerminalSize(cols: number, rows: number): void {
+    const safeCols = Math.max(1, Math.min(240, Math.round(cols)))
+    const safeRows = Math.max(1, Math.min(120, Math.round(rows)))
+    if (this.terminalSize?.cols === safeCols && this.terminalSize.rows === safeRows) return
+    this.terminalSize = { cols: safeCols, rows: safeRows }
+    this.scheduleTerminalSizeSend()
+  }
+
+  private scheduleTerminalSizeSend(): void {
+    if (this.emulator === null || !this.terminalControlReady) return
+    this.clearTerminalSizeSendTimer()
+    this.terminalSizeSendTimer = setTimeout(() => {
+      this.terminalSizeSendTimer = null
+      this.sendTerminalSize()
+    }, TERMINAL_SIZE_DEBOUNCE_MS)
+  }
+
+  private clearTerminalSizeSendTimer(): void {
+    if (this.terminalSizeSendTimer === null) return
+    clearTimeout(this.terminalSizeSendTimer)
+    this.terminalSizeSendTimer = null
+  }
+
+  private sendTerminalSize(): void {
+    const emulator = this.emulator
+    if (
+      emulator === null ||
+      !emulator.is_running() ||
+      !this.terminalControlReady ||
+      this.terminalSize === null
+    ) return
+    if (
+      this.lastSentTerminalSize?.cols === this.terminalSize.cols &&
+      this.lastSentTerminalSize.rows === this.terminalSize.rows
+    ) return
+    // The auxiliary UART is reserved for a tiny winsize side channel. It is
+    // independent from the student's shell, so resizing never becomes a
+    // command accidentally consumed by gdb/debugger.
+    if (typeof emulator.serial_send_bytes === 'function') {
+      const payload = new TextEncoder().encode(
+        `PwnHubSize;${this.terminalSize.cols};${this.terminalSize.rows}\n`,
+      )
+      emulator.serial_send_bytes(1, payload)
+      this.lastSentTerminalSize = { ...this.terminalSize }
+    }
+  }
   onSerialOutput(callback: (data: string) => void): () => void {
     this.serialCallbacks.add(callback)
     return () => {

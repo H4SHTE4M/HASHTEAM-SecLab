@@ -20,7 +20,7 @@
     {
       "path": "/opt/pwnhub/labs/asm-stack-ops-01/asm-stack-ops",
       "architecture": "i386",
-      "sha256": "bd3b56a443f0059f57bd3af13f9e0ca1b2fe4ee6ebff60b64cefb9d57e398dbb",
+      "sha256": "f9cacce544588e61133416667bd6f8ccde415489d88633e71c5395ba78b717fb",
       "purpose": "固定、离线的 push、pop、ESP 和寄存器传值观察样本",
       "downloadable": true
     }
@@ -114,7 +114,8 @@
     { "level": 3, "kind": "structure", "text": "最终结构是 check <第一次PUSH后ESP> <第二次PUSH后ESP> <第一次POP值> <第二次POP值>。" }
   ],
   "verification": {
-    "type": "answer",
+    "type": "debugger-state",
+    "debuggerCheckpoint": "stack_ops_checkpoint",
     "usage": "check <第一次PUSH后ESP> <第二次PUSH后ESP> <第一次POP值> <第二次POP值>",
     "instruction": "依次填入两条 push 行的 ESP，以及 pop eax、pop ebx 行的取出值。",
     "placeholders": [

@@ -1,0 +1,14 @@
+format=1
+distribution=AOSC OS optenv(32)
+packages=gcc=14.3.0.20250523;binutils=2.46.0.20260210
+compiler=/opt/32/bin/i686-aosc-linux-gnu-gcc
+compiler_version=i686-aosc-linux-gnu-gcc (GCC) 14.3.0 20250523 (AOSC OS, optenv(32))
+compiler_sha256=a791daecf0a00a888b4791026da452ea320ab066a32ee7a05ef071c11d2129fc
+linker=/opt/32/bin/i686-aosc-linux-gnu-ld
+linker_version=GNU ld (GNU Binutils) 2.46.0.20260210
+linker_sha256=2e46094c9318c4e2b69203f12ef93e3623fec21a66633489fd80870c23f25f41
+source_date_epoch=0
+architecture=i386
+endianness=little
+compile_flags=-m32 -static -Os -Wall -Wextra -Werror -Wl,--build-id=none -Wl,-z,noexecstack -Wl,-z,relro,-z,now
+output_sha256=4a28618efb50830a34274d6daeb32cb578f52d79e02e9c6289d3ba5f406809bf

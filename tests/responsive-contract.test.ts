@@ -167,6 +167,21 @@ describe('responsive layout contract', () => {
     expect(terminal).toContain('rescaleOverlappingGlyphs: true')
   })
 
+  it('synchronizes the guest tty width without injecting resize commands into the foreground app', () => {
+    const profile = source('vm/rootfs-overlay/home/guest/.profile')
+    const init = source('vm/rootfs-overlay/init')
+    const controller = source('src/services/vm-controller.ts')
+    const winsize = source('vm/rootfs-overlay/usr/local/bin/pwnhub-winsize')
+
+    expect(profile).toContain('stty cols 80 rows 24')
+    expect(init).toContain('/usr/local/bin/pwnhub-winsize')
+    expect(controller).toContain("add_listener('serial1-output-byte'")
+    expect(controller).toContain('PwnHubSize;${this.terminalSize.cols};${this.terminalSize.rows}')
+    expect(winsize).toContain('TARGET_TTY=/dev/ttyS0')
+    expect(winsize).toContain('stty -F "$TARGET_TTY" cols "$cols" rows "$rows"')
+    expect(controller).not.toMatch(/runCommand\([^)]*stty/)
+  })
+
   it('offers persisted, bounded terminal font controls', () => {
     const app = source('src/views/SecLabWorkspace.vue')
     const terminal = source('src/components/LabTerminal.vue')
@@ -205,6 +220,26 @@ describe('responsive layout contract', () => {
     )
     expect(rail).not.toContain('flex-basis: 38px')
     expect(topbar).not.toContain('width: 34px')
+  })
+
+  it('keeps payload segment controls in stable columns and stacks them on narrow screens', () => {
+    const payload = source('src/components/PayloadWorkbench.vue')
+
+    expect(payload).toMatch(/grid-template-columns:\s*30px[^;]+58px 34px;/)
+    expect(payload).toContain('.segment-kind { grid-column: 5;')
+    expect(payload).toContain('.remove-segment { grid-column: 6;')
+    expect(payload).toContain("li:not([data-kind='padding']) > label:nth-of-type(2) { grid-column: 3 / 5; }")
+    expect(payload).toContain("li:not([data-kind='padding']) > label:nth-of-type(2) { grid-column: 2; }")
+  })
+
+  it('keeps debugger controls usable on narrow mission panels', () => {
+    const debuggerControls = source('src/components/DebuggerControls.vue')
+
+    expect(debuggerControls).toContain('debugger-checkpoint')
+    expect(debuggerControls).toMatch(
+      /@media \(max-width: 520px\)[\s\S]*?\.debugger-command-form,\s*\.debugger-command-form:last-child\s*\{\s*grid-template-columns: minmax\(0, 1fr\);/,
+    )
+    expect(debuggerControls).toContain("send(`until ${props.checkpoint}`)")
   })
 
   it('ships compact WOFF2 terminal fonts instead of multi-megabyte TTF payloads', () => {
@@ -278,6 +313,7 @@ describe('responsive layout contract', () => {
 
   it('supports accessible tooltips and a resizable mission panel', () => {
     const app = source('src/views/SecLabWorkspace.vue')
+    const pwnhubApp = source('src/views/PwnHubWorkspace.vue')
     const globalCss = source('src/styles/global.css')
     const topbar = source('src/components/TopBar.vue')
 
@@ -288,6 +324,12 @@ describe('responsive layout contract', () => {
     expect(app).toContain('class="panel-collapse-toggle"')
     expect(app).toContain('aria-controls="mission-panel"')
     expect(app).toContain("'展开任务栏' : '收起任务栏'")
+    expect(pwnhubApp).toContain('@pointerdown="startPanelToggleGesture"')
+    expect(pwnhubApp).toContain('@click="handlePanelToggleClick"')
+    expect(pwnhubApp).toMatch(
+      /\.panel-collapse-toggle\s*\{[^}]*width:\s*24px;[^}]*height:\s*40px;/,
+    )
+    expect(pwnhubApp).not.toMatch(/\.panel-collapse-toggle\s*\{[^}]*top:/)
     expect(app).toContain('--workspace-panel-width')
     expect(globalCss).toContain('[data-tooltip]:hover::before')
     expect(globalCss).toContain('[data-tooltip]:focus-visible::before')

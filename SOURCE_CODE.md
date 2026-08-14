@@ -2,8 +2,8 @@
 
 The production site distributes a Linux kernel, BusyBox userland, a minimal
 BusyBox `su` helper, static GNU Binutils `readelf`, `nm`, and `objdump` frontends, a static
-native GDB fallback, the glibc and other libraries linked into those executables, SeaBIOS,
-and the v86 runtime.
+native GDB fallback, a project-authored static i386 `ptrace` debugger, the glibc and other
+libraries linked into those executables, SeaBIOS, and the v86 runtime.
 
 The exact project source for this production release, including the VM build
 configuration, initramfs overlay, challenge data, build scripts, dependency
@@ -79,6 +79,11 @@ relinked against a modified glibc.
 The static `htcheck` signer uses the separate i386 cross toolchain recorded in
 `vm/toolchain-source/htcheck/toolchain.lock`; that lock includes the compiler,
 linker, package versions, flags, and audited output hash.
+The project-authored debugger source is `vm/toolchain-source/debugger/debugger.c`.
+`vm/binary-tools/build-debugger.sh` builds it with the AOSC optenv(32) i686 cross
+toolchain, statically links glibc, strips the result, and verifies the output against
+`vm/toolchain-source/debugger/toolchain.lock`. The same AOSC optenv(32) GCC 14.3
+toolchain (with the audited glibc source set) is shared with `htcheck`.
 The static Binutils tools use the locked two-stage build in
 `vm/binary-tools/build-binutils.sh`: libraries are built with static linker flags,
 then the selected frontends are relinked with Libtool `-all-static` and stripped.
@@ -91,7 +96,9 @@ configure flags, and the output hash. Its lock explicitly records that Pwndbg wa
 excluded after the size and no-pwntools audit; the course therefore documents native
 GDB commands as the guaranteed route. The corresponding source set also includes
 the exact GCC 13 runtime, GMP, MPFR, Expat, ncurses and zlib source packages selected
-by that lock.
+by that lock. `vm/binary-tools/gdb-15.1-ascii-casefold.patch` is applied to the
+pristine GDB source so ASCII C/C++ symbols do not require runtime UTF-32 gconv
+modules in the reduced initramfs; the patch is distributed with the build materials.
 
 The pwn/ROP lab samples (`pwn-overflow-offset-01`, `pwn-ret2win-01`,
 `pwn-ret2win-args-01`, `rop-gadget-stack-01`, `rop-register-chain-01`,
@@ -105,6 +112,11 @@ linked. The restricted payload teaching tools `p32`, `hex2bin`, `cyclic`,
 `cyclic-find` and `payload-run` are project-authored POSIX shell scripts under
 `vm/rootfs-overlay/usr/local/bin/`, audited with sizes and SHA-256 in
 `vm/binary-profile/assets.json` (`scriptTools`).
+The debugger-enabled memory and assembly samples are project-authored sources under
+`vm/binary-profile/<labId>/`. Their build scripts invoke
+`scripts/generate-debugger-index.sh` to derive the instruction and symbol indexes from
+each locked ELF. The ELF, both indexes, `debugger.json`, and `debugger-check.sh` hashes
+are recorded in the lab `toolchain.lock` and in `vm/binary-profile/assets.json`.
 
 To rebuild the VM and static web release from the fixed commit:
 

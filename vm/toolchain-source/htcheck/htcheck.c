@@ -18,7 +18,9 @@
 // `htcheck selftest` 用 RFC 4231 与 FIPS 180-4 向量自检。
 
 #include <errno.h>
+#include <fcntl.h>
 #include <grp.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -222,6 +224,8 @@ static void render_result(int rc, const char *output, size_t output_len) {
 #define VM_LABS_DIR "/opt/pwnhub/labs"
 #define VM_KEY_FILE "/etc/hashteam/protocol.key"
 #define VM_STATE_DIR "/home/guest/.hashteam"
+#define VM_DEBUGGER "/usr/local/bin/debugger"
+#define VM_DEBUGGER_TOKEN_PREFIX "/tmp/.pwnhub-debugger-"
 #define MAX_CAPTURE (1024 * 1024)
 #define MAX_KEY_LEN 128
 
@@ -232,6 +236,10 @@ typedef struct {
     const char *key_file;       // 会话密钥文件
     char state_dir[512];        // VM 固定 guest 状态目录（非 SUID 测试可覆盖）
 } run_env;
+
+static const char *verified_debugger_token = NULL;
+
+static int debugger_parent_is_trusted(void);
 
 static int resolve_run_env(run_env *env) {
     env->suid_active = getuid() != geteuid() ? 1 : 0;
@@ -294,6 +302,39 @@ static int valid_lab_id(const char *value) {
         if (!((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-')) return 0;
     }
     return 1;
+}
+
+static int debugger_token_path(const char *lab_id, char path[256]) {
+    if (!valid_lab_id(lab_id)) return -1;
+    return snprintf(path, 256, "%s%s", VM_DEBUGGER_TOKEN_PREFIX, lab_id) < 256 ? 0 : -1;
+}
+
+static int read_exact(int fd, uint8_t *buffer, size_t length) {
+    size_t used = 0;
+    while (used < length) {
+        ssize_t count = read(fd, buffer + used, length - used);
+        if (count > 0) {
+            used += (size_t)count;
+            continue;
+        }
+        if (count < 0 && errno == EINTR) continue;
+        return -1;
+    }
+    return 0;
+}
+
+static int write_exact(int fd, const char *buffer, size_t length) {
+    size_t used = 0;
+    while (used < length) {
+        ssize_t count = write(fd, buffer + used, length - used);
+        if (count > 0) {
+            used += (size_t)count;
+            continue;
+        }
+        if (count < 0 && errno == EINTR) continue;
+        return -1;
+    }
+    return 0;
 }
 
 // 返回 1 表示读到合法 labId，0 表示仍处于旧数字关卡，-1 表示状态文件非法。
@@ -440,6 +481,14 @@ static int run_check(int argc, char **argv) {
         level = 0;
         script[0] = '\0';
     }
+    if (verified_debugger_token != NULL) {
+        if (lab_state != 1 ||
+            snprintf(script, sizeof(script), "%s/%s/debugger-check.sh", env.labs_dir, lab_id) >=
+                (int)sizeof(script)) {
+            fprintf(stderr, "✗ 当前实验没有 debugger 检查脚本。\n");
+            return 2;
+        }
+    }
     struct stat st;
     if (script[0] == '\0' || stat(script, &st) != 0 || !S_ISREG(st.st_mode)) {
         fprintf(stderr, "✗ 当前关卡没有检查脚本。\n");
@@ -489,7 +538,18 @@ static int run_check(int argc, char **argv) {
                 (char *)"LC_ALL=C",
                 NULL,
             };
-            execve(shell, child_argv, child_env);
+            char *const debugger_child_env[] = {
+                (char *)"HOME=/home/guest",
+                (char *)"PATH=/usr/local/bin:/bin:/usr/bin:/sbin",
+                (char *)"USER=guest",
+                (char *)"LOGNAME=guest",
+                (char *)"SHELL=/bin/sh",
+                (char *)"LC_ALL=C",
+                (char *)"PWNHUB_DEBUGGER_VERIFIED=1",
+                NULL,
+            };
+            execve(shell, child_argv,
+                   verified_debugger_token != NULL ? debugger_child_env : child_env);
         } else {
             if (getenv("PATH") == NULL) {
                 setenv("PATH", "/usr/local/bin:/bin:/usr/bin:/sbin", 1);
@@ -557,6 +617,80 @@ static int run_check(int argc, char **argv) {
         }
     }
     return rc;
+}
+
+static int current_lab_for_debugger(const run_env *env, char lab_id[97]) {
+    int state = read_current_lab(env, lab_id);
+    return state == 1 ? 0 : -1;
+}
+
+static int create_debugger_token(void) {
+    run_env env;
+    char lab_id[97] = {0};
+    char path[256];
+    if (resolve_run_env(&env) != 0 || !env.suid_active || !debugger_parent_is_trusted() ||
+        current_lab_for_debugger(&env, lab_id) != 0 ||
+        debugger_token_path(lab_id, path) != 0) return 2;
+    uint8_t token_bytes[24];
+    int source = open("/dev/urandom", O_RDONLY);
+    if (source < 0 || read_exact(source, token_bytes, sizeof(token_bytes)) != 0) {
+        if (source >= 0) close(source);
+        return 3;
+    }
+    close(source);
+    char token[49];
+    hex_encode(token_bytes, sizeof(token_bytes), token);
+    unlink(path);
+    int fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0600);
+    if (fd < 0 || write_exact(fd, token, strlen(token)) != 0) {
+        if (fd >= 0) close(fd);
+        unlink(path);
+        return 3;
+    }
+    fchmod(fd, 0600);
+    close(fd);
+    return 0;
+}
+
+static int debugger_parent_is_trusted(void) {
+    char path[64];
+    char executable[PATH_MAX];
+    snprintf(path, sizeof(path), "/proc/%ld/exe", (long)getppid());
+    ssize_t length = readlink(path, executable, sizeof(executable) - 1);
+    if (length <= 0 || length >= (ssize_t)sizeof(executable)) return 0;
+    executable[length] = '\0';
+    return strcmp(executable, VM_DEBUGGER) == 0;
+}
+
+static int complete_debugger(void) {
+    run_env env;
+    char lab_id[97] = {0};
+    char path[256];
+    if (resolve_run_env(&env) != 0 || !env.suid_active || !debugger_parent_is_trusted() ||
+        current_lab_for_debugger(&env, lab_id) != 0 || debugger_token_path(lab_id, path) != 0) {
+        printf("✗ debugger 动态验证调用者不受信任。\n");
+        return 2;
+    }
+    int fd = open(path, O_RDONLY | O_NOFOLLOW);
+    if (fd < 0) {
+        printf("✗ 本次实验没有可用的一次性验证 token。\n");
+        return 1;
+    }
+    char token[49] = {0};
+    if (read_exact(fd, (uint8_t *)token, 48) != 0 || read(fd, token + 48, 1) != 0) {
+        close(fd);
+        unlink(path);
+        printf("✗ 动态验证 token 无效。\n");
+        return 1;
+    }
+    close(fd);
+    unlink(path);
+    verified_debugger_token = token;
+    // 复用现有官方 check.sh；token 作为唯一参数，check.sh 必须显式校验它。
+    char *args[] = {(char *)"run", token, NULL};
+    int result = run_check(2, args);
+    verified_debugger_token = NULL;
+    return result;
 }
 
 static int emit_level_ready(const char *level_arg) {
@@ -694,9 +828,15 @@ int main(int argc, char **argv) {
     if (strcmp(mode, "lab-ready") == 0) {
         return emit_lab_ready(argc >= 3 ? argv[2] : NULL);
     }
+    if (strcmp(mode, "debugger-reset") == 0) {
+        return create_debugger_token();
+    }
+    if (strcmp(mode, "debugger-complete") == 0) {
+        return complete_debugger();
+    }
     if (strcmp(mode, "selftest") == 0) {
         return selftest();
     }
-    fprintf(stderr, "用法：htcheck run [check 参数...] | htcheck level-ready <关卡号> | htcheck lab-ready <实验 ID> | htcheck selftest\n");
+    fprintf(stderr, "用法：htcheck run [check 参数...] | htcheck level-ready <关卡号> | htcheck lab-ready <实验 ID> | htcheck debugger-reset | htcheck debugger-complete | htcheck selftest\n");
     return 2;
 }

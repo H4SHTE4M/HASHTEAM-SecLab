@@ -5,6 +5,7 @@ set -eu
 STATE_DIR="$HOME/.hashteam"
 LEVELS_DIR="${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}"
 LABS_DIR="${PWNHUB_LABS_DIR:-/opt/pwnhub/labs}"
+COURSE_ORDER="${PWNHUB_COURSE_ORDER:-/opt/pwnhub/course-order}"
 . "${HASHTEAM_LIB_DIR:-/etc/hashteam}/colors.sh"
 
 current_level() {
@@ -90,6 +91,36 @@ run_lab_init() {
     sh "$LABS_DIR/$1/init.sh"
 }
 
+course_number() {
+    wanted=$1
+    number=10
+    [ -f "$COURSE_ORDER" ] || return 1
+    while IFS= read -r item || [ -n "$item" ]; do
+        [ -n "$item" ] || continue
+        number=$((number + 1))
+        if [ "$item" = "$wanted" ]; then
+            printf '%s\n' "$number"
+            return 0
+        fi
+    done < "$COURSE_ORDER"
+    return 1
+}
+
+lab_title() {
+    # 课程 manifest 的第一个 title 是实验标题；步骤标题位于后面。
+    sed -n 's/^[[:space:]]*"title"[[:space:]]*:[[:space:]]*"\([^"\\]*\)".*/\1/p' \
+        "$LABS_DIR/$1/manifest.json" 2>/dev/null | sed -n '1p'
+}
+
+show_lab_banner() {
+    lab_id=$1
+    number=$(course_number "$lab_id") || return 0
+    title=$(lab_title "$lab_id")
+    [ -n "$title" ] || title="$lab_id"
+    [ -t 1 ] && clear
+    ht_banner "第 $number 关 · $title"
+}
+
 assert_lab_unlocked() {
     lab_dir=$1
     if [ -f "$lab_dir/unlock-level" ]; then
@@ -138,6 +169,7 @@ case "$cmd" in
         rm -f "$STATE_DIR/lab"
         echo "$level" > "$STATE_DIR/level"
         clear_workspace
+        [ -t 1 ] && clear
         run_init "$level"
         emit_level_ready "$level"
         echo "卡住时输入 help 或 hint。"
@@ -155,6 +187,7 @@ case "$cmd" in
         rm -f "$STATE_DIR"/hint-count-* "$STATE_DIR/level"
         echo "$lab_id" > "$STATE_DIR/lab"
         clear_workspace
+        show_lab_banner "$lab_id"
         run_lab_init "$lab_id"
         emit_lab_ready "$lab_id"
         echo "卡住时输入 help 或 hint。"
@@ -187,12 +220,14 @@ case "$cmd" in
             valid_lab_id "$lab_id" || { ht_error "当前实验状态无效"; exit 2; }
             ht_notice "正在重置实验 $lab_id..."
             clear_workspace
+            show_lab_banner "$lab_id"
             run_lab_init "$lab_id"
             emit_lab_ready "$lab_id"
         else
             level=$(current_level)
             ht_notice "正在重置第 $level 关的实验环境..."
             clear_workspace
+            [ -t 1 ] && clear
             run_init "$level"
             emit_level_ready "$level"
         fi
@@ -203,6 +238,7 @@ case "$cmd" in
         mkdir -p "$STATE_DIR"
         echo 1 > "$STATE_DIR/level"
         clear_workspace
+        [ -t 1 ] && clear
         run_init 1
         emit_level_ready 1
         ;;

@@ -7,10 +7,12 @@ const xtermMock = vi.hoisted(() => ({
   handler: null as ((event: KeyboardEvent) => boolean) | null,
   hasSelection: true,
   selection: 'selected output',
+  fit: vi.fn(),
 }))
 
 vi.mock('@xterm/xterm', () => ({
   Terminal: class {
+    cols = 100
     rows = 24
     options: Record<string, unknown> = {}
 
@@ -35,7 +37,7 @@ vi.mock('@xterm/xterm', () => ({
 
 vi.mock('@xterm/addon-fit', () => ({
   FitAddon: class {
-    fit() {}
+    fit() { xtermMock.fit() }
   },
 }))
 
@@ -48,7 +50,7 @@ describe('LabTerminal keyboard shortcuts', () => {
   beforeEach(() => {
     xtermMock.handler = null
     xtermMock.hasSelection = true
-    xtermMock.selection = 'selected output'
+    xtermMock.fit.mockReset()
     vi.stubGlobal('ResizeObserver', ResizeObserverMock)
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 1)
     vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined)
@@ -154,6 +156,29 @@ describe('LabTerminal keyboard shortcuts', () => {
 
     expect(event.defaultPrevented).toBe(true)
     expect(writeText).toHaveBeenCalledWith('selected output')
+    wrapper.unmount()
+  })
+
+  it('emits the fitted terminal dimensions after a resize', () => {
+    const resizeFrames: FrameRequestCallback[] = []
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      resizeFrames.push(callback)
+      return 1
+    })
+    const wrapper = mount(LabTerminal)
+
+    expect(resizeFrames).toHaveLength(1)
+    resizeFrames[0]!(0)
+
+    expect(xtermMock.fit).toHaveBeenCalledOnce()
+    expect(wrapper.emitted('resize')).toEqual([[{ cols: 100, rows: 24 }]])
+
+    window.dispatchEvent(new Event('resize'))
+    expect(resizeFrames).toHaveLength(2)
+    resizeFrames[1]!(16)
+
+    expect(xtermMock.fit).toHaveBeenCalledTimes(2)
+    expect(wrapper.emitted('resize')).toEqual([[{ cols: 100, rows: 24 }]])
     wrapper.unmount()
   })
 })

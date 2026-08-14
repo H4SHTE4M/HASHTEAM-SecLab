@@ -20,7 +20,7 @@
     {
       "path": "/opt/pwnhub/labs/asm-registers-01/asm-registers",
       "architecture": "i386",
-      "sha256": "66bc1629d0e30810add25434272188290a6ab19db76432dbba5de2e1b9aaa4e1",
+      "sha256": "ab2122285db34dbe4e3c6b96879113b4dba2246396965dad3bc8ba262e503115",
       "purpose": "固定、离线的寄存器约定、mov 值复制和 lea 地址计算观察样本",
       "downloadable": true
     }
@@ -178,7 +178,8 @@
     { "level": 3, "kind": "structure", "text": "最终结构是 check <MOV后EAX> <LEA后ECX> <栈顶寄存器>。" }
   ],
   "verification": {
-    "type": "answer",
+    "type": "debugger-state",
+    "debuggerCheckpoint": "registers_checkpoint",
     "usage": "check <MOV后EAX> <LEA后ECX> <栈顶寄存器>",
     "instruction": "依次填入两条操作行的后值，以及职责表中指向栈顶的寄存器。",
     "placeholders": [

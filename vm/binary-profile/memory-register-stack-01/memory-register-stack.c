@@ -126,6 +126,7 @@ __attribute__((noreturn, noinline, used)) void _start(void) {
     char output[1024];
     char *cursor = output;
     capture_stack_sequence();
+    __asm__ volatile("stack_checkpoint:\n\t nop\n\t" ::: "memory");
 
     cursor = append_text(cursor, "memory-register-stack-01（i386 栈快照）\n");
     cursor = append_header(cursor);

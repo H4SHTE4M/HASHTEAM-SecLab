@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "target": "/opt/pwnhub/labs/memory-register-stack-01/memory-register-stack",
+  "disassembly": "/opt/pwnhub/labs/memory-register-stack-01/memory-register-stack.disasm",
+  "symbols": "/opt/pwnhub/labs/memory-register-stack-01/memory-register-stack.symbols",
+  "views": [
+    { "type": "memory", "address": "first_removed_value", "size": 16 },
+    { "type": "stack", "address": "$esp", "size": 32 }
+  ],
+  "success": {
+    "type": "all",
+    "conditions": [
+      { "type": "reached-address", "address": "stack_checkpoint", "op": "eq" },
+      { "type": "memory-u32", "address": "first_removed_value", "op": "eq", "value": "0x22222222" },
+      { "type": "memory-u32", "address": "second_removed_value", "op": "eq", "value": "0x11111111" },
+      { "type": "memory-u32", "address": "after_first_top_value", "op": "eq", "value": "0x11111111" }
+    ]
+  }
+}

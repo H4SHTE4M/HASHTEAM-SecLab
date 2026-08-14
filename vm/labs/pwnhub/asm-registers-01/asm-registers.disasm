@@ -1,0 +1,407 @@
+8049000|1|55|push ebp
+8049001|2|89e5|mov ebp,esp
+8049003|1|53|push ebx
+8049004|3|83ec04|sub esp,0x4
+8049007|3|8b4508|mov eax,DWORD PTR [ebp+0x8]
+804900a|3|8b5d0c|mov ebx,DWORD PTR [ebp+0xc]
+804900d|3|8b4d10|mov ecx,DWORD PTR [ebp+0x10]
+8049010|3|8b5514|mov edx,DWORD PTR [ebp+0x14]
+8049013|2|cd80|int 0x80
+8049015|3|8945f8|mov DWORD PTR [ebp-0x8],eax
+8049018|3|8b45f8|mov eax,DWORD PTR [ebp-0x8]
+804901b|3|8b5dfc|mov ebx,DWORD PTR [ebp-0x4]
+804901e|1|c9|leave
+804901f|1|c3|ret
+8049020|1|55|push ebp
+8049021|2|89e5|mov ebp,esp
+8049023|1|53|push ebx
+8049024|2|31c0|xor eax,eax
+8049026|5|a3e4b10408|mov ds:0x804b1e4,eax
+804902b|5|b844332211|mov eax,0x11223344
+8049030|5|a3e8b10408|mov ds:0x804b1e8,eax
+8049035|5|bb00100000|mov ebx,0x1000
+804903a|2|31c9|xor ecx,ecx
+804903c|6|891decb10408|mov DWORD PTR ds:0x804b1ec,ebx
+8049042|6|890df0b10408|mov DWORD PTR ds:0x804b1f0,ecx
+8049048|3|8d4b0c|lea ecx,[ebx+0xc]
+804904b|6|890df4b10408|mov DWORD PTR ds:0x804b1f4,ecx
+8049051|1|90|nop
+8049052|3|8b5dfc|mov ebx,DWORD PTR [ebp-0x4]
+8049055|1|c9|leave
+8049056|1|c3|ret
+8049057|1|c3|ret
+8049058|1|90|nop
+8049059|2|0f0b|ud2
+804905b|1|55|push ebp
+804905c|2|89e5|mov ebp,esp
+804905e|2|eb17|jmp 8049077 <append_text+0x1c>
+8049060|3|8b550c|mov edx,DWORD PTR [ebp+0xc]
+8049063|3|8d4201|lea eax,[edx+0x1]
+8049066|3|89450c|mov DWORD PTR [ebp+0xc],eax
+8049069|3|8b4508|mov eax,DWORD PTR [ebp+0x8]
+804906c|3|8d4801|lea ecx,[eax+0x1]
+804906f|3|894d08|mov DWORD PTR [ebp+0x8],ecx
+8049072|3|0fb612|movzx edx,BYTE PTR [edx]
+8049075|2|8810|mov BYTE PTR [eax],dl
+8049077|3|8b450c|mov eax,DWORD PTR [ebp+0xc]
+804907a|3|0fb600|movzx eax,BYTE PTR [eax]
+804907d|2|84c0|test al,al
+804907f|2|75df|jne 8049060 <append_text+0x5>
+8049081|3|8b4508|mov eax,DWORD PTR [ebp+0x8]
+8049084|1|5d|pop ebp
+8049085|1|c3|ret
+8049086|1|55|push ebp
+8049087|2|89e5|mov ebp,esp
+8049089|3|83ec08|sub esp,0x8
+804908c|7|c745fc00000000|mov DWORD PTR [ebp-0x4],0x0
+8049093|2|eb49|jmp 80490de <display_width+0x58>
+8049095|3|8b4508|mov eax,DWORD PTR [ebp+0x8]
+8049098|3|8d5001|lea edx,[eax+0x1]
+804909b|3|895508|mov DWORD PTR [ebp+0x8],edx
+804909e|3|0fb600|movzx eax,BYTE PTR [eax]
+80490a1|3|8845fb|mov BYTE PTR [ebp-0x5],al
+80490a4|4|0fb645fb|movzx eax,BYTE PTR [ebp-0x5]
+80490a8|2|84c0|test al,al
+80490aa|2|7807|js 80490b3 <display_width+0x2d>
+80490ac|5|b801000000|mov eax,0x1
+80490b1|2|eb05|jmp 80490b8 <display_width+0x32>
+80490b3|5|b802000000|mov eax,0x2
+80490b8|3|0145fc|add DWORD PTR [ebp-0x4],eax
+80490bb|2|eb04|jmp 80490c1 <display_width+0x3b>
+80490bd|4|83450801|add DWORD PTR [ebp+0x8],0x1
+80490c1|4|0fb645fb|movzx eax,BYTE PTR [ebp-0x5]
+80490c5|2|84c0|test al,al
+80490c7|2|7915|jns 80490de <display_width+0x58>
+80490c9|3|8b4508|mov eax,DWORD PTR [ebp+0x8]
+80490cc|3|0fb600|movzx eax,BYTE PTR [eax]
+80490cf|3|0fbec0|movsx eax,al
+80490d2|5|25c0000000|and eax,0xc0
+80490d7|5|3d80000000|cmp eax,0x80
+80490dc|2|74df|je 80490bd <display_width+0x37>
+80490de|3|8b4508|mov eax,DWORD PTR [ebp+0x8]
+80490e1|3|0fb600|movzx eax,BYTE PTR [eax]
+80490e4|2|84c0|test al,al
+80490e6|2|75ad|jne 8049095 <display_width+0xf>
+80490e8|3|8b45fc|mov eax,DWORD PTR [ebp-0x4]
+80490eb|1|c9|leave
+80490ec|1|c3|ret
+80490ed|1|55|push ebp
+80490ee|2|89e5|mov ebp,esp
+80490f0|3|83ec04|sub esp,0x4
+80490f3|3|ff750c|push DWORD PTR [ebp+0xc]
+80490f6|5|e88bffffff|call 8049086 <display_width>
+80490fb|3|83c404|add esp,0x4
+80490fe|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+8049101|3|ff750c|push DWORD PTR [ebp+0xc]
+8049104|3|ff7508|push DWORD PTR [ebp+0x8]
+8049107|5|e84fffffff|call 804905b <append_text>
+804910c|3|83c408|add esp,0x8
+804910f|3|894508|mov DWORD PTR [ebp+0x8],eax
+8049112|2|eb0c|jmp 8049120 <append_padded+0x33>
+8049114|3|8b4508|mov eax,DWORD PTR [ebp+0x8]
+8049117|3|8d5001|lea edx,[eax+0x1]
+804911a|3|895508|mov DWORD PTR [ebp+0x8],edx
+804911d|3|c60020|mov BYTE PTR [eax],0x20
+8049120|3|8b45fc|mov eax,DWORD PTR [ebp-0x4]
+8049123|3|8d5001|lea edx,[eax+0x1]
+8049126|3|8955fc|mov DWORD PTR [ebp-0x4],edx
+8049129|3|3b4510|cmp eax,DWORD PTR [ebp+0x10]
+804912c|2|72e6|jb 8049114 <append_padded+0x27>
+804912e|3|8b4508|mov eax,DWORD PTR [ebp+0x8]
+8049131|1|c9|leave
+8049132|1|c3|ret
+8049133|1|55|push ebp
+8049134|2|89e5|mov ebp,esp
+8049136|3|83ec04|sub esp,0x4
+8049139|7|c745fc1c000000|mov DWORD PTR [ebp-0x4],0x1c
+8049140|2|eb27|jmp 8049169 <append_hex32+0x36>
+8049142|3|8b45fc|mov eax,DWORD PTR [ebp-0x4]
+8049145|3|8b550c|mov edx,DWORD PTR [ebp+0xc]
+8049148|2|89c1|mov ecx,eax
+804914a|2|d3ea|shr edx,cl
+804914c|2|89d0|mov eax,edx
+804914e|3|83e00f|and eax,0xf
+8049151|2|89c1|mov ecx,eax
+8049153|3|8b4508|mov eax,DWORD PTR [ebp+0x8]
+8049156|3|8d5001|lea edx,[eax+0x1]
+8049159|3|895508|mov DWORD PTR [ebp+0x8],edx
+804915c|7|0fb691d0a10408|movzx edx,BYTE PTR [ecx+0x804a1d0]
+8049163|2|8810|mov BYTE PTR [eax],dl
+8049165|4|836dfc04|sub DWORD PTR [ebp-0x4],0x4
+8049169|4|837dfc00|cmp DWORD PTR [ebp-0x4],0x0
+804916d|2|79d3|jns 8049142 <append_hex32+0xf>
+804916f|3|8b4508|mov eax,DWORD PTR [ebp+0x8]
+8049172|1|c9|leave
+8049173|1|c3|ret
+8049174|1|55|push ebp
+8049175|2|89e5|mov ebp,esp
+8049177|2|6a04|push 0x4
+8049179|5|6800a00408|push 0x804a000
+804917e|3|ff7508|push DWORD PTR [ebp+0x8]
+8049181|5|e867ffffff|call 80490ed <append_padded>
+8049186|3|83c40c|add esp,0xc
+8049189|3|894508|mov DWORD PTR [ebp+0x8],eax
+804918c|5|6807a00408|push 0x804a007
+8049191|3|ff7508|push DWORD PTR [ebp+0x8]
+8049194|5|e8c2feffff|call 804905b <append_text>
+8049199|3|83c408|add esp,0x8
+804919c|3|894508|mov DWORD PTR [ebp+0x8],eax
+804919f|2|6a07|push 0x7
+80491a1|3|ff750c|push DWORD PTR [ebp+0xc]
+80491a4|3|ff7508|push DWORD PTR [ebp+0x8]
+80491a7|5|e841ffffff|call 80490ed <append_padded>
+80491ac|3|83c40c|add esp,0xc
+80491af|3|894508|mov DWORD PTR [ebp+0x8],eax
+80491b2|5|6807a00408|push 0x804a007
+80491b7|3|ff7508|push DWORD PTR [ebp+0x8]
+80491ba|5|e89cfeffff|call 804905b <append_text>
+80491bf|3|83c408|add esp,0x8
+80491c2|3|894508|mov DWORD PTR [ebp+0x8],eax
+80491c5|3|ff7510|push DWORD PTR [ebp+0x10]
+80491c8|3|ff7508|push DWORD PTR [ebp+0x8]
+80491cb|5|e88bfeffff|call 804905b <append_text>
+80491d0|3|83c408|add esp,0x8
+80491d3|3|894508|mov DWORD PTR [ebp+0x8],eax
+80491d6|5|680ba00408|push 0x804a00b
+80491db|3|ff7508|push DWORD PTR [ebp+0x8]
+80491de|5|e878feffff|call 804905b <append_text>
+80491e3|3|83c408|add esp,0x8
+80491e6|1|c9|leave
+80491e7|1|c3|ret
+80491e8|1|55|push ebp
+80491e9|2|89e5|mov ebp,esp
+80491eb|2|6a04|push 0x4
+80491ed|5|680da00408|push 0x804a00d
+80491f2|3|ff7508|push DWORD PTR [ebp+0x8]
+80491f5|5|e8f3feffff|call 80490ed <append_padded>
+80491fa|3|83c40c|add esp,0xc
+80491fd|3|894508|mov DWORD PTR [ebp+0x8],eax
+8049200|5|6807a00408|push 0x804a007
+8049205|3|ff7508|push DWORD PTR [ebp+0x8]
+8049208|5|e84efeffff|call 804905b <append_text>
+804920d|3|83c408|add esp,0x8
+8049210|3|894508|mov DWORD PTR [ebp+0x8],eax
+8049213|2|6a04|push 0x4
+8049215|3|ff750c|push DWORD PTR [ebp+0xc]
+8049218|3|ff7508|push DWORD PTR [ebp+0x8]
+804921b|5|e8cdfeffff|call 80490ed <append_padded>
+8049220|3|83c40c|add esp,0xc
+8049223|3|894508|mov DWORD PTR [ebp+0x8],eax
+8049226|5|6807a00408|push 0x804a007
+804922b|3|ff7508|push DWORD PTR [ebp+0x8]
+804922e|5|e828feffff|call 804905b <append_text>
+8049233|3|83c408|add esp,0x8
+8049236|3|894508|mov DWORD PTR [ebp+0x8],eax
+8049239|2|6a1a|push 0x1a
+804923b|3|ff7510|push DWORD PTR [ebp+0x10]
+804923e|3|ff7508|push DWORD PTR [ebp+0x8]
+8049241|5|e8a7feffff|call 80490ed <append_padded>
+8049246|3|83c40c|add esp,0xc
+8049249|3|894508|mov DWORD PTR [ebp+0x8],eax
+804924c|5|6807a00408|push 0x804a007
+8049251|3|ff7508|push DWORD PTR [ebp+0x8]
+8049254|5|e802feffff|call 804905b <append_text>
+8049259|3|83c408|add esp,0x8
+804925c|3|894508|mov DWORD PTR [ebp+0x8],eax
+804925f|2|6a04|push 0x4
+8049261|3|ff7514|push DWORD PTR [ebp+0x14]
+8049264|3|ff7508|push DWORD PTR [ebp+0x8]
+8049267|5|e881feffff|call 80490ed <append_padded>
+804926c|3|83c40c|add esp,0xc
+804926f|3|894508|mov DWORD PTR [ebp+0x8],eax
+8049272|5|6814a00408|push 0x804a014
+8049277|3|ff7508|push DWORD PTR [ebp+0x8]
+804927a|5|e8dcfdffff|call 804905b <append_text>
+804927f|3|83c408|add esp,0x8
+8049282|3|894508|mov DWORD PTR [ebp+0x8],eax
+8049285|3|ff7518|push DWORD PTR [ebp+0x18]
+8049288|3|ff7508|push DWORD PTR [ebp+0x8]
+804928b|5|e8a3feffff|call 8049133 <append_hex32>
+8049290|3|83c408|add esp,0x8
+8049293|3|894508|mov DWORD PTR [ebp+0x8],eax
+8049296|5|6814a00408|push 0x804a014
+804929b|3|ff7508|push DWORD PTR [ebp+0x8]
+804929e|5|e8b8fdffff|call 804905b <append_text>
+80492a3|3|83c408|add esp,0x8
+80492a6|3|894508|mov DWORD PTR [ebp+0x8],eax
+80492a9|3|ff751c|push DWORD PTR [ebp+0x1c]
+80492ac|3|ff7508|push DWORD PTR [ebp+0x8]
+80492af|5|e87ffeffff|call 8049133 <append_hex32>
+80492b4|3|83c408|add esp,0x8
+80492b7|3|894508|mov DWORD PTR [ebp+0x8],eax
+80492ba|5|680ba00408|push 0x804a00b
+80492bf|3|ff7508|push DWORD PTR [ebp+0x8]
+80492c2|5|e894fdffff|call 804905b <append_text>
+80492c7|3|83c408|add esp,0x8
+80492ca|1|c9|leave
+80492cb|1|c3|ret
+80492cc|1|55|push ebp
+80492cd|2|89e5|mov ebp,esp
+80492cf|6|81ec04080000|sub esp,0x804
+80492d5|6|8d85fcf7ffff|lea eax,[ebp-0x804]
+80492db|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+80492de|5|e83dfdffff|call 8049020 <capture_registers>
+80492e3|5|a1e8b10408|mov eax,ds:0x804b1e8
+80492e8|6|8b0df4b10408|mov ecx,DWORD PTR ds:0x804b1f4
+80492ee|5|e864fdffff|call 8049057 <registers_checkpoint>
+80492f3|5|681ca00408|push 0x804a01c
+80492f8|3|ff75fc|push DWORD PTR [ebp-0x4]
+80492fb|5|e85bfdffff|call 804905b <append_text>
+8049300|3|83c408|add esp,0x8
+8049303|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+8049306|2|6a04|push 0x4
+8049308|5|6800a00408|push 0x804a000
+804930d|3|ff75fc|push DWORD PTR [ebp-0x4]
+8049310|5|e8d8fdffff|call 80490ed <append_padded>
+8049315|3|83c40c|add esp,0xc
+8049318|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+804931b|5|6807a00408|push 0x804a007
+8049320|3|ff75fc|push DWORD PTR [ebp-0x4]
+8049323|5|e833fdffff|call 804905b <append_text>
+8049328|3|83c408|add esp,0x8
+804932b|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+804932e|2|6a07|push 0x7
+8049330|5|6845a00408|push 0x804a045
+8049335|3|ff75fc|push DWORD PTR [ebp-0x4]
+8049338|5|e8b0fdffff|call 80490ed <append_padded>
+804933d|3|83c40c|add esp,0xc
+8049340|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+8049343|5|684fa00408|push 0x804a04f
+8049348|3|ff75fc|push DWORD PTR [ebp-0x4]
+804934b|5|e80bfdffff|call 804905b <append_text>
+8049350|3|83c408|add esp,0x8
+8049353|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+8049356|5|6860a00408|push 0x804a060
+804935b|5|687fa00408|push 0x804a07f
+8049360|3|ff75fc|push DWORD PTR [ebp-0x4]
+8049363|5|e80cfeffff|call 8049174 <append_role>
+8049368|3|83c40c|add esp,0xc
+804936b|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+804936e|5|6883a00408|push 0x804a083
+8049373|5|6896a00408|push 0x804a096
+8049378|3|ff75fc|push DWORD PTR [ebp-0x4]
+804937b|5|e8f4fdffff|call 8049174 <append_role>
+8049380|3|83c40c|add esp,0xc
+8049383|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+8049386|5|689ca00408|push 0x804a09c
+804938b|5|68bea00408|push 0x804a0be
+8049390|3|ff75fc|push DWORD PTR [ebp-0x4]
+8049393|5|e8dcfdffff|call 8049174 <append_role>
+8049398|3|83c40c|add esp,0xc
+804939b|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+804939e|5|68c4a00408|push 0x804a0c4
+80493a3|5|68efa00408|push 0x804a0ef
+80493a8|3|ff75fc|push DWORD PTR [ebp-0x4]
+80493ab|5|e8c4fdffff|call 8049174 <append_role>
+80493b0|3|83c40c|add esp,0xc
+80493b3|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+80493b6|5|68f4a00408|push 0x804a0f4
+80493bb|5|681ca10408|push 0x804a11c
+80493c0|3|ff75fc|push DWORD PTR [ebp-0x4]
+80493c3|5|e8acfdffff|call 8049174 <append_role>
+80493c8|3|83c40c|add esp,0xc
+80493cb|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+80493ce|5|6820a10408|push 0x804a120
+80493d3|5|6851a10408|push 0x804a151
+80493d8|3|ff75fc|push DWORD PTR [ebp-0x4]
+80493db|5|e894fdffff|call 8049174 <append_role>
+80493e0|3|83c40c|add esp,0xc
+80493e3|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+80493e6|2|6a04|push 0x4
+80493e8|5|680da00408|push 0x804a00d
+80493ed|3|ff75fc|push DWORD PTR [ebp-0x4]
+80493f0|5|e8f8fcffff|call 80490ed <append_padded>
+80493f5|3|83c40c|add esp,0xc
+80493f8|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+80493fb|5|6807a00408|push 0x804a007
+8049400|3|ff75fc|push DWORD PTR [ebp-0x4]
+8049403|5|e853fcffff|call 804905b <append_text>
+8049408|3|83c408|add esp,0x8
+804940b|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+804940e|2|6a04|push 0x4
+8049410|5|6859a10408|push 0x804a159
+8049415|3|ff75fc|push DWORD PTR [ebp-0x4]
+8049418|5|e8d0fcffff|call 80490ed <append_padded>
+804941d|3|83c40c|add esp,0xc
+8049420|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+8049423|5|6807a00408|push 0x804a007
+8049428|3|ff75fc|push DWORD PTR [ebp-0x4]
+804942b|5|e82bfcffff|call 804905b <append_text>
+8049430|3|83c408|add esp,0x8
+8049433|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+8049436|2|6a1a|push 0x1a
+8049438|5|6860a10408|push 0x804a160
+804943d|3|ff75fc|push DWORD PTR [ebp-0x4]
+8049440|5|e8a8fcffff|call 80490ed <append_padded>
+8049445|3|83c40c|add esp,0xc
+8049448|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+804944b|5|6807a00408|push 0x804a007
+8049450|3|ff75fc|push DWORD PTR [ebp-0x4]
+8049453|5|e803fcffff|call 804905b <append_text>
+8049458|3|83c408|add esp,0x8
+804945b|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+804945e|2|6a04|push 0x4
+8049460|5|6867a10408|push 0x804a167
+8049465|3|ff75fc|push DWORD PTR [ebp-0x4]
+8049468|5|e880fcffff|call 80490ed <append_padded>
+804946d|3|83c40c|add esp,0xc
+8049470|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+8049473|5|686ea10408|push 0x804a16e
+8049478|3|ff75fc|push DWORD PTR [ebp-0x4]
+804947b|5|e8dbfbffff|call 804905b <append_text>
+8049480|3|83c408|add esp,0x8
+8049483|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+8049486|6|8b15e8b10408|mov edx,DWORD PTR ds:0x804b1e8
+804948c|5|a1e4b10408|mov eax,ds:0x804b1e4
+8049491|1|52|push edx
+8049492|1|50|push eax
+8049493|5|68efa00408|push 0x804a0ef
+8049498|5|6888a10408|push 0x804a188
+804949d|5|689ca10408|push 0x804a19c
+80494a2|3|ff75fc|push DWORD PTR [ebp-0x4]
+80494a5|5|e83efdffff|call 80491e8 <append_operation>
+80494aa|3|83c418|add esp,0x18
+80494ad|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+80494b0|6|8b15f4b10408|mov edx,DWORD PTR ds:0x804b1f4
+80494b6|5|a1f0b10408|mov eax,ds:0x804b1f0
+80494bb|1|52|push edx
+80494bc|1|50|push eax
+80494bd|5|68a0a10408|push 0x804a1a0
+80494c2|5|68a4a10408|push 0x804a1a4
+80494c7|5|68b8a10408|push 0x804a1b8
+80494cc|3|ff75fc|push DWORD PTR [ebp-0x4]
+80494cf|5|e814fdffff|call 80491e8 <append_operation>
+80494d4|3|83c418|add esp,0x18
+80494d7|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+80494da|5|68bca10408|push 0x804a1bc
+80494df|3|ff75fc|push DWORD PTR [ebp-0x4]
+80494e2|5|e874fbffff|call 804905b <append_text>
+80494e7|3|83c408|add esp,0x8
+80494ea|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+80494ed|5|a1ecb10408|mov eax,ds:0x804b1ec
+80494f2|1|50|push eax
+80494f3|3|ff75fc|push DWORD PTR [ebp-0x4]
+80494f6|5|e838fcffff|call 8049133 <append_hex32>
+80494fb|3|83c408|add esp,0x8
+80494fe|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+8049501|5|680ba00408|push 0x804a00b
+8049506|3|ff75fc|push DWORD PTR [ebp-0x4]
+8049509|5|e84dfbffff|call 804905b <append_text>
+804950e|3|83c408|add esp,0x8
+8049511|3|8945fc|mov DWORD PTR [ebp-0x4],eax
+8049514|6|8d85fcf7ffff|lea eax,[ebp-0x804]
+804951a|3|8b55fc|mov edx,DWORD PTR [ebp-0x4]
+804951d|2|29c2|sub edx,eax
+804951f|6|8d85fcf7ffff|lea eax,[ebp-0x804]
+8049525|1|52|push edx
+8049526|1|50|push eax
+8049527|2|6a01|push 0x1
+8049529|2|6a04|push 0x4
+804952b|5|e8d0faffff|call 8049000 <syscall3>
+8049530|3|83c410|add esp,0x10
+8049533|2|6a00|push 0x0
+8049535|2|6a00|push 0x0
+8049537|2|6a00|push 0x0
+8049539|2|6a01|push 0x1
+804953b|5|e8c0faffff|call 8049000 <syscall3>
+8049540|3|83c410|add esp,0x10

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "target": "/opt/pwnhub/labs/asm-call-stack-01/asm-call-stack",
+  "disassembly": "/opt/pwnhub/labs/asm-call-stack-01/asm-call-stack.disasm",
+  "symbols": "/opt/pwnhub/labs/asm-call-stack-01/asm-call-stack.symbols",
+  "views": [
+    { "type": "memory", "address": "teaching_stack", "size": 32 },
+    { "type": "stack", "address": "$esp", "size": 48 }
+  ],
+  "success": {
+    "type": "all",
+    "conditions": [
+      { "type": "reached-address", "address": "call_stack_checkpoint", "op": "eq" },
+      { "type": "memory-u32", "address": "return_address", "op": "eq", "value": "0x08049081" },
+      { "type": "memory-u32", "address": "argument_value", "op": "eq", "value": "0x00000015" },
+      { "type": "register", "name": "eax", "op": "eq", "value": "0x0000002b" }
+    ]
+  }
+}

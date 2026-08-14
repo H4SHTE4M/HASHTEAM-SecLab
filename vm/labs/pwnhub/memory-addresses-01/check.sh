@@ -4,7 +4,7 @@ set -eu
 LAB_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROGRAM="$LAB_DIR/memory-addresses"
 ANSWER_HASH="$LAB_DIR/answer.sha256"
-EXPECTED_SHA256='ef9beb6b8c9ce744d867d9df12983fe74dc5847c7aff223f000a59d88ad303b8'
+EXPECTED_SHA256='0bd88729bc6b5f3119f6024ff924b90acdcf8cb7001f139009fb924eb65a5c3b'
 
 if [ "$#" -ne 4 ]; then
     echo '需要四个观察值：地址、内存值、指针值、有符号值' >&2

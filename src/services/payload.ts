@@ -136,6 +136,7 @@ export function buildPayloadSegment(segment: PayloadSegmentDefinition): Uint8Arr
   }
   if (segment.kind === 'p32') return p32(segment.value)
   if (segment.kind === 'hex') return parseHexBytes(segment.value)
+  if (segment.kind === 'text') return new TextEncoder().encode(segment.value)
   return generateCyclicPattern(segment.length)
 }
 

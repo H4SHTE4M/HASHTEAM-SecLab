@@ -116,6 +116,20 @@ describe('SerialProtocolParser', () => {
     ])
   })
 
+  it('解析 debugger 状态并拒绝不规范的 EIP', () => {
+    const parser = new SerialProtocolParser()
+    const input = [
+      `${M}{"type":"debugger-state","state":"ready"}\n`,
+      `${M}{"type":"debugger-state","state":"stopped","eip":"0x08049020"}\n`,
+      `${M}{"type":"debugger-state","state":"stopped","eip":"8049020"}\n`,
+      `${M}{"type":"debugger-state","state":"unknown"}\n`,
+    ].join('')
+    expect(parser.feed(input).messages).toEqual([
+      { type: 'debugger-state', state: 'ready' },
+      { type: 'debugger-state', state: 'stopped', eip: '0x08049020' },
+    ])
+  })
+
   it('拒绝可穿越路径或同时带数字与稳定身份的实验消息', () => {
     const parser = new SerialProtocolParser()
     const invalid = [

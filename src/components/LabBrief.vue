@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { CourseLabDef, LabMode, LevelCompletionRecord } from '../types/lab'
+import type { ExternalToolCourseStep } from '../types/lab'
+import AppIcon from './AppIcon.vue'
 
 const props = defineProps<{
   level: CourseLabDef
@@ -27,6 +29,15 @@ const completionRecordLabel = computed(() => {
       : `展开 ${props.completionRecord.hintsUsed} 层提示`
   return `${path} · ${hints}`
 })
+
+const hasDistinctStory = computed(() => props.level.story.trim() !== props.level.storySummary.trim())
+const externalArtifact = computed(() => {
+  if (props.level.kind !== 'external-tool') return null
+  const step = props.level.steps.find(
+    (item): item is ExternalToolCourseStep => item.type === 'external-tool',
+  )
+  return step?.companion.artifact ?? null
+})
 </script>
 
 <template>
@@ -47,10 +58,21 @@ const completionRecordLabel = computed(() => {
     <h2 id="lab-brief-title" class="level-name">{{ level.name }}</h2>
     <p class="level-tagline">{{ level.tagline }}</p>
 
+    <a
+      v-if="externalArtifact"
+      class="sample-download"
+      :href="externalArtifact.downloadUrl"
+      download
+    >
+      <AppIcon name="download" :size="15" />
+      下载实验样本
+      <small>{{ externalArtifact.architecture }} · SHA-256 {{ externalArtifact.sha256 }}</small>
+    </a>
+
     <details class="story-details">
       <summary><span>任务背景</span></summary>
       <p class="story-summary">{{ level.storySummary }}</p>
-      <p>{{ level.story }}</p>
+      <p v-if="hasDistinctStory">{{ level.story }}</p>
     </details>
 
     <template v-if="completed">
@@ -106,6 +128,8 @@ const completionRecordLabel = computed(() => {
 .done-badge { margin-left: auto; color: var(--accent-green); background: var(--accent-green-soft); border: var(--hairline) solid var(--accent-green-border); }
 .level-name { margin: 8px 0 3px; color: var(--text-primary); font-family: var(--font-cjk); font-size: 20px; font-weight: 600; line-height: 1.4; }
 .level-tagline { margin: 0; color: var(--text-faint); font-size: 13px; line-height: 1.6; }
+.sample-download { min-height: 38px; display: flex; align-items: center; gap: 7px; margin-top: 12px; padding: 7px 9px; overflow: hidden; color: var(--accent-cyan); font-size: 12px; font-weight: 700; text-decoration: none; background: var(--accent-cyan-soft); border: var(--hairline) solid var(--accent-cyan-border); border-radius: 6px; }
+.sample-download small { min-width: 0; margin-left: auto; overflow: hidden; color: var(--text-faint); font: 9px/1.4 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
 .story-details,
 .goals-block,
 .summary-block { margin-top: var(--space-4); }

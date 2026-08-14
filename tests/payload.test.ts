@@ -39,6 +39,17 @@ describe('deterministic payload helpers', () => {
     ], 8)).toThrow('不能超过 8 字节')
   })
 
+  it('把输入字符串按 UTF-8 编码为 payload 字节', () => {
+    const payload = composePayload([
+      { id: 'text', label: 'text', kind: 'text', value: 'A中' },
+    ])
+
+    expect([...payload.bytes]).toEqual([0x41, 0xe4, 0xb8, 0xad])
+    expect(payload.ranges).toEqual([
+      { id: 'text', label: 'text', kind: 'text', offset: 0, length: 4 },
+    ])
+  })
+
   it('生成 BusyBox Base64 回退命令并拒绝危险路径', () => {
     const bytes = Uint8Array.of(0x41, 0x00, 0xff)
     expect(bytesToBase64(bytes)).toBe('QQD/')

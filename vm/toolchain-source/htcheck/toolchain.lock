@@ -11,4 +11,4 @@ source_date_epoch=0
 architecture=i386
 endianness=little
 compile_flags=-m32 -static -Os -Wall -Wextra -Werror -Wl,--build-id=none -Wl,-z,noexecstack -Wl,-z,relro,-z,now
-output_sha256=c0d8508dce7d7c138cff0b3d549224038072c79b9c7b2424cb048a472880cb78
+output_sha256=f90e0df3e733ca5b3aedb5032f26eaea5714351c46a0e71127a9cca69ecc9205

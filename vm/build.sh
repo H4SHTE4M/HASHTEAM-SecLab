@@ -29,6 +29,7 @@
 #   SOURCE_DATE_EPOCH  BusyBox 与内核的可复现构建时间戳（默认 0）
 #   REBUILD_SUID       设为 1 时忽略已校验的 SUID BusyBox 缓存（默认复用）
 #   REBUILD_HTCHECK    设为 1 时忽略已校验的 htcheck 缓存（默认复用）
+#   REBUILD_DEBUGGER   设为 1 时重编译原生 i386 debugger（默认复用）
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -57,6 +58,7 @@ BUSYBOX_SUID_CHECKSUM="$ROOT/vm/busybox-suid.sha256"
 BUSYBOX_TOOLCHAIN_LOCK="$ROOT/vm/suid-toolchain.lock"
 AOSC_GLIBC_RECIPE="$ROOT/vm/toolchain-source/aosc-glibc32"
 HTCHECK_TOOLCHAIN_LOCK="$ROOT/vm/toolchain-source/htcheck/toolchain.lock"
+DEBUGGER_TOOLCHAIN_LOCK="$ROOT/vm/toolchain-source/debugger/toolchain.lock"
 BUSYBOX_BUILD_EPOCH="${SOURCE_DATE_EPOCH:-0}"
 export KBUILD_BUILD_USER="${KBUILD_BUILD_USER:-hashteam}"
 export KBUILD_BUILD_HOST="${KBUILD_BUILD_HOST:-reproducible-builder}"
@@ -369,6 +371,20 @@ LC_ALL=C readelf -l "$WORK/htcheck" | grep -Eq 'GNU_STACK[^R]*RW ' || {
 }
 fi
 
+# ---------- 1d. 原生 i386 ptrace debugger ----------
+DEBUGGER_OUTPUT="$WORK/debugger"
+_expected_debugger_sha256="$(sed -n 's/^output_sha256=//p' "$DEBUGGER_TOOLCHAIN_LOCK")"
+_reuse_debugger_cache=0
+if [ "${REBUILD_DEBUGGER:-0}" != 1 ] && [ -f "$DEBUGGER_OUTPUT" ] &&
+    verify_sha256 "$_expected_debugger_sha256" "$DEBUGGER_OUTPUT" >/dev/null 2>&1; then
+    _reuse_debugger_cache=1
+    log "复用已审核的 debugger 缓存"
+fi
+if [ "$_reuse_debugger_cache" -eq 0 ]; then
+    bash "$ROOT/vm/binary-tools/build-debugger.sh" "$DEBUGGER_OUTPUT"
+fi
+verify_sha256 "$_expected_debugger_sha256" "$DEBUGGER_OUTPUT" >/dev/null
+
 # ---------- 2. 定制 32 位内核 ----------
 if [ "$SKIP_KERNEL" -eq 0 ]; then
     if ! verify_sha256 "$KERNEL_SOURCE_SHA256" "linux-$KERNEL_VERSION.tar.xz" >/dev/null 2>&1; then
@@ -414,7 +430,7 @@ fi
 log "打包 initramfs（busybox + SUID busybox + htcheck + 关卡系统）"
 python3 "$ROOT/scripts/pack-initramfs.py" \
     --root "$OVERLAY" --busybox "$WORK/busybox" --busybox-suid "$BUSYBOX_SUID" \
-    --htcheck "$WORK/htcheck" \
+    --htcheck "$WORK/htcheck" --debugger "$DEBUGGER_OUTPUT" \
     --profile "$ROOT/vm/profiles/production.json" \
     --labs-root "$ROOT/vm/labs/pwnhub" \
     --binary-tools-root "$ROOT/vm/binary-tools/prebuilt" \

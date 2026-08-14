@@ -35,6 +35,14 @@ function requireFile(relativePath, field) {
   return { absolute, info }
 }
 
+function requireExactKeys(value, allowed, field) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    fail(`${field} must be an object`)
+  }
+  const extras = Object.keys(value).filter((key) => !allowed.includes(key))
+  if (extras.length > 0) fail(`${field} contains unsupported fields: ${extras.join(', ')}`)
+}
+
 function sha256(buffer) {
   return createHash('sha256').update(buffer).digest('hex')
 }
@@ -170,7 +178,7 @@ function validateTool(tool, index) {
   if (tool.path !== `vm/binary-tools/staged/${command}`) {
     fail(`${field}.path must reference the staged locked tool`)
   }
-  if (tool.installPath !== `/usr/local/bin/${command}`) {
+  if (tool.projectSource !== true && tool.installPath !== `/usr/local/bin/${command}`) {
     fail(`${field}.installPath must install the command in /usr/local/bin`)
   }
   const binary = requireFile(tool.path, `${field}.path`)
@@ -182,7 +190,9 @@ function validateTool(tool, index) {
     fail(`${field} sha256 mismatch`)
   }
   if (!/^[a-f0-9]{64}$/.test(tool.sourceSha256 ?? '')) fail(`${field} source sha256 is not locked`)
-  if (!/^https:\/\//.test(tool.sourceUrl ?? '')) fail(`${field} sourceUrl must use HTTPS`)
+  if (tool.projectSource !== true && !/^https:\/\//.test(tool.sourceUrl ?? '')) {
+    fail(`${field} sourceUrl must use HTTPS`)
+  }
   if (tool.profile !== profile.profileId) fail(`${field} profile does not match profileId`)
   requireString(tool.upstreamVersion, `${field}.upstreamVersion`)
   requireString(tool.license, `${field}.license`)
@@ -193,6 +203,16 @@ function validateTool(tool, index) {
 
   const lockText = readFileSync(lock.absolute, 'utf8')
   const lockValue = (name) => lockText.match(new RegExp(`^${name}=(.+)$`, 'm'))?.[1]
+  if (tool.projectSource === true) {
+    const source = requireFile(tool.source, `${field}.source`)
+    if (!/^[a-f0-9]{64}$/.test(tool.sourceSha256 ?? '') ||
+        sha256(readFileSync(source.absolute)) !== tool.sourceSha256) {
+      fail(`${field} project source hash mismatch`)
+    }
+    if (lockValue('output_sha256') !== tool.sha256) fail(`${field} output hash does not match toolchain lock`)
+    inspectToolElf(tool, binary, field)
+    return tool
+  }
   const versionKey = tool.lockVersionKey ?? 'binutils_version'
   const shaKey = tool.lockShaKey ?? `${command}_sha256`
   if (!/^[a-z][a-z0-9_]*$/.test(versionKey) || !/^[a-z][a-z0-9_]*$/.test(shaKey)) {
@@ -206,6 +226,220 @@ function validateTool(tool, index) {
   }
   inspectToolElf(tool, binary, field)
   return tool
+}
+
+function parseLock(lockFile, field) {
+  const values = new Map()
+  for (const line of readFileSync(lockFile.absolute, 'utf8').split(/\r?\n/)) {
+    if (line === '') continue
+    const separator = line.indexOf('=')
+    if (separator < 1) fail(`${field} contains an invalid line`)
+    const key = line.slice(0, separator)
+    if (values.has(key)) fail(`${field} contains a duplicate key: ${key}`)
+    values.set(key, line.slice(separator + 1))
+  }
+  return values
+}
+
+function validateLockedAsset(raw, expectedPath, field) {
+  requireExactKeys(raw, ['path', 'size', 'sha256'], field)
+  if (raw.path !== expectedPath) fail(`${field}.path must be ${expectedPath}`)
+  const file = requireFile(raw.path, `${field}.path`)
+  if (!Number.isInteger(raw.size) || raw.size !== file.info.size) fail(`${field}.size mismatch`)
+  if (!/^[a-f0-9]{64}$/.test(raw.sha256 ?? '') || sha256(readFileSync(file.absolute)) !== raw.sha256) {
+    fail(`${field}.sha256 mismatch`)
+  }
+  return file
+}
+
+function validateDebuggerIndex(disassembly, symbols, field) {
+  const instructionAddresses = new Set()
+  for (const [index, line] of readFileSync(disassembly.absolute, 'utf8').trim().split(/\r?\n/).entries()) {
+    const match = line.match(/^([0-9a-f]+)\|([1-9][0-9]*)\|([0-9a-f]+)\|(.+)$/)
+    if (!match) fail(`${field} disassembly row ${index + 1} is invalid`)
+    const length = Number(match[2])
+    if (length > 15 || match[3].length !== length * 2) {
+      fail(`${field} disassembly row ${index + 1} has an invalid instruction length`)
+    }
+    if (instructionAddresses.has(match[1])) fail(`${field} disassembly contains a duplicate address`)
+    instructionAddresses.add(match[1])
+  }
+
+  const symbolNames = new Set()
+  for (const [index, line] of readFileSync(symbols.absolute, 'utf8').trim().split(/\r?\n/).entries()) {
+    const match = line.match(/^([0-9a-f]+)\|([A-Za-z_.$][A-Za-z0-9_.$@]*)$/)
+    if (!match) fail(`${field} symbols row ${index + 1} is invalid`)
+    if (symbolNames.has(match[2])) fail(`${field} symbols contains a duplicate name: ${match[2]}`)
+    symbolNames.add(match[2])
+  }
+  return symbolNames
+}
+
+function validU32Text(value) {
+  if (typeof value !== 'string' || !/^(?:0[xX][0-9a-fA-F]+|[0-9]+)$/.test(value)) return false
+  try {
+    return BigInt(value) <= 0xffffffffn
+  } catch {
+    return false
+  }
+}
+
+function validateDebuggerCondition(rootCondition, symbolNames, field) {
+  let conditionCount = 0
+  const addressPattern = /^\$(?:eax|ebx|ecx|edx|esi|edi|ebp|esp|eip)$/i
+  const validateAddress = (value, path) => {
+    if (typeof value !== 'string' ||
+        (!addressPattern.test(value) && !validU32Text(value) && !symbolNames.has(value))) {
+      fail(`${path} must use a locked symbol, register, or u32 address`)
+    }
+  }
+
+  const visit = (node, path, depth) => {
+    conditionCount += 1
+    if (conditionCount > 64 || depth > 32) fail(`${field} condition tree is too large`)
+    if (typeof node !== 'object' || node === null || Array.isArray(node)) fail(`${path} must be an object`)
+    const type = node.type
+    if (type === 'all' || type === 'any') {
+      requireExactKeys(node, ['type', 'conditions'], path)
+      if (!Array.isArray(node.conditions) || node.conditions.length < 1 || node.conditions.length > 12) {
+        fail(`${path}.conditions must contain 1 to 12 entries`)
+      }
+      node.conditions.forEach((child, index) => visit(child, `${path}.conditions[${index}]`, depth + 1))
+      return
+    }
+    if (type === 'not') {
+      requireExactKeys(node, ['type', 'condition'], path)
+      visit(node.condition, `${path}.condition`, depth + 1)
+      return
+    }
+
+    const leafTypes = new Set([
+      'register', 'memory-u32', 'memory-bytes', 'instruction-pointer', 'reached-address', 'exit-code',
+    ])
+    if (!leafTypes.has(type)) fail(`${path}.type is unsupported`)
+    const keys = ['type', 'op']
+    if (type === 'register') keys.push('name')
+    if (type === 'memory-u32' || type === 'memory-bytes' || type === 'reached-address') keys.push('address')
+    const operations = type === 'reached-address' || type === 'memory-bytes'
+      ? ['eq', 'ne']
+      : ['eq', 'ne', 'mask', 'range']
+    if (!operations.includes(node.op)) fail(`${path}.op is unsupported for ${type}`)
+    if (type !== 'reached-address') {
+      if (node.op === 'range') keys.push('min', 'max')
+      else keys.push('value')
+      if (node.op === 'mask') keys.push('mask')
+    }
+    requireExactKeys(node, keys, path)
+
+    if (type === 'register' && !/^(?:eax|ebx|ecx|edx|esi|edi|ebp|esp|eip)$/i.test(node.name ?? '')) {
+      fail(`${path}.name is not a supported i386 register`)
+    }
+    if (keys.includes('address')) validateAddress(node.address, `${path}.address`)
+    if (type === 'memory-bytes') {
+      if (typeof node.value !== 'string' || !/^(?:[0-9a-fA-F]{2}){1,256}$/.test(node.value)) {
+        fail(`${path}.value must contain 1 to 256 locked bytes`)
+      }
+    } else if (type !== 'reached-address') {
+      for (const key of ['value', 'mask', 'min', 'max']) {
+        if (keys.includes(key) && !validU32Text(node[key])) fail(`${path}.${key} must be a u32 string`)
+      }
+    }
+  }
+
+  visit(rootCondition, field, 0)
+}
+
+function validateDebuggerBundle(bundle, index, artifacts) {
+  const field = `debuggerBundles[${index}]`
+  requireExactKeys(
+    bundle,
+    ['labId', 'binaryArtifactId', 'disassembly', 'symbols', 'config', 'check'],
+    field,
+  )
+  const labId = requireString(bundle.labId, `${field}.labId`)
+  if (bundle.binaryArtifactId !== labId) fail(`${field}.binaryArtifactId must match labId`)
+  const artifact = requiredArtifact(artifacts, labId)
+  const labRoot = `vm/labs/pwnhub/${labId}`
+  const binaryName = path.posix.basename(artifact.path)
+  const disassembly = validateLockedAsset(
+    bundle.disassembly,
+    `${labRoot}/${binaryName}.disasm`,
+    `${field}.disassembly`,
+  )
+  const symbols = validateLockedAsset(bundle.symbols, `${labRoot}/${binaryName}.symbols`, `${field}.symbols`)
+  const configFile = validateLockedAsset(bundle.config, `${labRoot}/debugger.json`, `${field}.config`)
+  validateLockedAsset(bundle.check, `${labRoot}/debugger-check.sh`, `${field}.check`)
+  const symbolNames = validateDebuggerIndex(disassembly, symbols, field)
+
+  const config = JSON.parse(readFileSync(configFile.absolute, 'utf8'))
+  requireExactKeys(config, ['schemaVersion', 'target', 'disassembly', 'symbols', 'views', 'success'], `${field}.config`)
+  if (config.schemaVersion !== 1 ||
+      config.target !== `/opt/pwnhub/labs/${labId}/${binaryName}` ||
+      config.disassembly !== `/opt/pwnhub/labs/${labId}/${binaryName}.disasm` ||
+      config.symbols !== `/opt/pwnhub/labs/${labId}/${binaryName}.symbols`) {
+    fail(`${field}.config must point only to the root-owned official lab bundle`)
+  }
+  if (!Array.isArray(config.views) || config.views.length < 1 || config.views.length > 4) {
+    fail(`${field}.config.views must contain 1 to 4 entries`)
+  }
+  for (const [viewIndex, view] of config.views.entries()) {
+    const viewField = `${field}.config.views[${viewIndex}]`
+    requireExactKeys(view, ['type', 'address', 'size'], viewField)
+    if (!['memory', 'stack'].includes(view.type) || !Number.isInteger(view.size) ||
+        view.size < 1 || view.size > 256) {
+      fail(`${viewField} is invalid`)
+    }
+    if (typeof view.address !== 'string' ||
+        (!/^\$(?:eax|ebx|ecx|edx|esi|edi|ebp|esp|eip)$/i.test(view.address) &&
+         !validU32Text(view.address) && !symbolNames.has(view.address))) {
+      fail(`${viewField}.address must use a locked symbol, register, or u32 address`)
+    }
+  }
+  validateDebuggerCondition(config.success, symbolNames, `${field}.config.success`)
+  const checkpoint = {
+    'memory-addresses-01': 'memory_addresses_checkpoint',
+    'memory-layout-01': 'layout_checkpoint',
+    'memory-register-stack-01': 'stack_checkpoint',
+    'asm-registers-01': 'registers_checkpoint',
+    'asm-arithmetic-01': 'arithmetic_checkpoint',
+    'asm-stack-ops-01': 'stack_ops_checkpoint',
+    'asm-branches-01': 'branches_checkpoint',
+    'asm-call-stack-01': 'call_stack_checkpoint',
+  }[labId]
+  const successText = JSON.stringify(config.success)
+  if (!successText.includes('"type":"reached-address"') || !symbolNames.has(checkpoint) ||
+      !successText.includes(`"address":"${checkpoint}"`)) {
+    fail(`${field}.config must require its locked ${checkpoint} symbol`)
+  }
+  const manifestFile = requireFile(`${labRoot}/manifest.json`, `${field} manifest`)
+  const manifest = JSON.parse(readFileSync(manifestFile.absolute, 'utf8'))
+  if (manifest.verification?.type !== 'debugger-state' ||
+      manifest.verification?.debuggerCheckpoint !== checkpoint) {
+    fail(`${field} manifest must expose its locked debugger checkpoint to the GUI`)
+  }
+
+  const lockFile = requireFile(artifact.toolchainLock, `${field} toolchain lock`)
+  const lock = parseLock(lockFile, `${field} toolchain lock`)
+  const expectedLocks = new Map([
+    ['output_sha256', artifact.sha256],
+    ['debugger_disassembly_sha256', bundle.disassembly.sha256],
+    ['debugger_symbols_sha256', bundle.symbols.sha256],
+    ['debugger_config_sha256', bundle.config.sha256],
+    ['debugger_check_sha256', bundle.check.sha256],
+  ])
+  for (const [key, expected] of expectedLocks) {
+    if (lock.get(key) !== expected) fail(`${field} does not match ${key} in its toolchain lock`)
+  }
+  const buildScript = readFileSync(projectPath(artifact.buildScript, `${field} build script`), 'utf8')
+  if (!buildScript.includes('generate-debugger-index.sh')) {
+    fail(`${field} build script must regenerate the locked debugger indexes`)
+  }
+  const checkText = readFileSync(projectPath(bundle.check.path, `${field}.check.path`), 'utf8')
+  if (!checkText.includes('PWNHUB_DEBUGGER_VERIFIED') || !checkText.includes('"$#"') ||
+      !checkText.includes("'^[0-9a-f]{48}$'")) {
+    fail(`${field}.check must require the SUID-injected debugger token`)
+  }
+  return labId
 }
 
 function requiredArtifact(artifacts, id) {
@@ -269,6 +503,25 @@ profile.artifacts.forEach((raw, index) => {
   artifacts.set(artifact.id, artifact)
 })
 
+const requiredDebuggerLabs = [
+  'memory-addresses-01',
+  'memory-layout-01',
+  'memory-register-stack-01',
+  'asm-registers-01',
+  'asm-arithmetic-01',
+  'asm-stack-ops-01',
+  'asm-branches-01',
+  'asm-call-stack-01',
+]
+if (!Array.isArray(profile.debuggerBundles) || profile.debuggerBundles.length !== requiredDebuggerLabs.length) {
+  fail('debuggerBundles must audit all eight memory and assembly debugger labs')
+}
+const debuggerBundleIds = profile.debuggerBundles.map((bundle, index) =>
+  validateDebuggerBundle(bundle, index, artifacts))
+if (JSON.stringify(debuggerBundleIds) !== JSON.stringify(requiredDebuggerLabs)) {
+  fail('debuggerBundles must use the locked course order without duplicates')
+}
+
 const tools = new Map()
 profile.tools.forEach((raw, index) => {
   const tool = validateTool(raw, index)
@@ -283,6 +536,11 @@ if (gdbTool.upstreamVersion !== '15.1' || gdbTool.lockVersionKey !== 'gdb_versio
   fail('native gdb tool must use the audited gdb-15.1 lock keys')
 }
 requireFile('vm/binary-tools/staged/gdbinit', 'native gdb system init')
+
+const debuggerTool = tools.get('debugger')
+if (!debuggerTool || debuggerTool.projectSource !== true || debuggerTool.upstreamVersion !== '1') {
+  fail('binary profile requires the audited project debugger tool')
+}
 
 const ret2winArtifact = requiredArtifact(artifacts, 'pwn-ret2win-01')
 validateLabPackage(ret2winArtifact, 'pwn', 'ret2win')
@@ -303,14 +561,11 @@ if (memoryVisual.workbench?.memory?.cells?.find((cell) => cell.name === 'cell_po
 }
 validateAnswerHash(memoryArtifact.id, 'memory')
 
+const memoryLayoutArtifact = requiredArtifact(artifacts, 'memory-layout-01')
 const memoryLayoutScript = requireFile(
   'vm/labs/pwnhub/memory-layout-01/inspect-memory-layout.sh',
   'memory layout observation script',
 )
-const memoryLayoutArtifact = {
-  id: 'memory-layout-01',
-  sha256: sha256(readFileSync(memoryLayoutScript.absolute)),
-}
 const memoryLayoutManifest = validateLabPackage(memoryLayoutArtifact, 'visual', 'memory layout')
 if (JSON.stringify(memoryLayoutManifest.unlockAfter) !== JSON.stringify(['memory-addresses-01'])) {
   fail('memory layout manifest must depend on memory-addresses-01')
@@ -322,8 +577,8 @@ const memoryLayoutUnlockLabs = requireFile(
 if (readFileSync(memoryLayoutUnlockLabs.absolute, 'utf8').trim() !== 'memory-addresses-01') {
   fail('memory layout VM prerequisite does not match the course manifest')
 }
-if (memoryLayoutManifest.artifacts[0]?.path !== '/opt/pwnhub/labs/memory-layout-01/inspect-memory-layout.sh' ||
-    memoryLayoutManifest.artifacts[0]?.architecture !== 'any' ||
+if (memoryLayoutManifest.artifacts[0]?.path !== '/opt/pwnhub/labs/memory-layout-01/memory-layout' ||
+    memoryLayoutManifest.artifacts[0]?.architecture !== 'i386' ||
     !Array.isArray(memoryLayoutManifest.steps) || memoryLayoutManifest.steps.length !== 4 ||
     memoryLayoutManifest.steps[0]?.type !== 'concept' ||
     memoryLayoutManifest.steps[1]?.type !== 'prediction' ||
@@ -816,9 +1071,9 @@ function validateScriptTool(tool, index) {
   const command = requireString(tool.command, `${field}.command`)
   if (!/^[a-z][a-z0-9-]*$/.test(command)) fail(`${field}.command is invalid`)
   if (tool.path !== `vm/binary-tools/staged/${command}`) {
-    fail(`${field}.path must reference the staged locked script`)
+    fail(`${field}.path must reference the staged locked tool`)
   }
-  if (tool.installPath !== `/usr/local/bin/${command}`) {
+  if (tool.projectSource !== true && tool.installPath !== `/usr/local/bin/${command}`) {
     fail(`${field}.installPath must install the command in /usr/local/bin`)
   }
   const script = requireFile(tool.path, `${field}.path`)

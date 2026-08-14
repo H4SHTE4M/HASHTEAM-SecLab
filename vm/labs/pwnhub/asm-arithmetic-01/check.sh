@@ -4,7 +4,7 @@ set -eu
 LAB_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROGRAM="$LAB_DIR/asm-arithmetic"
 ANSWER_HASH="$LAB_DIR/answer.sha256"
-EXPECTED_SHA256='8c30413bbc6fa5a4a76c1834b0cf43f49a4421c687f80a7a60a3d7a26bd1ac5c'
+EXPECTED_SHA256='c7d1958a0c25812b7ffe1f4a90348fcced1bd3f65f3a0fba98e4132aede92dd0'
 
 if [ "$#" -ne 5 ]; then
     echo '需要五个观察值：加减结果、乘积、除法商、除法余数和位运算结果。' >&2

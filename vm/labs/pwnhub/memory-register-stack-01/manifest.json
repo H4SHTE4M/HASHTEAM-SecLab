@@ -20,7 +20,7 @@
     {
       "path": "/opt/pwnhub/labs/memory-register-stack-01/memory-register-stack",
       "architecture": "i386",
-      "sha256": "39088feedfa54f33289fd875a5ccd7a8094a5e17a239f1122928243c55a1e74a",
+      "sha256": "77fe3707ba4e34a52bbfa297e915a7b66f964bddec40784810428c349b9dc692",
       "purpose": "固定、离线的后入先出、入栈与出栈行为观察样本",
       "downloadable": true
     }
@@ -114,7 +114,8 @@
     { "level": 3, "kind": "structure", "text": "最终结构是 check <第二个值入栈后的栈顶地址> <第一次取出值> <随后栈顶值> <第二次取出值>。" }
   ],
   "verification": {
-    "type": "answer",
+    "type": "debugger-state",
+    "debuggerCheckpoint": "stack_checkpoint",
     "usage": "check <第二个值入栈后的栈顶地址> <第一次取出值> <随后栈顶值> <第二次取出值>",
     "instruction": "依次填入表格中的四个事实：第二个值入栈后的地址、第一次取出的值、第一次出栈后仍在栈顶的值、第二次取出的值。",
     "placeholders": [

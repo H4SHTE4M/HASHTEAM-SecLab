@@ -18,10 +18,10 @@
   "unlockAfter": ["memory-addresses-01"],
   "artifacts": [
     {
-      "path": "/opt/pwnhub/labs/memory-layout-01/inspect-memory-layout.sh",
-      "architecture": "any",
-      "sha256": "94a06311f6e006788bff713217216cc3b3b9c7ac064a651927f35219841ff2a7",
-      "purpose": "读取当前进程真实 /proc 映射并提取代码段、数据段、堆和栈的教学观察脚本",
+      "path": "/opt/pwnhub/labs/memory-layout-01/memory-layout",
+      "architecture": "i386",
+      "sha256": "653724b4c98eec5ddd6c9e5aea5d7799c94d38756333bb5838c5192266db8ad9",
+      "purpose": "固定、离线的 i386 内存布局观察目标，供 debugger 读取代码、数据、堆和栈",
       "downloadable": true
     }
   ],
@@ -114,7 +114,8 @@
     { "level": 3, "kind": "structure", "text": "最终结构是 check <代码段权限> <数据段权限> <堆权限> <栈权限>，每项使用三个字符。" }
   ],
   "verification": {
-    "type": "answer",
+    "type": "debugger-state",
+    "debuggerCheckpoint": "layout_checkpoint",
     "usage": "check <代码段权限> <数据段权限> <堆权限> <栈权限>",
     "instruction": "按表格顺序填入四类区域的三个字符 rwx 权限，缺少的权限用 - 表示。",
     "placeholders": [

@@ -21,7 +21,7 @@
     {
       "path": "/opt/pwnhub/labs/memory-addresses-01/memory-addresses",
       "architecture": "i386",
-      "sha256": "ef9beb6b8c9ce744d867d9df12983fe74dc5847c7aff223f000a59d88ad303b8",
+      "sha256": "0bd88729bc6b5f3119f6024ff924b90acdcf8cb7001f139009fb924eb65a5c3b",
       "purpose": "固定、离线、只读的地址与补码观察样本",
       "downloadable": true
     }
@@ -110,7 +110,8 @@
     { "level": 3, "kind": "structure", "text": "最终结构是 check <地址> <内存值> <指针值> <有符号值>，每个占位符都来自真实输出。" }
   ],
   "verification": {
-    "type": "answer",
+    "type": "debugger-state",
+    "debuggerCheckpoint": "memory_addresses_checkpoint",
     "usage": "check <地址> <内存值> <指针值> <有符号值>",
     "instruction": "把样本输出中的四个事实按顺序填入；地址、内存值和指针值保留 0x 前缀。",
     "placeholders": [

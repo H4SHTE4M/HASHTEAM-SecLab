@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { parseCourseLabManifest } from '../src/services/course-manifest'
 
@@ -7,7 +7,8 @@ const artifactPath = 'vm/labs/pwnhub/pwn-ret2win-01/ret2win'
 const manifestPath = 'vm/labs/pwnhub/pwn-ret2win-01/manifest.json'
 const memoryArtifactPath = 'vm/labs/pwnhub/memory-addresses-01/memory-addresses'
 const memoryManifestPath = 'vm/labs/pwnhub/memory-addresses-01/manifest.json'
-const memoryLayoutArtifactPath = 'vm/labs/pwnhub/memory-layout-01/inspect-memory-layout.sh'
+const memoryLayoutArtifactPath = 'vm/labs/pwnhub/memory-layout-01/memory-layout'
+const memoryLayoutScriptPath = 'vm/labs/pwnhub/memory-layout-01/inspect-memory-layout.sh'
 const memoryLayoutManifestPath = 'vm/labs/pwnhub/memory-layout-01/manifest.json'
 const memoryRegisterStackArtifactPath = 'vm/labs/pwnhub/memory-register-stack-01/memory-register-stack'
 const memoryRegisterStackManifestPath = 'vm/labs/pwnhub/memory-register-stack-01/manifest.json'
@@ -93,10 +94,11 @@ describe('staged i386 binary profile', () => {
     const manifest = readJson(memoryLayoutManifestPath)
     const artifact = (manifest.artifacts as Array<Record<string, unknown>>)[0]
     const bytes = readFileSync(memoryLayoutArtifactPath)
+    const script = readFileSync(memoryLayoutScriptPath, 'utf8')
 
     expect(artifact.sha256).toBe(createHash('sha256').update(bytes).digest('hex'))
-    expect(bytes.toString('utf8')).toContain('readlink "/proc/$$/exe"')
-    expect(bytes.toString('utf8')).not.toContain('/bin/busybox')
+    expect(script).toContain('readlink "/proc/$$/exe"')
+    expect(script).not.toContain('/bin/busybox')
 
     const parsed = parseCourseLabManifest(manifest, memoryLayoutManifestPath)
     expect(parsed.labId).toBe('memory-layout-01')
@@ -636,5 +638,21 @@ describe('staged i386 binary profile', () => {
     const download = readFileSync('vm/labs/pwnhub/rev-strings-xrefs-01/reverse-companion')
     expect(hashes).toEqual(new Set(['a1d48129804d6eee16ddf44e8697b780dc47a9b2b088503bc5a41fe7543d66cb']))
     expect(createHash('sha256').update(download).digest('hex')).toBe([...hashes][0])
+  })
+
+  it('locks the stable lab display order used by terminal banners', () => {
+    const order = readFileSync('vm/rootfs-overlay/opt/pwnhub/course-order', 'utf8')
+      .trim()
+      .split('\n')
+    const manifests = readdirSync('vm/labs/pwnhub', { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .filter((labId) => existsSync(`vm/labs/pwnhub/${labId}/manifest.json`))
+      .sort()
+
+    expect([...order].sort()).toEqual(manifests)
+    expect(new Set(order).size).toBe(order.length)
+    expect(order[0]).toBe('memory-addresses-01')
+    expect(order.at(-1)).toBe('rop-call-chain-01')
   })
 })

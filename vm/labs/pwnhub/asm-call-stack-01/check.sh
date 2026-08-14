@@ -4,7 +4,7 @@ set -eu
 LAB_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROGRAM="$LAB_DIR/asm-call-stack"
 ANSWER_HASH="$LAB_DIR/answer.sha256"
-EXPECTED_SHA256='1fd5e07c8b83e5d681164dde7ab590c50a1b8028c26b9405d9304279913de5c0'
+EXPECTED_SHA256='bc8371c0e3f9645844bfe71320c01e004ec7015070db8fc87697b49a78187bd0'
 
 if [ "$#" -ne 5 ]; then
     echo '需要五个观察值：返回地址、参数值、局部值、清理字节数和 EAX 返回值。' >&2

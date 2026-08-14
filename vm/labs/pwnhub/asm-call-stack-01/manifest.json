@@ -20,7 +20,7 @@
     {
       "path": "/opt/pwnhub/labs/asm-call-stack-01/asm-call-stack",
       "architecture": "i386",
-      "sha256": "1fd5e07c8b83e5d681164dde7ab590c50a1b8028c26b9405d9304279913de5c0",
+      "sha256": "bc8371c0e3f9645844bfe71320c01e004ec7015070db8fc87697b49a78187bd0",
       "purpose": "固定、离线的 call、ret、EBP 栈帧和 cdecl 调用方清理观察样本",
       "downloadable": true
     }
@@ -251,7 +251,8 @@
     { "level": 3, "kind": "structure", "text": "最终结构是 check <返回地址> <参数值> <局部值> <清理字节数> <EAX返回值>。" }
   ],
   "verification": {
-    "type": "answer",
+    "type": "debugger-state",
+    "debuggerCheckpoint": "call_stack_checkpoint",
     "usage": "check <返回地址> <参数值> <局部值> <清理字节数> <EAX返回值>",
     "instruction": "依次填入栈表中的返回地址、参数、局部变量，ret 后调用方清理的字节数，以及结果行中的 EAX 返回值。",
     "placeholders": [

@@ -32,6 +32,7 @@
     "labId": { "$ref": "#/$defs/id" },
     "title": { "$ref": "#/$defs/text" },
     "summary": { "$ref": "#/$defs/text" },
+    "story": { "$ref": "#/$defs/text" },
     "goals": { "$ref": "#/$defs/textList" },
     "prerequisites": { "$ref": "#/$defs/textListOptional" },
     "kind": { "enum": ["terminal", "visual", "elf", "gdb", "external-tool", "pwn"] },
@@ -70,10 +71,14 @@
       "required": ["type", "usage", "instruction", "placeholders", "feedback"],
       "properties": {
         "type": {
-          "enum": ["terminal-state", "answer", "payload-replay", "external-observation"]
+          "enum": ["terminal-state", "answer", "payload-replay", "external-observation", "debugger-state"]
         },
         "usage": { "$ref": "#/$defs/text" },
         "instruction": { "$ref": "#/$defs/text" },
+        "debuggerCheckpoint": {
+          "type": "string",
+          "pattern": "^[A-Za-z_.$][A-Za-z0-9_.$@]*$"
+        },
         "placeholders": { "type": "array", "items": { "$ref": "#/$defs/placeholder" } },
         "feedback": {
           "type": "object",
@@ -85,7 +90,17 @@
             "success": { "$ref": "#/$defs/text" }
           }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "debugger-state" } },
+            "required": ["type"]
+          },
+          "then": { "required": ["debuggerCheckpoint"] },
+          "else": { "not": { "required": ["debuggerCheckpoint"] } }
+        }
+      ]
     },
     "completionSummary": {
       "type": "object",
@@ -423,6 +438,17 @@
             "id": { "$ref": "#/$defs/id" },
             "label": { "$ref": "#/$defs/text" },
             "kind": { "const": "hex" },
+            "value": { "$ref": "#/$defs/text" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "label", "kind", "value"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "label": { "$ref": "#/$defs/text" },
+            "kind": { "const": "text" },
             "value": { "$ref": "#/$defs/text" }
           }
         },

@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 LAB="$ROOT/vm/binary-profile/memory-addresses-01"
+RUNTIME_LAB="$ROOT/vm/rootfs-overlay/opt/pwnhub/labs/memory-addresses-01"
+LOCK="$LAB/toolchain.lock"
 OUT="${1:-$ROOT/vm/rootfs-overlay/opt/pwnhub/labs/memory-addresses-01/memory-addresses}"
 CC="${CC:-i686-linux-gnu-gcc}"
 EXPECTED_VERSION='i686-linux-gnu-gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0'
@@ -40,6 +42,9 @@ LC_ALL=C nm -n "$OUT" | grep -qE '[[:space:]]T _start$' || {
     echo "_start symbol missing" >&2
     exit 1
 }
+
+"$ROOT/scripts/generate-debugger-index.sh" "$OUT" "${OUT}.disasm" "${OUT}.symbols" \
+    "$LOCK" "$RUNTIME_LAB/debugger.json" "$RUNTIME_LAB/debugger-check.sh"
 
 sha256sum "$OUT"
 LC_ALL=C nm -n "$OUT" | grep -E '[[:space:]]([BDbd]) (cell|cell_pointer|signed_cell)$'

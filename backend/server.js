@@ -123,7 +123,7 @@ const COMMAND_ALLOWLISTS = {
   ]),
   pwnhub: new Set([
     'ls', 'cat', 'cd', 'pwd', 'check', 'help', 'readelf', 'nm', 'objdump',
-    'file', 'hexdump', 'strings', 'od',
+    'file', 'hexdump', 'strings', 'od', 'debugger',
   ]),
 }
 
