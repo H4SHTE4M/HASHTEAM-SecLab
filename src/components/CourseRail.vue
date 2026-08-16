@@ -46,6 +46,20 @@ const currentChapterLabs = computed(() =>
   props.course.labs.filter((lab) => lab.chapterId === currentChapter.value?.chapterId),
 )
 const completed = computed(() => new Set(props.completedLabIds))
+// 课程内全局序号（仅统计可用章节），与 TopBar「第 N 关」、VM 终端横幅保持一致
+const labNumbers = computed(() => {
+  const map = new Map<string, number>()
+  let next = 1
+  for (const chapter of props.course.chapters) {
+    if (chapter.status !== 'available') continue
+    for (const labId of chapter.labIds) map.set(labId, next++)
+  }
+  return map
+})
+
+function labNumber(labId: string): number {
+  return labNumbers.value.get(labId) ?? 0
+}
 const debugUnlockedLabs = computed(() => new Set(props.debugUnlockedLabIds ?? []))
 const debugUnlockedChapters = computed(() => new Set(props.debugUnlockedChapterIds ?? []))
 
@@ -274,7 +288,7 @@ onBeforeUnmount(() => {
     <span class="rail-label">实验</span>
     <div ref="levelListRef" class="level-list">
       <button
-        v-for="(lab, index) in currentChapterLabs"
+        v-for="lab in currentChapterLabs"
         :key="lab.labId"
         type="button"
         class="level-button"
@@ -291,7 +305,7 @@ onBeforeUnmount(() => {
         :data-lab-id="lab.labId"
         :aria-disabled="!labUnlocked(lab) ? 'true' : undefined"
         :aria-current="lab.labId === currentLabId ? 'step' : undefined"
-        :aria-label="`${currentChapter.title}，实验 ${index + 1}：${lab.title}${completed.has(lab.labId) ? completionDescription(lab.labId, lab.legacyLevel) : ''}`"
+        :aria-label="`${currentChapter.title}，实验 ${labNumber(lab.labId)}：${lab.title}${completed.has(lab.labId) ? completionDescription(lab.labId, lab.legacyLevel) : ''}`"
         :title="`${lab.labId} · ${lab.title}`"
         @click="selectLab(lab.labId)"
       >
@@ -308,7 +322,7 @@ onBeforeUnmount(() => {
             name="lock"
             :size="14"
           />
-          <span v-else :key="`unlocked-${lab.labId}`">{{ index + 1 }}</span>
+          <span v-else :key="`unlocked-${lab.labId}`">{{ labNumber(lab.labId) }}</span>
         </Transition>
       </button>
     </div>

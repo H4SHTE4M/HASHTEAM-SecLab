@@ -93,6 +93,17 @@ describe('course manifest v3 compatibility layer', () => {
     })
   })
 
+  it('实验数字身份与 VM 终端横幅一致：从 1 开始连续编号', () => {
+    // 终端横幅第 N 关 = course-order 行序（hashteamctl course_number），
+    // 头部 TopBar 第 N 关 = availableLabs 下标 + 1；二者都以 id 字段为唯一来源
+    expect(COURSE.labs.map((lab) => lab.id)).toEqual(
+      PUBLISHED_PWNHUB_LAB_IDS.map((_, index) => index + 1),
+    )
+    expect(getCourseLab('memory-addresses-01')?.id).toBe(1)
+    expect(getCourseLab('vuln-weak-random-01')?.id).toBe(4)
+    expect(getCourseLab('asm-registers-01')?.id).toBe(10)
+  })
+
   it('保留后续章节路线图但不把未发布实验装入课程', () => {
     expect(COURSE.chapters.filter((chapter) => chapter.status === 'planned').map((chapter) => chapter.chapterId))
       .toEqual(['gdb-pwndbg', 'ida-companion', 'pwn-ret2win', 'rop-basics'])

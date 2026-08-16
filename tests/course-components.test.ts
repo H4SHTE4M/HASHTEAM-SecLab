@@ -41,6 +41,25 @@ describe('chapter-first course components', () => {
     expect(wrapper.emitted('select')?.[0]).toEqual(['memory-addresses-01'])
   })
 
+  it('章节内实验按钮显示课程全局序号，与头部和终端横幅一致', () => {
+    const wrapper = mount(CourseRail, {
+      props: {
+        course: COURSE,
+        currentLabId: 'vuln-weak-random-01',
+        completedLabIds: ['memory-addresses-01', 'memory-layout-01', 'memory-register-stack-01'],
+        completedLevels: [],
+        completionRecords: {},
+      },
+    })
+
+    const first = wrapper.get('[data-lab-id="vuln-weak-random-01"]')
+    expect(first.text()).toContain('4')
+    expect(first.attributes('aria-label')).toContain('实验 4：会重播的口令')
+    const last = wrapper.get('[data-lab-id="vuln-race-condition-01"]')
+    expect(last.attributes('aria-label')).toContain('实验 9：')
+    wrapper.unmount()
+  })
+
   it('章节菜单点击外部或按 Escape 即关闭', async () => {
     const wrapper = mount(CourseRail, {
       attachTo: document.body,

@@ -53,7 +53,7 @@ function courseLabFromManifest(manifest: CourseLabManifest, id: number): CourseL
 const publishedLabs = PUBLISHED_PWNHUB_LAB_IDS.map((labId, index) => {
   const manifest = courseManifests.get(labId)
   if (manifest === undefined) throw new Error(`缺少已发布实验 manifest：${labId}`)
-  return courseLabFromManifest(manifest, 11 + index)
+  return courseLabFromManifest(manifest, 1 + index)
 })
 
 const chapters: ChapterDef[] = [

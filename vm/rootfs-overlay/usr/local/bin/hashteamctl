@@ -93,7 +93,7 @@ run_lab_init() {
 
 course_number() {
     wanted=$1
-    number=10
+    number=0
     [ -f "$COURSE_ORDER" ] || return 1
     while IFS= read -r item || [ -n "$item" ]; do
         [ -n "$item" ] || continue

@@ -259,6 +259,7 @@ async function main() {
   })
   await step('PwnHub 首个实验可独立进入并按稳定 labId 验签', async () => {
     goToLab('memory-addresses-01')
+    await waitFor(/第 1 关 · 地址、值与指针/, 20000, '终端横幅序号与头部一致')
     const ready = await waitFor(
       /@@HASHTEAM:\{"type":"lab-ready","labId":"memory-addresses-01","sig":"([0-9a-f]{64})"\}/,
     )
@@ -494,6 +495,7 @@ async function main() {
 
   await step('vuln-first vuln-weak-random-01：重放当天口令并通过签名判题', async () => {
     goToLab('vuln-weak-random-01')
+    await waitFor(/第 4 关 · 会重播的口令/, 20000, '漏洞实验横幅序号与头部一致')
     await vulnLabReady('vuln-weak-random-01')
     send('./rand-door')
     const today = await waitFor(/今日口令: ([0-9]{6})/)

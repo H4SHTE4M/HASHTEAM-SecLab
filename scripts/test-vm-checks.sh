@@ -335,7 +335,7 @@ else
 fi
 expect_eq "内存实验可独立进入" "$RC" "0"
 expect_contains "$OUT" "内存实验发出稳定 ready" '"type":"lab-ready","labId":"memory-addresses-01"'
-expect_contains "$OUT" "稳定实验显示全局序号与标题" '第 11 关 · 地址、值与指针'
+expect_contains "$OUT" "稳定实验显示全局序号与标题" '第 1 关 · 地址、值与指针'
 [ -x "$MEMORY_SB/home/guest/memory-addresses" ] \
     && ok "内存实验样本已复制到 HOME" \
     || bad "内存实验样本未复制到 HOME"
