@@ -286,7 +286,6 @@ h2 {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  min-height: 54px;
   margin: 18px 0 0;
   color: var(--text-secondary);
   font-size: 13px;
