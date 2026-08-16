@@ -658,7 +658,7 @@ function validateAssemblyLab(id, prerequisite, label) {
 
 const { artifact: asmArtifact, manifest: asmManifest } = validateAssemblyLab(
   'asm-registers-01',
-  'memory-register-stack-01',
+  'vuln-race-condition-01',
   'asm registers',
 )
 if (!Array.isArray(asmManifest.steps) || asmManifest.steps.length !== 5 ||
@@ -1191,10 +1191,87 @@ const pwnLabDefinitions = [
     steps: ['concept', 'prediction', 'payload-builder', 'terminal'],
     targetAddresses: ['0x08049020', '0x08049030', '0x0804904a'],
   },
+  {
+    id: 'vuln-overwrite-variable-01',
+    prerequisite: 'vuln-integer-overflow-01',
+    steps: ['terminal', 'visual-trace', 'payload-builder', 'terminal'],
+    targetAddresses: [],
+  },
+  {
+    id: 'vuln-string-overflow-01',
+    prerequisite: 'vuln-overwrite-variable-01',
+    steps: ['terminal', 'visual-trace', 'payload-builder', 'terminal'],
+    targetAddresses: [],
+  },
 ]
 
 for (const definition of pwnLabDefinitions) validatePwnLab(definition)
 
+const weakRandomArtifact = requiredArtifact(artifacts, 'vuln-weak-random-01')
+const weakRandomManifest = validateLabPackage(weakRandomArtifact, 'pwn', 'weak random')
+if (JSON.stringify(weakRandomManifest.unlockAfter) !== JSON.stringify(['memory-register-stack-01'])) {
+  fail('weak random manifest must depend on memory-register-stack-01')
+}
+const weakRandomUnlockLabs = requireFile(
+  'vm/labs/pwnhub/vuln-weak-random-01/unlock-labs',
+  'weak random unlock-labs',
+)
+if (readFileSync(weakRandomUnlockLabs.absolute, 'utf8').trim() !== 'memory-register-stack-01') {
+  fail('weak random VM prerequisite does not match the course manifest')
+}
+if (weakRandomManifest.verification?.type !== 'answer') {
+  fail('weak random must use answer verification')
+}
+
+const integerOverflowArtifact = requiredArtifact(artifacts, 'vuln-integer-overflow-01')
+const integerOverflowManifest = validateLabPackage(integerOverflowArtifact, 'pwn', 'integer overflow')
+if (JSON.stringify(integerOverflowManifest.unlockAfter) !== JSON.stringify(['vuln-weak-random-01'])) {
+  fail('integer overflow manifest must depend on vuln-weak-random-01')
+}
+const integerOverflowUnlockLabs = requireFile(
+  'vm/labs/pwnhub/vuln-integer-overflow-01/unlock-labs',
+  'integer overflow unlock-labs',
+)
+if (readFileSync(integerOverflowUnlockLabs.absolute, 'utf8').trim() !== 'vuln-weak-random-01') {
+  fail('integer overflow VM prerequisite does not match the course manifest')
+}
+if (integerOverflowManifest.verification?.type !== 'answer') {
+  fail('integer overflow must use answer verification')
+}
+validateAnswerHash(integerOverflowArtifact.id, 'integer overflow')
+
+const formatStringArtifact = requiredArtifact(artifacts, 'vuln-format-string-01')
+const formatStringManifest = validateLabPackage(formatStringArtifact, 'pwn', 'format string')
+if (JSON.stringify(formatStringManifest.unlockAfter) !== JSON.stringify(['vuln-string-overflow-01'])) {
+  fail('format string manifest must depend on vuln-string-overflow-01')
+}
+const formatStringUnlockLabs = requireFile(
+  'vm/labs/pwnhub/vuln-format-string-01/unlock-labs',
+  'format string unlock-labs',
+)
+if (readFileSync(formatStringUnlockLabs.absolute, 'utf8').trim() !== 'vuln-string-overflow-01') {
+  fail('format string VM prerequisite does not match the course manifest')
+}
+if (formatStringManifest.verification?.type !== 'answer') {
+  fail('format string must use answer verification')
+}
+validateAnswerHash(formatStringArtifact.id, 'format string')
+
+const raceConditionArtifact = requiredArtifact(artifacts, 'vuln-race-condition-01')
+const raceConditionManifest = validateLabPackage(raceConditionArtifact, 'pwn', 'race condition')
+if (JSON.stringify(raceConditionManifest.unlockAfter) !== JSON.stringify(['vuln-format-string-01'])) {
+  fail('race condition manifest must depend on vuln-format-string-01')
+}
+const raceConditionUnlockLabs = requireFile(
+  'vm/labs/pwnhub/vuln-race-condition-01/unlock-labs',
+  'race condition unlock-labs',
+)
+if (readFileSync(raceConditionUnlockLabs.absolute, 'utf8').trim() !== 'vuln-format-string-01') {
+  fail('race condition VM prerequisite does not match the course manifest')
+}
+if (raceConditionManifest.verification?.type !== 'terminal-state') {
+  fail('race condition must use terminal-state verification')
+}
 if (profile.scriptTools === undefined || !Array.isArray(profile.scriptTools)) {
   fail('scriptTools must be present to audit the restricted payload teaching tools')
 }

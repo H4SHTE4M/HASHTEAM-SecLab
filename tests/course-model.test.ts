@@ -77,11 +77,11 @@ function manifest(): Record<string, unknown> {
 }
 
 describe('course manifest v3 compatibility layer', () => {
-  it('只发布首批内存、汇编与 ELF 十二个实验', () => {
+  it('只发布生产清单中的内存、漏洞、汇编与 ELF 实验', () => {
     expect(COURSE.courseId).toBe('pwnhub-foundations')
     expect(COURSE.labs.map((lab) => lab.labId)).toEqual(PUBLISHED_PWNHUB_LAB_IDS)
     expect(COURSE.chapters.filter((chapter) => chapter.status === 'available').map((chapter) => chapter.chapterId))
-      .toEqual(['memory-model', 'asm-reading', 'elf-static'])
+      .toEqual(['memory-model', 'vuln-first', 'asm-reading', 'elf-static'])
     expect(getCourseLab('memory-addresses-01')).toMatchObject({
       chapterId: 'memory-model',
       unlockAfter: [],
@@ -103,15 +103,19 @@ describe('course manifest v3 compatibility layer', () => {
 
   it('PwnHub 可独立进入并按稳定 labId 顺序解锁', () => {
     const memory = COURSE.chapters[0]
-    const assembly = COURSE.chapters[1]
-    const elf = COURSE.chapters[2]
+    const vulnFirst = COURSE.chapters[1]
+    const assembly = COURSE.chapters[2]
+    const elf = COURSE.chapters[3]
     expect(isChapterUnlocked(memory, [])).toBe(true)
     expect(isLabUnlocked(getCourseLab('memory-addresses-01')!, [], [])).toBe(true)
     expect(isLabUnlocked(getCourseLab('memory-layout-01')!, [], [])).toBe(false)
     expect(isLabUnlocked(getCourseLab('memory-layout-01')!, ['memory-addresses-01'], [])).toBe(true)
-    expect(isChapterUnlocked(assembly, ['memory-layout-01'])).toBe(false)
-    expect(isChapterUnlocked(assembly, ['memory-register-stack-01'])).toBe(true)
-    expect(isLabUnlocked(getCourseLab('asm-registers-01')!, ['memory-register-stack-01'], [])).toBe(true)
+    expect(isChapterUnlocked(vulnFirst, ['memory-layout-01'])).toBe(false)
+    expect(isChapterUnlocked(vulnFirst, ['memory-register-stack-01'])).toBe(true)
+    expect(isChapterUnlocked(assembly, ['memory-register-stack-01'])).toBe(false)
+    expect(isChapterUnlocked(assembly, ['vuln-race-condition-01'])).toBe(true)
+    expect(isLabUnlocked(getCourseLab('asm-registers-01')!, ['memory-register-stack-01'], [])).toBe(false)
+    expect(isLabUnlocked(getCourseLab('asm-registers-01')!, ['vuln-race-condition-01'], [])).toBe(true)
     expect(isLabUnlocked(getCourseLab('asm-arithmetic-01')!, ['asm-registers-01'], [])).toBe(true)
     expect(isLabUnlocked(getCourseLab('asm-stack-ops-01')!, ['asm-registers-01'], [])).toBe(false)
     expect(isLabUnlocked(getCourseLab('asm-stack-ops-01')!, ['asm-arithmetic-01'], [])).toBe(true)

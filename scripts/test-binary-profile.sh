@@ -673,6 +673,98 @@ if grep -Eq 'choose_path|jne|0x7' "$WORK/elf-disassembly-wrong.txt"; then
     exit 1
 fi
 
+echo '==> 第一批漏洞样本宿主重放'
+WEAK_RANDOM_LAB="$ROOT/vm/labs/pwnhub/vuln-weak-random-01"
+WEAK_RANDOM_ELF="$WEAK_RANDOM_LAB/rand-door"
+chmod +x "$WEAK_RANDOM_ELF"
+[ "$(sha256sum "$WEAK_RANDOM_ELF" | cut -d ' ' -f 1)" = \
+    6a1171604bd85f018409de89477371edd7e60ce0bda83c11eafb60ecd889d6b5 ]
+WEAK_RANDOM_SEED=$(( $(date +%s) / 86400 ))
+WEAK_RANDOM_TODAY="$($WEAK_RANDOM_ELF)"
+WEAK_RANDOM_FIRST="$($WEAK_RANDOM_ELF --seed "$WEAK_RANDOM_SEED")"
+WEAK_RANDOM_SECOND="$($WEAK_RANDOM_ELF --seed "$WEAK_RANDOM_SEED")"
+[ "$WEAK_RANDOM_FIRST" = "$WEAK_RANDOM_SECOND" ]
+WEAK_RANDOM_TODAY_CODE="$(printf '%s\n' "$WEAK_RANDOM_TODAY" \
+    | sed -n 's/^今日口令: \([0-9][0-9]*\)$/\1/p')"
+WEAK_RANDOM_REPLAY_CODE="$(printf '%s\n' "$WEAK_RANDOM_FIRST" \
+    | sed -n 's/^种子 [0-9][0-9]* 的口令: \([0-9][0-9]*\)$/\1/p')"
+echo "$WEAK_RANDOM_TODAY_CODE" | grep -Eq '^[0-9]{6}$'
+[ "$WEAK_RANDOM_REPLAY_CODE" = "$WEAK_RANDOM_TODAY_CODE" ]
+
+INTEGER_OVERFLOW_LAB="$ROOT/vm/labs/pwnhub/vuln-integer-overflow-01"
+INTEGER_OVERFLOW_ELF="$INTEGER_OVERFLOW_LAB/wallet"
+chmod +x "$INTEGER_OVERFLOW_ELF"
+[ "$(sha256sum "$INTEGER_OVERFLOW_ELF" | cut -d ' ' -f 1)" = \
+    d5f8ad8aa9cc71a765431acfc59bda6890fdda90162ac002e048fa036c914564 ]
+INTEGER_OVERFLOW_OUTPUT="$(printf '256\n' | timeout 2 "$INTEGER_OVERFLOW_ELF")"
+grep -Fq '系统计算: 256 x 16777216 = 0' <<EOF
+$INTEGER_OVERFLOW_OUTPUT
+EOF
+grep -Fq 'PwnHub_integer_wrap: 乘积回绕为 0，余额检查失效' <<EOF
+$INTEGER_OVERFLOW_OUTPUT
+EOF
+printf '1\n' | timeout 2 "$INTEGER_OVERFLOW_ELF" | grep -Fq '余额不足'
+
+OVERWRITE_LAB="$ROOT/vm/labs/pwnhub/vuln-overwrite-variable-01"
+OVERWRITE_ELF="$OVERWRITE_LAB/door"
+chmod +x "$OVERWRITE_ELF"
+[ "$(sha256sum "$OVERWRITE_ELF" | cut -d ' ' -f 1)" = \
+    e04f671dc760066aefed97188fef131a10630477be540c6a55227b1aaf1b40ff ]
+printf 'hi\n' | timeout 2 "$OVERWRITE_ELF" | grep -Fq '权限不足，门没有开'
+python3 -c "import sys; sys.stdout.write('A' * 17)" | timeout 2 "$OVERWRITE_ELF" \
+    | grep -Fq 'PwnHub_admin_door_open'
+
+STRING_OVERFLOW_LAB="$ROOT/vm/labs/pwnhub/vuln-string-overflow-01"
+STRING_OVERFLOW_ELF="$STRING_OVERFLOW_LAB/frame"
+chmod +x "$STRING_OVERFLOW_ELF"
+[ "$(sha256sum "$STRING_OVERFLOW_ELF" | cut -d ' ' -f 1)" = \
+    2cb4d2e6c6b80f9575fe6b1a612f9a5e744f450e72334ec1d159e6c23c35c4be ]
+printf 'hi\n' | timeout 2 "$STRING_OVERFLOW_ELF" | grep -Fq '正常结束'
+python3 -c "import sys; sys.stdout.write('A' * 36)" > "$WORK/frame-input.txt"
+set +e
+{ timeout 2 "$STRING_OVERFLOW_ELF" < "$WORK/frame-input.txt" \
+    > "$WORK/frame-output.txt"; } 2>/dev/null
+STRING_OVERFLOW_STATUS=$?
+set -e
+[ "$STRING_OVERFLOW_STATUS" -ge 128 ]
+grep -Fq '保存的返回地址现在是: 0x41414141' "$WORK/frame-output.txt"
+grep -Fq '读完后，保存的 EBP 现在是: 0x41414141' "$WORK/frame-output.txt"
+
+FORMAT_STRING_LAB="$ROOT/vm/labs/pwnhub/vuln-format-string-01"
+FORMAT_STRING_ELF="$FORMAT_STRING_LAB/greeter"
+chmod +x "$FORMAT_STRING_ELF"
+[ "$(sha256sum "$FORMAT_STRING_ELF" | cut -d ' ' -f 1)" = \
+    6d844f137c037eaa56736e7640048c04b21e69805abc645abb4ecf2d801da71e ]
+printf 'tom' | timeout 2 "$FORMAT_STRING_ELF" | grep -Fq '你好， tom!'
+FORMAT_STRING_ELEVENTH="$(printf '%s' '%x%x%x%x%x%x%x%x%x%x%x' \
+    | timeout 2 "$FORMAT_STRING_ELF" \
+    | awk '/你好，/ { sub(/^.*你好，[[:space:]]*/, ""); gsub(/[^ 0-9a-f]/, ""); n = split($0, words, /[[:space:]]+/); print words[11] }')"
+[ "$FORMAT_STRING_ELEVENTH" = 0badf00d ]
+
+RACE_CONDITION_LAB="$ROOT/vm/labs/pwnhub/vuln-race-condition-01"
+RACE_CONDITION_ELF="$RACE_CONDITION_LAB/bank"
+chmod +x "$RACE_CONDITION_ELF"
+[ "$(sha256sum "$RACE_CONDITION_ELF" | cut -d ' ' -f 1)" = \
+    a310eb2f9f8272aba2ef720ed8c259565325a2062cf156a3ec69b544ee1cbc10 ]
+mkdir -p "$WORK/race-home/vuln-race-condition-01"
+printf '1000' > "$WORK/race-home/vuln-race-condition-01/balance.txt"
+HOME="$WORK/race-home" timeout 10 "$RACE_CONDITION_ELF" 800 \
+    > "$WORK/race-single.txt"
+grep -Fq '取款成功: 800，余额剩余 200' "$WORK/race-single.txt"
+[ "$(cat "$WORK/race-home/vuln-race-condition-01/balance.txt")" = 200 ]
+rm -f "$WORK/race-home/vuln-race-condition-01/balance.txt" \
+    "$WORK/race-home/vuln-race-condition-01/ledger"
+printf '1000' > "$WORK/race-home/vuln-race-condition-01/balance.txt"
+HOME="$WORK/race-home" timeout 10 sh -c \
+    '"$1" 800 & "$1" 800 & wait' sh "$RACE_CONDITION_ELF" \
+    > "$WORK/race-double.txt"
+RACE_LEDGER_LINES=$(wc -l < "$WORK/race-home/vuln-race-condition-01/ledger")
+[ "$RACE_LEDGER_LINES" -eq 2 ]
+grep -Fqx '取出 800 成功' "$WORK/race-home/vuln-race-condition-01/ledger"
+[ "$(grep -c '^取出 800 成功$' "$WORK/race-home/vuln-race-condition-01/ledger")" -eq 2 ]
+[ "$(cat "$WORK/race-home/vuln-race-condition-01/balance.txt")" = 200 ]
+echo '  ✓ 六个 vuln 样本哈希与功能重放'
+
 if command -v gdb >/dev/null 2>&1; then
     gdb_output="$WORK/gdb.txt"
     if ! LC_ALL=C gdb -nx --batch -q "$ELF" \

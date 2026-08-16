@@ -244,6 +244,32 @@ PwnHub 内容与 SecLab 数字关卡并存，但不复用 `level-N` 编号：
 - 二进制样本、工具链锁或实验脚本变更后，运行
   `pnpm validate:binary-profile`、`pnpm test:binary-profile`、`pnpm test:vm`
   并重新构建 VM。
+- `chapterId='vuln-first'` 的六个实验全部 `kind: 'pwn'`、`environmentProfile: 'binary'`，
+  样本二进制哈希已列表锁死，用 `vm/binary-profile/build-pwn-lab.sh` 与各自
+  `toolchain.lock` 中锁定的 Ubuntu 24.04 i686 交叉工具链可逐字节重建；目录为 `vm/labs/pwnhub/vuln-weak-random-01/`、
+  `vuln-integer-overflow-01/`、`vuln-overwrite-variable-01/`、
+  `vuln-string-overflow-01/`、`vuln-format-string-01/`、`vuln-race-condition-01/`。
+- 判题方式按 `manifest.verification.type` 分三类：`answer`（弱随机、整数溢出、
+  格式化字符串——提交字符串）、`payload-replay`（覆盖变量、字符串溢出——提交
+  在 `$HOME/vuln-*/` 状态目录内的 payload 文件）、`terminal-state`（竞争条件——
+  直接读取 `$HOME/vuln-race-condition-01/ledger` 的成功记录条数与金额和）。
+  `check.sh` 退出码固定 0=通过、1=失败、2=用法/环境错误，错误反馈用中文。
+- 整数溢出与格式化字符串的 canonical 答案由 `answer.sha256` 锁定：
+  `validateAnswerHash` 校验文件存在与 64 位十六进制格式，`check.sh` 真实重放样本后按
+  `printf 'hashteam-lab answer v1 <labId>:%s' "$canonical" | sha256sum`
+  比对（整数溢出 canonical 为 `256,0`，格式化字符串为 `0badf00d`）。弱随机不存
+  固定答案文件，判题时分别以 `seed_today` 与 `seed_today-1` 重放并接受任一口令，
+  以容忍跨午夜提交。
+- `payload-replay` 实验沿用与 `pwn-overflow-offset-01` 一致的 confinement：
+  `check.sh` 只接受位于 `$HOME/<labId>/` 状态目录内的 payload（默认路径），拒绝
+  任何 `..`、符号链接以及超过实验上限的字节数（覆盖变量 64、字符串溢出 48），
+  并在通过前先校验样本二进制 SHA-256。脚本不读取状态目录之外的 payload 路径。
+  `init.sh`/`reset.sh` 负责建立状态目录与可清除的 payload 文件。
+- 六个 vuln 实验的 `unlockAfter` 与 `unlock-labs` 链顺序为
+  `memory-register-stack-01 → vuln-weak-random-01 → vuln-integer-overflow-01 →
+  vuln-overwrite-variable-01 → vuln-string-overflow-01 → vuln-format-string-01 →
+  vuln-race-condition-01`，三者都会被 `scripts/validate-binary-profile.mjs`
+  与 `scripts/test-binary-profile.sh`/`scripts/test-vm-checks.sh` 覆盖。
 
 ## 新增或修改关卡
 

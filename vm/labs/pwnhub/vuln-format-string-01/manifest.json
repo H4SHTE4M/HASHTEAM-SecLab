@@ -1,0 +1,140 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "vuln-first",
+  "labId": "vuln-format-string-01",
+  "title": "用 %x 读出栈上的秘密",
+  "summary": "把名字写成格式串，让 printf 把 %x 当成指令逐格读取调用者栈，泄漏栈上遗留的秘密值。",
+  "goals": [
+    "说明 %x 在 printf 里是一条读取栈格的指令",
+    "用多个 %x 逐格泄漏调用者栈上的值",
+    "把泄漏出的固定格子还原成要提交的秘密值"
+  ],
+  "prerequisites": ["已完成栈溢出覆盖返回地址的实验"],
+  "kind": "pwn",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 20, "max": 35 },
+  "unlockAfter": ["vuln-string-overflow-01"],
+  "artifacts": [{
+    "path": "/opt/pwnhub/labs/vuln-format-string-01/greeter",
+    "architecture": "i386",
+    "sha256": "6d844f137c037eaa56736e7640048c04b21e69805abc645abb4ecf2d801da71e",
+    "purpose": "固定、离线、把名字当格式串回显的格式化字符串泄漏样本",
+    "downloadable": true
+  }],
+  "concepts": [
+    { "id": "format-specifier-as-instruction", "term": "格式说明符即指令", "explanation": "printf 把格式串里的 %x 当成指令：每遇到一个 %x 就从调用者栈上顺次取一个格子并按十六进制打印。" },
+    { "id": "stack-leak", "term": "栈格泄漏", "explanation": "格式串不限定取数的来源；只要多放 %x 就能越界读出调用者栈上原本不可见的局部值，造成信息泄漏。" },
+    { "id": "planted-secret", "term": "栈上遗留的秘密", "explanation": "调用前留在栈格里的固定值会按 %x 的顺序被逐格打印出来；找到对应格子就还原了秘密。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "terminal",
+      "title": "普通名字只是回显",
+      "objective": "确认样本把名字原样回显",
+      "instruction": "运行 ./greeter 并输入一个普通名字（如 Alice）。样本打印 你好， Alice!，名字只是被原样放回字符串里，没有别的动作。",
+      "completion": "acknowledge",
+      "allowRun": true,
+      "introduces": [
+        { "id": "format-specifier-as-instruction", "term": "格式说明符即指令", "explanation": "printf 把格式串里的 %x 当成指令：每遇到一个 %x 就从调用者栈上顺次取一个格子并按十六进制打印。" }
+      ],
+      "uses": ["format-specifier-as-instruction"],
+      "evidence": "observation",
+      "tool": "shell"
+    },
+    {
+      "id": 2,
+      "type": "terminal",
+      "title": "名字里的 %x 冒出一个数",
+      "objective": "看到 %x 把栈格读出来",
+      "instruction": "运行 ./greeter，这次把名字输入成 %x（百分号 x，中间不要空格）。回显里多出了一个十六进制数，而不是字面的 %x——这说明 printf 把名字当成了格式串，%x 指示它从栈上读一格并打印。",
+      "completion": "acknowledge",
+      "allowRun": true,
+      "introduces": [
+        { "id": "stack-leak", "term": "栈格泄漏", "explanation": "格式串不限定取数的来源；只要多放 %x 就能越界读出调用者栈上原本不可见的局部值，造成信息泄漏。" }
+      ],
+      "uses": ["format-specifier-as-instruction", "stack-leak"],
+      "evidence": "observation",
+      "tool": "shell"
+    },
+    {
+      "id": 3,
+      "type": "visual-trace",
+      "title": "把 %x 想象成栈格指针",
+      "objective": "看清 %x 怎样逐格读调用者栈",
+      "instruction": "printf 处理格式串时，每遇到一个 %x 就从调用者栈上顺次取下一个格子并按十六进制打印。前几个格子是 name 缓冲区自身的字节，再往后是上一函数留在栈上的局部；调用前故意留下的固定值排在更靠后的格子里。下图用示意地址讲清取格顺序，实际地址以运行时为准。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        { "id": "planted-secret", "term": "栈上遗留的秘密", "explanation": "调用前留在栈格里的固定值会按 %x 的顺序被逐格打印出来；找到对应格子就还原了秘密。" }
+      ],
+      "uses": ["stack-leak", "planted-secret"],
+      "evidence": "observation",
+      "tool": "shell",
+      "initialTab": "stack",
+      "workbench": {
+        "stack": {
+          "entries": [
+            { "address": 4286578688, "value": 2015721509, "label": "栈格 1 · name 缓冲区字节（'%x%x' 小端 = 0x78257825）", "kind": "local" },
+            { "address": 4286578704, "value": 2015721509, "label": "栈格 5 · 仍是 name 缓冲区字节", "kind": "local" },
+            { "address": 4286578708, "value": 30757, "label": "栈格 6 · name 末尾 '%x' 加后续零（0x00007825）", "kind": "local" },
+            { "address": 4286578716, "value": 0, "label": "栈格 8 · name 缓冲区末尾的零字节", "kind": "local" },
+            { "address": 4286578720, "value": 286331153, "label": "栈格 9 · 调用前留在栈上的局部（固定 11111111）", "kind": "argument" },
+            { "address": 4286578724, "value": 572662306, "label": "栈格 10 · 固定 22222222", "kind": "argument" },
+            { "address": 4286578728, "value": 195948557, "label": "栈格 11 · 秘密值 0badf00d（第 11 个 %x 读到这一格）", "kind": "argument" },
+            { "address": 4286578732, "value": 1145324612, "label": "栈格 12 · 固定 44444444", "kind": "argument" }
+          ]
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "terminal",
+      "title": "数到第 11 个 %x",
+      "objective": "找到以 0bad 开头的那一格",
+      "instruction": "运行 ./greeter，把名字输入成 11 个连写的 %x（中间不要空格：%x%x%x%x%x%x%x%x%x%x%x）。回显会逐格打印 11 个十六进制数，找到以 0bad 开头的那一格，记录它完整的 8 位值。",
+      "completion": "acknowledge",
+      "allowRun": true,
+      "uses": ["planted-secret", "stack-leak"],
+      "evidence": "observation",
+      "tool": "shell"
+    },
+    {
+      "id": 5,
+      "type": "terminal",
+      "title": "提交秘密值",
+      "objective": "用泄漏出的秘密通过真实重放校验",
+      "instruction": "把第 11 个 %x 读到的那个 8 位十六进制值（去掉 0x 前缀）提交给 check。",
+      "completion": "confirm",
+      "allowRun": false,
+      "uses": ["planted-secret"],
+      "evidence": "answer",
+      "tool": "shell"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "先看普通名字只是回显；再想名字里带 %x 时，printf 为什么会多打印一个数。" },
+    { "level": 2, "kind": "tool", "text": "用 ./greeter 多放几个 %x（中间不用空格），数清楚每多一个 %x 就多读一格。" },
+    { "level": 3, "kind": "structure", "text": "把 %x 重复 11 次，第 11 个读到的 8 位十六进制以 0bad 开头；去掉 0x 前缀提交它。" }
+  ],
+  "verification": {
+    "type": "answer",
+    "usage": "check <秘密值>",
+    "instruction": "提交第 11 个 %x 从真实样本栈上读到的 8 位小写十六进制值，去掉 0x 前缀。",
+    "placeholders": [
+      { "token": "<秘密值>", "meaning": "第 11 个 %x 读到的 8 位小写十六进制值，去掉 0x 前缀（例如 0badf00d）" }
+    ],
+    "feedback": {
+      "empty": "还没有提交秘密值。",
+      "incorrect": "提交的值与第 11 个 %x 读到的那格不一致，重新数清楚格子的顺序。",
+      "success": "真实重放确认你找到了栈上泄漏的秘密值。"
+    }
+  },
+  "completionSummary": {
+    "solved": "通过真实重放确认用 %x 逐格读出了调用者栈上遗留的秘密值。",
+    "mastered": ["格式说明符即指令", "栈格泄漏", "栈上遗留的秘密"],
+    "next": "下一实验会让两次取款同时穿过检查与扣款之间的时间窗，触发竞争条件。"
+  }
+}

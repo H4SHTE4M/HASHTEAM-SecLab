@@ -5,6 +5,7 @@ import { PUBLISHED_PWNHUB_LAB_IDS } from './published-labs'
 const courseManifestModules = import.meta.glob<unknown>(
   [
     '../../../vm/labs/pwnhub/memory-*/manifest.json',
+    '../../../vm/labs/pwnhub/vuln-*/manifest.json',
     '../../../vm/labs/pwnhub/asm-*/manifest.json',
     '../../../vm/labs/pwnhub/elf-*/manifest.json',
   ],
@@ -69,14 +70,34 @@ const chapters: ChapterDef[] = [
     status: 'available',
   },
   {
+    chapterId: 'vuln-first',
+    title: '第一批漏洞',
+    summary:
+      '用六个固定样本亲手复现最基础漏洞：可预测随机数、整数回绕、相邻变量覆盖、字符串溢出、格式化字符串与条件竞争。',
+    goals: [
+      '识别可预测随机数、整数回绕与相邻变量覆盖等基本漏洞类别',
+      '在固定 i386 样本上构造越界写入或格式化字符串输入复现漏洞',
+      '用格式化字符串读取栈上数据，用并发复现检查与扣款分离的条件竞争',
+    ],
+    prerequisites: ['完成 C 内存模型章节'],
+    estimatedMinutes: { min: 100, max: 170 },
+    labIds: PUBLISHED_PWNHUB_LAB_IDS.slice(3, 9),
+    unlockAfter: ['memory-register-stack-01'],
+    completionDefinition: [
+      '完成六个漏洞复现实验',
+      '能够解释可预测随机、整数回绕、越界覆盖、格式化字符串与条件竞争各自的成因',
+    ],
+    status: 'available',
+  },
+  {
     chapterId: 'asm-reading',
     title: '汇编读写',
     summary: '从寄存器职责开始，逐步练习数据操作、栈操作、条件跳转与 i386 函数调用约定。',
     goals: ['按寄存器差分解释数据操作', '用 ESP 追踪 push 与 pop', '跟踪 call/ret、栈帧与 EAX 返回值'],
     prerequisites: ['memory-model'],
     estimatedMinutes: { min: 150, max: 250 },
-    labIds: PUBLISHED_PWNHUB_LAB_IDS.slice(3, 8),
-    unlockAfter: ['memory-register-stack-01'],
+    labIds: PUBLISHED_PWNHUB_LAB_IDS.slice(9, 14),
+    unlockAfter: ['vuln-race-condition-01'],
     completionDefinition: ['完成五个汇编实验', '能够按单步差分解释数据、栈、分支和函数调用'],
     status: 'available',
   },
@@ -87,7 +108,7 @@ const chapters: ChapterDef[] = [
     goals: ['识别 ELF 架构和字节序', '从 ELF 头找到入口点', '用符号表连接函数或数据的名称与地址', '用反汇编观察静态控制流'],
     prerequisites: ['asm-reading'],
     estimatedMinutes: { min: 115, max: 195 },
-    labIds: PUBLISHED_PWNHUB_LAB_IDS.slice(8, 12),
+    labIds: PUBLISHED_PWNHUB_LAB_IDS.slice(14, 18),
     unlockAfter: ['asm-call-stack-01'],
     completionDefinition: ['完成四个 ELF 实验', '能够用 file、readelf、nm 和 objdump 给出可复核的静态证据'],
     status: 'available',

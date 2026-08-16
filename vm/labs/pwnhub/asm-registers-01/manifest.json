@@ -15,7 +15,7 @@
   "kind": "visual",
   "environmentProfile": "binary",
   "estimatedMinutes": { "min": 30, "max": 45 },
-  "unlockAfter": ["memory-register-stack-01"],
+  "unlockAfter": ["vuln-race-condition-01"],
   "artifacts": [
     {
       "path": "/opt/pwnhub/labs/asm-registers-01/asm-registers",

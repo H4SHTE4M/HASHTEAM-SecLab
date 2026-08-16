@@ -555,6 +555,144 @@
         "canary": false,
         "relro": "none"
       }
+    },
+    {
+      "id": "vuln-weak-random-01",
+      "path": "vm/labs/pwnhub/vuln-weak-random-01/rand-door",
+      "architecture": "i386",
+      "endianness": "little",
+      "size": 8984,
+      "sha256": "6a1171604bd85f018409de89477371edd7e60ce0bda83c11eafb60ecd889d6b5",
+      "source": "vm/binary-profile/vuln-weak-random-01/rand-door.c",
+      "sourceSha256": "fe8076a98d85e1211e6207e4fbe792582e986708d0136af15eb1734920e41b9e",
+      "buildScript": "vm/binary-profile/build-pwn-lab.sh",
+      "toolchainLock": "vm/binary-profile/vuln-weak-random-01/toolchain.lock",
+      "profile": "binary-i386",
+      "license": "PwnHub project source; no third party runtime",
+      "purpose": "固定、离线、可预测种子的伪随机口令观察样本",
+      "downloadable": true,
+      "expected": {
+        "elfType": "EXEC",
+        "nx": true,
+        "pie": false,
+        "canary": false,
+        "relro": "none"
+      }
+    },
+    {
+      "id": "vuln-integer-overflow-01",
+      "path": "vm/labs/pwnhub/vuln-integer-overflow-01/wallet",
+      "architecture": "i386",
+      "endianness": "little",
+      "size": 9060,
+      "sha256": "d5f8ad8aa9cc71a765431acfc59bda6890fdda90162ac002e048fa036c914564",
+      "source": "vm/binary-profile/vuln-integer-overflow-01/wallet.c",
+      "sourceSha256": "3c7a8dfd79203ab820239ff4776cea9d327840e0dc147cd3321917086ae6e919",
+      "buildScript": "vm/binary-profile/build-pwn-lab.sh",
+      "toolchainLock": "vm/binary-profile/vuln-integer-overflow-01/toolchain.lock",
+      "profile": "binary-i386",
+      "license": "PwnHub project source; no third party runtime",
+      "purpose": "固定、离线、无副作用文件的 32 位乘法回绕观察样本",
+      "downloadable": true,
+      "expected": {
+        "elfType": "EXEC",
+        "nx": true,
+        "pie": false,
+        "canary": false,
+        "relro": "none"
+      }
+    },
+    {
+      "id": "vuln-overwrite-variable-01",
+      "path": "vm/labs/pwnhub/vuln-overwrite-variable-01/door",
+      "architecture": "i386",
+      "endianness": "little",
+      "size": 9108,
+      "sha256": "e04f671dc760066aefed97188fef131a10630477be540c6a55227b1aaf1b40ff",
+      "source": "vm/binary-profile/vuln-overwrite-variable-01/door.c",
+      "sourceSha256": "f3e57b0c6911a53e921983241d9cb76256e45ab872714e16e16c18fcd2d79dda",
+      "buildScript": "vm/binary-profile/build-pwn-lab.sh",
+      "toolchainLock": "vm/binary-profile/vuln-overwrite-variable-01/toolchain.lock",
+      "profile": "binary-i386",
+      "license": "PwnHub project source; no third party runtime",
+      "purpose": "固定、离线、一次 stdin 越界写改写相邻全局标志的样本",
+      "downloadable": true,
+      "expected": {
+        "elfType": "EXEC",
+        "nx": true,
+        "pie": false,
+        "canary": false,
+        "relro": "none"
+      }
+    },
+    {
+      "id": "vuln-string-overflow-01",
+      "path": "vm/labs/pwnhub/vuln-string-overflow-01/frame",
+      "architecture": "i386",
+      "endianness": "little",
+      "size": 9128,
+      "sha256": "2cb4d2e6c6b80f9575fe6b1a612f9a5e744f450e72334ec1d159e6c23c35c4be",
+      "source": "vm/binary-profile/vuln-string-overflow-01/frame.c",
+      "sourceSha256": "51380ed165fbaab1fba5b7cec36428e27dca48e0f33feb587c4881692d897f20",
+      "buildScript": "vm/binary-profile/build-pwn-lab.sh",
+      "toolchainLock": "vm/binary-profile/vuln-string-overflow-01/toolchain.lock",
+      "profile": "binary-i386",
+      "license": "PwnHub project source; no third party runtime",
+      "purpose": "固定、离线、可复现展示栈帧保存 EBP 与返回地址被覆盖的样本",
+      "downloadable": true,
+      "expected": {
+        "elfType": "EXEC",
+        "nx": true,
+        "pie": false,
+        "canary": false,
+        "relro": "none"
+      }
+    },
+    {
+      "id": "vuln-format-string-01",
+      "path": "vm/labs/pwnhub/vuln-format-string-01/greeter",
+      "architecture": "i386",
+      "endianness": "little",
+      "size": 8872,
+      "sha256": "6d844f137c037eaa56736e7640048c04b21e69805abc645abb4ecf2d801da71e",
+      "source": "vm/binary-profile/vuln-format-string-01/greeter.c",
+      "sourceSha256": "0bb0c274eec1fb3ae2711180553e267c2c932f6f06edc36260b8fb551ef0415c",
+      "buildScript": "vm/binary-profile/build-pwn-lab.sh",
+      "toolchainLock": "vm/binary-profile/vuln-format-string-01/toolchain.lock",
+      "profile": "binary-i386",
+      "license": "PwnHub project source; no third party runtime",
+      "purpose": "固定、离线、只读不写内存的格式化字符串观察样本",
+      "downloadable": true,
+      "expected": {
+        "elfType": "EXEC",
+        "nx": true,
+        "pie": false,
+        "canary": false,
+        "relro": "none"
+      }
+    },
+    {
+      "id": "vuln-race-condition-01",
+      "path": "vm/labs/pwnhub/vuln-race-condition-01/bank",
+      "architecture": "i386",
+      "endianness": "little",
+      "size": 9184,
+      "sha256": "a310eb2f9f8272aba2ef720ed8c259565325a2062cf156a3ec69b544ee1cbc10",
+      "source": "vm/binary-profile/vuln-race-condition-01/bank.c",
+      "sourceSha256": "401177c4f83bd6ebdad7207837c8b5ac1e95c69fcdf589ec2f2d61b2eb7587f0",
+      "buildScript": "vm/binary-profile/build-pwn-lab.sh",
+      "toolchainLock": "vm/binary-profile/vuln-race-condition-01/toolchain.lock",
+      "profile": "binary-i386",
+      "license": "PwnHub project source; no third party runtime",
+      "purpose": "固定、离线、仅在实验状态目录内读写的检查与扣款分离样本",
+      "downloadable": true,
+      "expected": {
+        "elfType": "EXEC",
+        "nx": true,
+        "pie": false,
+        "canary": false,
+        "relro": "none"
+      }
     }
   ],
   "debuggerBundles": [

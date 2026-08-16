@@ -27,13 +27,13 @@ describe('chapter-first course components', () => {
     )
     await wrapper.get('.chapter-button').trigger('click')
     const chapters = wrapper.findAll('.chapter-menu > button')
-    expect(chapters).toHaveLength(7)
+    expect(chapters).toHaveLength(8)
     expect(chapters[0].attributes('aria-disabled')).toBeUndefined()
-    for (const index of [1, 2]) {
+    for (const index of [1, 2, 3]) {
       expect(chapters[index].attributes('disabled')).toBeUndefined()
       expect(chapters[index].attributes('aria-disabled')).toBe('true')
     }
-    for (const index of [3, 4, 5, 6]) {
+    for (const index of [4, 5, 6, 7]) {
       expect(chapters[index].attributes('disabled')).toBeDefined()
     }
 
@@ -84,7 +84,7 @@ describe('chapter-first course components', () => {
     expect(wrapper.emitted('debug-unlock-lab')?.[0]).toEqual(['memory-layout-01'])
 
     await wrapper.get('.chapter-button').trigger('click')
-    const assemblyChapter = wrapper.findAll('.chapter-menu > button')[1]
+    const assemblyChapter = wrapper.findAll('.chapter-menu > button')[2]
     for (let count = 0; count < 5; count += 1) await assemblyChapter.trigger('click')
     expect(wrapper.emitted('debug-unlock-chapter')?.[0]).toEqual(['asm-reading'])
 
@@ -155,11 +155,11 @@ describe('chapter-first course components', () => {
 
   it('章节菜单用圆环显示本章进度，完成后改为对勾', async () => {
     const memoryIds = COURSE.chapters[0].labIds
-    const assemblyIds = COURSE.chapters[1].labIds
+    const vulnerabilityIds = COURSE.chapters[1].labIds
     const wrapper = mount(CourseRail, {
       props: {
         course: COURSE,
-        currentLabId: 'asm-registers-01',
+        currentLabId: 'vuln-weak-random-01',
         completedLabIds: memoryIds,
         completedLevels: [],
         completionRecords: {},
@@ -170,13 +170,13 @@ describe('chapter-first course components', () => {
     const chapters = wrapper.findAll('.chapter-menu > button')
     expect(chapters[0].find('.chapter-complete').exists()).toBe(true)
     expect(chapters[1].find('.chapter-progress-ring').exists()).toBe(true)
-    expect(chapters[1].text()).toContain('0 / 5 个实验')
+    expect(chapters[1].text()).toContain('0 / 6 个实验')
 
-    await wrapper.setProps({ completedLabIds: [...memoryIds, 'asm-registers-01'] })
+    await wrapper.setProps({ completedLabIds: [...memoryIds, 'vuln-weak-random-01'] })
     expect(wrapper.findAll('.chapter-menu > button')[1].find('.chapter-complete').exists()).toBe(false)
-    expect(wrapper.findAll('.chapter-menu > button')[1].text()).toContain('1 / 5 个实验')
+    expect(wrapper.findAll('.chapter-menu > button')[1].text()).toContain('1 / 6 个实验')
 
-    await wrapper.setProps({ completedLabIds: [...memoryIds, ...assemblyIds] })
+    await wrapper.setProps({ completedLabIds: [...memoryIds, ...vulnerabilityIds] })
     expect(wrapper.findAll('.chapter-menu > button')[1].find('.chapter-complete').exists()).toBe(true)
   })
 

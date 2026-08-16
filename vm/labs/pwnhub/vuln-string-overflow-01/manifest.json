@@ -1,0 +1,129 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "vuln-first",
+  "labId": "vuln-string-overflow-01",
+  "title": "栈溢出盖掉返回地址",
+  "summary": "用一段超过 16 字节缓冲区的输入，沿栈向高地址蔓延，覆盖保存的 EBP 与保存的返回地址，让函数返回时崩溃。",
+  "goals": [
+    "说明栈上局部缓冲区、保存的 EBP 与保存返回地址的排列",
+    "用足够长的输入把保存返回地址改写成 0x41414141",
+    "把崩溃当作返回地址被劫持的证据"
+  ],
+  "prerequisites": ["已完成越界一字节覆盖邻接标志的实验"],
+  "kind": "pwn",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 20, "max": 30 },
+  "unlockAfter": ["vuln-overwrite-variable-01"],
+  "artifacts": [{
+    "path": "/opt/pwnhub/labs/vuln-string-overflow-01/frame",
+    "architecture": "i386",
+    "sha256": "2cb4d2e6c6b80f9575fe6b1a612f9a5e744f450e72334ec1d159e6c23c35c4be",
+    "purpose": "固定、离线、只读一次输入并打印栈布局的栈溢出样本",
+    "downloadable": true
+  }],
+  "concepts": [
+    { "id": "stack-frame-layout", "term": "栈帧排列", "explanation": "局部缓冲区、保存的 EBP 与保存的返回地址在栈上由低到高连续排布；越界写入会沿这个方向依次覆盖它们。" },
+    { "id": "saved-eip-overwrite", "term": "覆盖保存返回地址", "explanation": "保存的返回地址决定 ret 跳向哪里；越界字节把它改写后，函数返回会跳到攻击者写入的值。" },
+    { "id": "crash-as-evidence", "term": "崩溃即证据", "explanation": "返回地址被改成无效值时程序在 ret 时 SIGSEGV；崩溃本身证明控制流已被劫持。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "terminal",
+      "title": "短输入安全返回",
+      "objective": "记录栈上三个不变的值",
+      "instruction": "运行 ./frame 输入短内容（如 hi）。样本会打印 buf 缓冲区地址（16 字节）、保存的 EBP 的位置与当前值、保存的返回地址的位置与当前值；读完后三者都不变，并打印正常结束。记录这三个地址和它们的相对距离。",
+      "completion": "acknowledge",
+      "allowRun": true,
+      "introduces": [
+        { "id": "stack-frame-layout", "term": "栈帧排列", "explanation": "局部缓冲区、保存的 EBP 与保存的返回地址在栈上由低到高连续排布；越界写入会沿这个方向依次覆盖它们。" }
+      ],
+      "uses": ["stack-frame-layout"],
+      "evidence": "observation",
+      "tool": "shell"
+    },
+    {
+      "id": 2,
+      "type": "visual-trace",
+      "title": "看清栈上的三格",
+      "objective": "把 buf、保存的 EBP、保存的返回地址和溢出方向对应起来",
+      "instruction": "栈由低地址向高地址排列：先是 16 字节的 buf 缓冲区，再隔 8 字节局部空间到达保存的 EBP，再 +4 字节就是保存的返回地址。越界输入从 buf 向高地址蔓延，依次盖过这 8 字节、保存的 EBP，最后改写返回地址。下图是示意地址，用于讲清相对位置；buf、保存的 EBP、返回地址的实际地址以你运行时打印的为准，但相对距离固定（buf 到保存的 EBP 24 字节，再 +4 到返回地址）。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        { "id": "saved-eip-overwrite", "term": "覆盖保存返回地址", "explanation": "保存的返回地址决定 ret 跳向哪里；越界字节把它改写后，函数返回会跳到攻击者写入的值。" }
+      ],
+      "uses": ["stack-frame-layout", "saved-eip-overwrite"],
+      "evidence": "observation",
+      "tool": "shell",
+      "initialTab": "stack",
+      "workbench": {
+        "stack": {
+          "entries": [
+            { "address": 4286578688, "value": 1094795585, "label": "buf · 16 字节局部缓冲区（溢出从低地址向高地址蔓延→）", "kind": "local" },
+            { "address": 4286578704, "value": 1094795585, "label": "buf 与保存 EBP 之间的局部空间（8 字节）", "kind": "local" },
+            { "address": 4286578712, "value": 1094795585, "label": "保存的 EBP · 被溢出改写成 0x41414141", "kind": "frame-pointer" },
+            { "address": 4286578716, "value": 1094795585, "label": "保存的返回地址 · 被改成 0x41414141，ret 时跳到无效地址崩溃", "kind": "return-address" }
+          ]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "payload-builder",
+      "title": "拼出能盖到返回地址的输入",
+      "objective": "把填充长度加到 32 以上覆盖保存返回地址",
+      "instruction": "默认填 16 字节只够填满 buf，盖不到保存的 EBP。按上一步的相对距离，把 padding 长度加到 32（或更多），让 'A' 蔓延过 24 字节、把保存返回地址也写成 0x41414141。生成的 payload.bin 会保存到 $HOME/vuln-string-overflow-01/。",
+      "completion": "confirm",
+      "allowRun": false,
+      "introduces": [
+        { "id": "crash-as-evidence", "term": "崩溃即证据", "explanation": "返回地址被改成无效值时程序在 ret 时 SIGSEGV；崩溃本身证明控制流已被劫持。" }
+      ],
+      "uses": ["saved-eip-overwrite", "crash-as-evidence"],
+      "evidence": "payload-replay",
+      "tool": "shell",
+      "payload": {
+        "outputPath": "vuln-string-overflow-01/payload.bin",
+        "maxBytes": 48,
+        "segments": [
+          { "id": "flood", "label": "超长输入", "kind": "padding", "byte": 65, "length": 16 }
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "type": "terminal",
+      "title": "重放并提交",
+      "objective": "亲眼看到返回地址被改写并崩溃",
+      "instruction": "运行 ./frame < payload.bin，观察到保存的 EBP 和返回地址都变成 0x41414141、程序在返回时崩溃（退出码 139），然后运行 check。",
+      "completion": "confirm",
+      "allowRun": false,
+      "uses": ["saved-eip-overwrite", "crash-as-evidence"],
+      "evidence": "payload-replay",
+      "tool": "shell"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "先用短输入记下 buf、保存的 EBP、返回地址三个地址，算出 buf 到返回地址差多少字节。" },
+    { "level": 2, "kind": "tool", "text": "在 PayloadWorkbench 把 padding 加到 32 以上，或用 printf 生成 32 个以上的 'A' 存成 payload.bin。" },
+    { "level": 3, "kind": "structure", "text": "buf 到保存的 EBP 差 24 字节，再 +4 到返回地址；要盖到返回地址至少写 32 个 'A'，0x41414141 就是四个 'A'。" }
+  ],
+  "verification": {
+    "type": "payload-replay",
+    "usage": "check",
+    "instruction": "把能让样本崩溃的 payload.bin 放入 $HOME/vuln-string-overflow-01/ 后运行 check。",
+    "placeholders": [],
+    "feedback": {
+      "empty": "还没有 payload.bin。",
+      "incorrect": "保存的返回地址还没被改成 0x41414141 或样本没有崩溃，把填充加到 32 以上。",
+      "success": "真实重放确认保存返回地址被改成 0x41414141 并崩溃。"
+    }
+  },
+  "completionSummary": {
+    "solved": "通过真实重放确认越界输入覆盖了保存的返回地址，函数返回时崩溃。",
+    "mastered": ["栈帧排列", "覆盖保存返回地址", "崩溃即证据"],
+    "next": "下一实验会改用格式串 %x 读出栈上遗留的秘密值。"
+  }
+}

@@ -61,6 +61,10 @@ for pwn_lab in pwn-overflow-offset-01 pwn-ret2win-01 pwn-ret2win-args-01 \
     rop-gadget-stack-01 rop-register-chain-01 rop-call-chain-01; do
     cp -R "$ROOT/vm/labs/pwnhub/$pwn_lab" "$PWNHUB_LABS_DIR/"
 done
+for vuln_lab in vuln-weak-random-01 vuln-integer-overflow-01 vuln-overwrite-variable-01 \
+    vuln-string-overflow-01 vuln-format-string-01 vuln-race-condition-01; do
+    cp -R "$ROOT/vm/labs/pwnhub/$vuln_lab" "$PWNHUB_LABS_DIR/"
+done
 chmod +x "$PWNHUB_LABS_DIR/memory-addresses-01"/*.sh "$PWNHUB_LABS_DIR/memory-addresses-01/memory-addresses"
 chmod +x "$PWNHUB_LABS_DIR/memory-layout-01"/*.sh
 chmod +x "$PWNHUB_LABS_DIR/memory-register-stack-01"/*.sh "$PWNHUB_LABS_DIR/memory-register-stack-01/memory-register-stack"
@@ -94,6 +98,14 @@ chmod +x "$PWNHUB_READELF"
 chmod +x "$PWNHUB_NM"
 chmod +x "$PWNHUB_OBJDUMP"
 chmod +x "$PWNHUB_GDB"
+for vuln_lab in vuln-weak-random-01 vuln-integer-overflow-01 vuln-overwrite-variable-01 \
+    vuln-string-overflow-01 vuln-format-string-01 vuln-race-condition-01; do
+    chmod +x "$PWNHUB_LABS_DIR/$vuln_lab"/*.sh
+    for vuln_bin in rand-door wallet door frame greeter bank; do
+        [ -f "$PWNHUB_LABS_DIR/$vuln_lab/$vuln_bin" ] \
+            && chmod +x "$PWNHUB_LABS_DIR/$vuln_lab/$vuln_bin" || true
+    done
+done
 stop_test_httpd() {
     if [ -n "${HASHTEAM_HTTP_PORT:-}" ]; then
         pkill -f "httpd -p 127.0.0.1:${HASHTEAM_HTTP_PORT}" 2>/dev/null || true
@@ -395,6 +407,154 @@ expect_eq "栈实验重放真实 ELF 后通过" "$RC" "0"
 expect_contains "$OUT" "栈实验发出签名结果" '"type":"lab-result","labId":"memory-register-stack-01"'
 OUT=$(run_check "$MEMORY_SB" 0x0804c15c 0x22222222 0x11111111 0x11111111) && RC=0 || RC=$?
 expect_eq "栈实验错误栈顶失败" "$RC" "1"
+echo "—— 第一批漏洞（vuln-first）实验 ——"
+vuln_goto() {
+    if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+        HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
+        HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+        "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab "$1" 2>&1); then
+        RC=0
+    else
+        RC=$?
+    fi
+}
+
+vuln_goto asm-registers-01
+expect_eq "汇编实验在 vuln-first 完成前保持锁定" "$RC" "3"
+
+# 1. 弱随机：当天口令由真实样本重放得出，提交后通过。
+chmod +x "$PWNHUB_LABS_DIR/vuln-weak-random-01/rand-door"
+WEAK_RANDOM_OUTPUT="$(HOME="$MEMORY_SB/home/guest" \
+    "$PWNHUB_LABS_DIR/vuln-weak-random-01/rand-door" 2>/dev/null || true)"
+WEAK_RANDOM_SECRET="$(printf '%s\n' "$WEAK_RANDOM_OUTPUT" \
+    | "$STUB/awk" '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]{6}$/) { print $i; exit } }')"
+[ -n "$WEAK_RANDOM_SECRET" ] || WEAK_RANDOM_SECRET=000000
+WEAK_RANDOM_YESTERDAY_SEED=$(( $(date +%s) / 86400 - 1 ))
+WEAK_RANDOM_YESTERDAY_SECRET="$(
+    "$PWNHUB_LABS_DIR/vuln-weak-random-01/rand-door" --seed "$WEAK_RANDOM_YESTERDAY_SEED" \
+        | "$STUB/awk" '{ print $NF }'
+)"
+WEAK_RANDOM_WRONG_NUMBER=$(( (10#$WEAK_RANDOM_SECRET + 1) % 1000000 ))
+printf -v WEAK_RANDOM_WRONG '%06d' "$WEAK_RANDOM_WRONG_NUMBER"
+if [ "$WEAK_RANDOM_WRONG" = "$WEAK_RANDOM_YESTERDAY_SECRET" ]; then
+    WEAK_RANDOM_WRONG_NUMBER=$(( (WEAK_RANDOM_WRONG_NUMBER + 1) % 1000000 ))
+    printf -v WEAK_RANDOM_WRONG '%06d' "$WEAK_RANDOM_WRONG_NUMBER"
+fi
+vuln_goto vuln-weak-random-01
+expect_eq "内存栈完成后可进入弱随机实验" "$RC" "0"
+expect_contains "$OUT" "弱随机实验发出稳定 ready" '"type":"lab-ready","labId":"vuln-weak-random-01"'
+[ -x "$MEMORY_SB/home/guest/rand-door" ] \
+    && ok "弱随机样本已复制到 HOME" \
+    || bad "弱随机样本未复制到 HOME"
+if OUT=$(run_check "$MEMORY_SB" "$WEAK_RANDOM_SECRET"); then RC=0; else RC=$?; fi
+expect_eq "弱随机预测今日口令通过" "$RC" "0"
+expect_contains "$OUT" "弱随机发出签名结果" '"type":"lab-result","labId":"vuln-weak-random-01"'
+OUT=$(run_check "$MEMORY_SB" "$WEAK_RANDOM_WRONG") && RC=0 || RC=$?
+expect_eq "弱随机错误口令失败" "$RC" "1"
+expect_not_contains "$OUT" "弱随机失败不签发结果" '"type":"lab-result"'
+
+# 2. 整数溢出：提交 数量=256、回绕金额=0 通过。
+vuln_goto vuln-integer-overflow-01
+expect_eq "弱随机完成后可进入整数溢出实验" "$RC" "0"
+expect_contains "$OUT" "整数溢出实验发出稳定 ready" '"type":"lab-ready","labId":"vuln-integer-overflow-01"'
+[ -x "$MEMORY_SB/home/guest/wallet" ] \
+    && ok "整数溢出样本已复制到 HOME" \
+    || bad "整数溢出样本未复制到 HOME"
+if OUT=$(run_check "$MEMORY_SB" 256 0); then RC=0; else RC=$?; fi
+expect_eq "整数溢出提交 256,0 通过" "$RC" "0"
+expect_contains "$OUT" "整数溢出发出签名结果" '"type":"lab-result","labId":"vuln-integer-overflow-01"'
+OUT=$(run_check "$MEMORY_SB" 256 1) && RC=0 || RC=$?
+expect_eq "整数溢出错误回绕金额失败" "$RC" "1"
+expect_not_contains "$OUT" "整数溢出失败不签发结果" '"type":"lab-result"'
+
+# 3. 覆盖变量：17 个 A 越过 16 字节缓冲区改写 is_admin。
+vuln_goto vuln-overwrite-variable-01
+expect_eq "整数溢出完成后可进入覆盖变量实验" "$RC" "0"
+expect_contains "$OUT" "覆盖变量实验发出稳定 ready" '"type":"lab-ready","labId":"vuln-overwrite-variable-01"'
+[ -x "$MEMORY_SB/home/guest/door" ] \
+    && ok "覆盖变量样本已复制到 HOME" \
+    || bad "覆盖变量样本未复制到 HOME"
+OVERWRITE_DIR="$MEMORY_SB/home/guest/vuln-overwrite-variable-01"
+mkdir -p "$OVERWRITE_DIR"
+OUT=$(run_check "$MEMORY_SB") && RC=0 || RC=$?
+expect_eq "覆盖变量缺 payload 失败" "$RC" "2"
+expect_contains "$OUT" "覆盖变量给出缺失反馈" "payload file is missing"
+OUT=$(run_check "$MEMORY_SB" "$OVERWRITE_DIR/../outside.bin") && RC=0 || RC=$?
+expect_eq "覆盖变量拒绝路径穿越 payload" "$RC" "2"
+expect_contains "$OUT" "覆盖变量给出穿越反馈" "path traversal is not allowed"
+python3 -c "import sys; sys.stdout.write('A' * 17)" > "$OVERWRITE_DIR/input.txt"
+if OUT=$(run_check "$MEMORY_SB"); then RC=0; else RC=$?; fi
+expect_eq "覆盖变量真实重放通过" "$RC" "0"
+expect_contains "$OUT" "覆盖变量发出签名结果" '"type":"lab-result","labId":"vuln-overwrite-variable-01"'
+python3 -c "import sys; sys.stdout.write('A' * 5)" > "$OVERWRITE_DIR/input.txt"
+OUT=$(run_check "$MEMORY_SB") && RC=0 || RC=$?
+expect_eq "覆盖变量过短 payload 失败" "$RC" "1"
+python3 -c "import sys; sys.stdout.write('A' * 65)" > "$OVERWRITE_DIR/input.txt"
+OUT=$(run_check "$MEMORY_SB") && RC=0 || RC=$?
+expect_eq "覆盖变量拒绝超限 payload" "$RC" "2"
+expect_contains "$OUT" "覆盖变量给出超限反馈" "exceeds the 64 byte limit"
+
+# 4. 字符串溢出：36 个 A 覆盖到保存的返回地址并崩溃。
+vuln_goto vuln-string-overflow-01
+expect_eq "覆盖变量完成后可进入字符串溢出实验" "$RC" "0"
+expect_contains "$OUT" "字符串溢出实验发出稳定 ready" '"type":"lab-ready","labId":"vuln-string-overflow-01"'
+[ -x "$MEMORY_SB/home/guest/frame" ] \
+    && ok "字符串溢出样本已复制到 HOME" \
+    || bad "字符串溢出样本未复制到 HOME"
+STRING_DIR="$MEMORY_SB/home/guest/vuln-string-overflow-01"
+mkdir -p "$STRING_DIR"
+OUT=$(run_check "$MEMORY_SB") && RC=0 || RC=$?
+expect_eq "字符串溢出缺 payload 失败" "$RC" "2"
+expect_contains "$OUT" "字符串溢出给出缺失反馈" "payload file is missing"
+OUT=$(run_check "$MEMORY_SB" "$STRING_DIR/../outside.bin") && RC=0 || RC=$?
+expect_eq "字符串溢出拒绝路径穿越 payload" "$RC" "2"
+expect_contains "$OUT" "字符串溢出给出穿越反馈" "path traversal is not allowed"
+python3 -c "import sys; sys.stdout.write('A' * 36)" > "$STRING_DIR/payload.bin"
+if OUT=$(run_check "$MEMORY_SB"); then RC=0; else RC=$?; fi
+expect_eq "字符串溢出真实重放通过" "$RC" "0"
+expect_contains "$OUT" "字符串溢出发出签名结果" '"type":"lab-result","labId":"vuln-string-overflow-01"'
+python3 -c "import sys; sys.stdout.write('A' * 5)" > "$STRING_DIR/payload.bin"
+OUT=$(run_check "$MEMORY_SB") && RC=0 || RC=$?
+expect_eq "字符串溢出过短 payload 失败" "$RC" "1"
+python3 -c "import sys; sys.stdout.write('A' * 49)" > "$STRING_DIR/payload.bin"
+OUT=$(run_check "$MEMORY_SB") && RC=0 || RC=$?
+expect_eq "字符串溢出拒绝超限 payload" "$RC" "2"
+expect_contains "$OUT" "字符串溢出给出超限反馈" "exceeds the 48 byte limit"
+
+# 5. 格式化字符串：提交 leaked 的 0badf00d 通过。
+vuln_goto vuln-format-string-01
+expect_eq "字符串溢出完成后可进入格式化字符串实验" "$RC" "0"
+expect_contains "$OUT" "格式化字符串实验发出稳定 ready" '"type":"lab-ready","labId":"vuln-format-string-01"'
+[ -x "$MEMORY_SB/home/guest/greeter" ] \
+    && ok "格式化字符串样本已复制到 HOME" \
+    || bad "格式化字符串样本未复制到 HOME"
+if OUT=$(run_check "$MEMORY_SB" 0badf00d); then RC=0; else RC=$?; fi
+expect_eq "格式化字符串提交 0badf00d 通过" "$RC" "0"
+expect_contains "$OUT" "格式化字符串发出签名结果" '"type":"lab-result","labId":"vuln-format-string-01"'
+OUT=$(run_check "$MEMORY_SB" deadbeef) && RC=0 || RC=$?
+expect_eq "格式化字符串错误秘密值失败" "$RC" "1"
+expect_not_contains "$OUT" "格式化字符串失败不签发结果" '"type":"lab-result"'
+
+# 6. 竞争条件：两次并发取款都成功，ledger 两行。
+chmod +x "$PWNHUB_LABS_DIR/vuln-race-condition-01/bank"
+vuln_goto vuln-race-condition-01
+expect_eq "格式化字符串完成后可进入竞争条件实验" "$RC" "0"
+expect_contains "$OUT" "竞争条件实验发出稳定 ready" '"type":"lab-ready","labId":"vuln-race-condition-01"'
+[ -x "$MEMORY_SB/home/guest/bank" ] \
+    && ok "竞争条件样本已复制到 HOME" \
+    || bad "竞争条件样本未复制到 HOME"
+RACE_DIR="$MEMORY_SB/home/guest/vuln-race-condition-01"
+mkdir -p "$RACE_DIR"
+OUT=$(run_check "$MEMORY_SB") && RC=0 || RC=$?
+expect_eq "竞争条件无成功记录时失败" "$RC" "1"
+HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+    "$STUB/timeout" 15 "$BUSYBOX" sh -c \
+    '"$1" 800 & "$1" 800 & wait' sh "$PWNHUB_LABS_DIR/vuln-race-condition-01/bank" \
+    >/dev/null 2>&1 || true
+if OUT=$(run_check "$MEMORY_SB"); then RC=0; else RC=$?; fi
+expect_eq "竞争条件两次并发扣款通过" "$RC" "0"
+expect_contains "$OUT" "竞争条件发出签名结果" '"type":"lab-result","labId":"vuln-race-condition-01"'
+
 if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
     HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
     HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
@@ -403,7 +563,7 @@ if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
 else
     RC=$?
 fi
-expect_eq "栈实验完成后可进入汇编实验" "$RC" "0"
+expect_eq "竞争条件实验完成后可进入汇编实验" "$RC" "0"
 expect_contains "$OUT" "汇编实验发出稳定 ready" '"type":"lab-ready","labId":"asm-registers-01"'
 if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
     HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
