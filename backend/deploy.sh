@@ -216,7 +216,7 @@ if [ "$(stat -c '%a' "$STAGING_DIR")" != "750" ]; then
   echo "ERROR: staging 根目录权限检查失败" >&2
   exit 1
 fi
-if [ -n "$(find "$STAGING_DIR" -perm /022 -print -quit)" ]; then
+if [ -n "$(find "$STAGING_DIR" ! -type l -perm /022 -print -quit)" ]; then
   echo "ERROR: staging 中存在可被 group/other 写入的文件" >&2
   exit 1
 fi
