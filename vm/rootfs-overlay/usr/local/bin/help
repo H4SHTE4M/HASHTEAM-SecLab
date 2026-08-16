@@ -3,9 +3,19 @@ set -eu
 
 HELP_FILE="${HASHTEAM_HELP_FILE:-/etc/hashteam/help.txt}"
 STATE_DIR="${HASHTEAM_STATE_DIR:-$HOME/.hashteam}"
-level=$(cat "$STATE_DIR/level" 2>/dev/null || echo 1)
+. "${HASHTEAM_LIB_DIR:-/etc/hashteam}/lab.sh"
 
 show_current() {
+    lab=$(ht_current_lab)
+    if [ -n "$lab" ]; then
+        number=$(ht_lab_number "$lab" || printf '?')
+        title=$(ht_lab_title "$lab")
+        [ -n "$title" ] || title="$lab"
+        echo "当前是第 $number 关 · $title，建议先查这些命令："
+        echo "  status  hint  check"
+        return
+    fi
+    level=$(cat "$STATE_DIR/level" 2>/dev/null || echo 1)
     echo "当前是第 $level 关，建议先查这些命令："
     case "$level" in
         1) echo "  whoami  pwd  ls  cat  check" ;;

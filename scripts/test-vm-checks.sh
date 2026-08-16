@@ -376,6 +376,24 @@ expect_contains "$OUT" "内存布局实验发出稳定 ready" '"type":"lab-ready
     && ok "切换实验会清理旧样本并复制新样本" \
     || bad "切换实验未正确清理或复制 HOME 样本"
 if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+    "$BUSYBOX" sh "$OVERLAY/usr/local/bin/help" current 2>&1); then
+    RC=0
+else
+    RC=$?
+fi
+expect_eq "实验内 help current 可用" "$RC" "0"
+expect_contains "$OUT" "help 显示与横幅一致的实验序号" '第 2 关 · 进程内存布局与 rwx'
+if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+    "$BUSYBOX" sh "$OVERLAY/usr/local/bin/status" 2>&1); then
+    RC=0
+else
+    RC=$?
+fi
+expect_eq "实验内 status 可用" "$RC" "0"
+expect_contains "$OUT" "status 显示与横幅一致的实验序号" '第 2 关 · 进程内存布局与 rwx'
+if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
     HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
     HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
     "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab memory-register-stack-01 2>&1); then

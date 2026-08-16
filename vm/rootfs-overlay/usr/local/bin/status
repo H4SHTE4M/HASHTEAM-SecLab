@@ -1,7 +1,19 @@
 #!/bin/sh
 set -eu
-level=$(cat "$HOME/.hashteam/level" 2>/dev/null || echo 1)
-max_completed=$(cat "$HOME/.hashteam/max-completed" 2>/dev/null || echo 0)
-echo "当前关卡：第 $level 关"
-echo "已完成最高关：第 $max_completed 关"
+
+STATE_DIR="${HASHTEAM_STATE_DIR:-$HOME/.hashteam}"
+. "${HASHTEAM_LIB_DIR:-/etc/hashteam}/lab.sh"
+
+lab=$(ht_current_lab)
+if [ -n "$lab" ]; then
+    number=$(ht_lab_number "$lab" || printf '?')
+    title=$(ht_lab_title "$lab")
+    [ -n "$title" ] || title="$lab"
+    echo "当前实验：第 $number 关 · $title"
+else
+    level=$(cat "$STATE_DIR/level" 2>/dev/null || echo 1)
+    max_completed=$(cat "$STATE_DIR/max-completed" 2>/dev/null || echo 0)
+    echo "当前关卡：第 $level 关"
+    echo "已完成最高关：第 $max_completed 关"
+fi
 echo "完成后运行 check 验证；卡住时可以输入 hint。"

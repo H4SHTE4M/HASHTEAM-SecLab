@@ -7,6 +7,7 @@ LEVELS_DIR="${HASHTEAM_LEVELS_DIR:-/opt/hashteam/levels}"
 LABS_DIR="${PWNHUB_LABS_DIR:-/opt/pwnhub/labs}"
 COURSE_ORDER="${PWNHUB_COURSE_ORDER:-/opt/pwnhub/course-order}"
 . "${HASHTEAM_LIB_DIR:-/etc/hashteam}/colors.sh"
+. "${HASHTEAM_LIB_DIR:-/etc/hashteam}/lab.sh"
 
 current_level() {
     cat "$STATE_DIR/level" 2>/dev/null || echo 1
@@ -15,10 +16,6 @@ current_level() {
 # 已完成的最高关卡号（关卡顺序解锁，故只记一个最大值即可）
 max_completed() {
     cat "$STATE_DIR/max-completed" 2>/dev/null || echo 0
-}
-
-current_lab() {
-    cat "$STATE_DIR/lab" 2>/dev/null || true
 }
 
 valid_lab_id() {
@@ -91,31 +88,10 @@ run_lab_init() {
     sh "$LABS_DIR/$1/init.sh"
 }
 
-course_number() {
-    wanted=$1
-    number=0
-    [ -f "$COURSE_ORDER" ] || return 1
-    while IFS= read -r item || [ -n "$item" ]; do
-        [ -n "$item" ] || continue
-        number=$((number + 1))
-        if [ "$item" = "$wanted" ]; then
-            printf '%s\n' "$number"
-            return 0
-        fi
-    done < "$COURSE_ORDER"
-    return 1
-}
-
-lab_title() {
-    # 课程 manifest 的第一个 title 是实验标题；步骤标题位于后面。
-    sed -n 's/^[[:space:]]*"title"[[:space:]]*:[[:space:]]*"\([^"\\]*\)".*/\1/p' \
-        "$LABS_DIR/$1/manifest.json" 2>/dev/null | sed -n '1p'
-}
-
 show_lab_banner() {
     lab_id=$1
-    number=$(course_number "$lab_id") || return 0
-    title=$(lab_title "$lab_id")
+    number=$(ht_lab_number "$lab_id") || return 0
+    title=$(ht_lab_title "$lab_id")
     [ -n "$title" ] || title="$lab_id"
     [ -t 1 ] && clear
     ht_banner "第 $number 关 · $title"
@@ -215,7 +191,7 @@ case "$cmd" in
         ;;
     reset-level)
         rm -f "$STATE_DIR"/hint-count-*
-        lab_id=$(current_lab)
+        lab_id=$(ht_current_lab)
         if [ -n "$lab_id" ]; then
             valid_lab_id "$lab_id" || { ht_error "当前实验状态无效"; exit 2; }
             ht_notice "正在重置实验 $lab_id..."
@@ -243,7 +219,7 @@ case "$cmd" in
         emit_level_ready 1
         ;;
     current)
-        lab_id=$(current_lab)
+        lab_id=$(ht_current_lab)
         [ -n "$lab_id" ] && printf '%s\n' "$lab_id" || current_level
         ;;
     *)
