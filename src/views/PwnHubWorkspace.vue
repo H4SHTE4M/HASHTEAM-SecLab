@@ -119,6 +119,7 @@ const resumedHasProgress =
     progress.state.completedLabIds.length > 0)
 const welcomeBackDismissed = ref(false)
 const mobileBannerDismissed = ref(false)
+const constructionBannerDismissed = ref(false)
 const debugUnlockedLabIds = ref<string[]>([])
 const debugUnlockedChapterIds = ref<string[]>([])
 let resizeStartX = 0
@@ -243,6 +244,9 @@ const showWelcomeBack = computed(
 )
 const showMobileBanner = computed(
   () => !mobileBannerDismissed.value && !showCompletion.value && viewportWidth.value <= 900,
+)
+const showConstructionBanner = computed(
+  () => !constructionBannerDismissed.value && !showCompletion.value,
 )
 
 let unsubscribeDisplay: (() => void) | null = null
@@ -715,6 +719,10 @@ async function handleBugReportDownload(): Promise<void> {
       <span>建议用电脑打开以获得完整终端体验</span>
       <button type="button" aria-label="关闭提示" @click="mobileBannerDismissed = true">×</button>
     </div>
+    <div v-if="showConstructionBanner" class="construction-banner" role="status">
+      <span>PwnHub 正在建设中：引导和关卡内容会持续更新，你的学习进度会保留。</span>
+      <button type="button" aria-label="关闭提示" @click="constructionBannerDismissed = true">×</button>
+    </div>
     <Transition name="overlay-fade">
       <div v-if="showWelcomeBack" class="welcome-back" role="status">
         <span>
@@ -1015,6 +1023,19 @@ async function handleBugReportDownload(): Promise<void> {
   border-bottom: var(--hairline) solid var(--accent-amber-border);
 }
 
+.construction-banner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 7px calc(12px + var(--safe-right)) 7px calc(12px + var(--safe-left));
+  color: var(--accent-violet);
+  font-size: 12px;
+  background: var(--accent-violet-soft);
+  border-bottom: var(--hairline) solid var(--accent-violet-border);
+}
+
 .welcome-back {
   position: fixed;
   top: calc(10px + var(--safe-top));
@@ -1036,6 +1057,7 @@ async function handleBugReportDownload(): Promise<void> {
 }
 
 .mobile-banner button,
+.construction-banner button,
 .welcome-back button {
   flex: 0 0 auto;
   padding: 0 4px;

@@ -76,6 +76,7 @@ function enterModule(module: ModuleSummary): void {
             <p class="module-kicker">{{ module.moduleId === 'seclab' ? 'SecLab' : 'PwnHub' }}</p>
             <h2>{{ module.title }}</h2>
           </div>
+          <span v-if="module.moduleId === 'pwnhub'" class="wip-badge">建设中</span>
         </div>
 
         <p class="module-description">{{ module.description }}</p>
@@ -105,6 +106,11 @@ function enterModule(module: ModuleSummary): void {
         <p v-if="module.moduleId === 'pwnhub'" class="readiness-note">
           <AppIcon name="info" :size="15" />
           <span>{{ pwnHubReadiness }}</span>
+        </p>
+
+        <p v-if="module.moduleId === 'pwnhub'" class="wip-note">
+          <AppIcon name="layers" :size="15" />
+          <span>模块仍在建设中：后续会持续改进新手引导并开放更多关卡，已有进度会保留。</span>
         </p>
 
         <button type="button" class="enter-button" @click="enterModule(module)">
@@ -291,6 +297,35 @@ h2 {
   flex: 0 0 auto;
   margin-top: 2px;
   color: var(--accent-amber);
+}
+
+.wip-badge {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 3px 9px;
+  color: var(--accent-violet);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  background: color-mix(in srgb, var(--accent-violet) 12%, transparent);
+  border: var(--hairline) solid color-mix(in srgb, var(--accent-violet) 40%, transparent);
+  border-radius: 999px;
+}
+
+.wip-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.wip-note svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--accent-violet);
 }
 
 .enter-button {
