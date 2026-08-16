@@ -2,10 +2,11 @@
   "$schema": "../course.schema.json",
   "schemaVersion": 3,
   "courseId": "pwnhub-foundations",
-  "chapterId": "vuln-first",
+  "chapterId": "vuln-logic",
   "labId": "vuln-weak-random-01",
   "title": "会重播的口令",
   "summary": "观察用当天种子算出的伪随机口令，用 --seed 重放任意一天并预测它。",
+  "story": "这一章不需要懂内存。先弄清三件平常事：程序不是凭空出现的，它是程序员写下的源代码被编译器翻译出来的；源代码里的变量是有名字的数据；而当一段数字完全由变量决定时，它就一定能被提前算出来。rand-door 的口令正是这种数字。",
   "goals": [
     "运行样本两次，确认同一天里口令完全相同",
     "说明伪随机口令由种子决定，种子相同输出必然相同",
@@ -16,7 +17,7 @@
   "kind": "pwn",
   "environmentProfile": "binary",
   "estimatedMinutes": { "min": 15, "max": 25 },
-  "unlockAfter": ["memory-register-stack-01"],
+  "unlockAfter": ["num-wrap-01"],
   "artifacts": [
     {
       "path": "/opt/pwnhub/labs/vuln-weak-random-01/rand-door",
@@ -28,7 +29,7 @@
   ],
   "concepts": [
     { "id": "pseudo-random", "term": "伪随机数", "explanation": "rand 一类函数的输出由种子和算法完全决定；种子相同，生成的序列一定相同，所谓随机只是不可预先肉眼猜出。" },
-    { "id": "predictable-seed", "term": "可预测种子", "explanation": "样本用 当天 0 点至今的 86400 秒日数 当种子，一天之内不变，所以同一天里任何人运行都拿到同一个口令。" },
+    { "id": "predictable-seed", "term": "可预测种子", "explanation": "源代码把 当天 0 点至今的 86400 秒日数 存进变量 seed 当种子；一天之内这个变量不变，所以同一天里任何人运行都拿到同一个口令。" },
     { "id": "seed-replay", "term": "种子重放", "explanation": "用 ./rand-door --seed N 可以指定任意一天，重算出那一天的口令；拿到种子就能提前知道口令。" }
   ],
   "steps": [
@@ -37,12 +38,12 @@
       "type": "concept",
       "title": "口令真的随机吗",
       "objective": "把伪随机口令拆成种子和算法",
-      "instruction": "rand 把种子喂给确定算法，生成所谓随机数。种子一旦固定，后续输出全部固定。样本用 当天 0 点至今的秒数除以 86400 得到日数当种子，所以一天之内种子不变，口令也不会变。",
+      "instruction": "先认清单词：./rand-door 是一个程序。程序不是凭空出现的——程序员先写下 C 源代码，再用编译器把源代码翻译成机器能跑的指令，这一步叫编译；源代码 → 编译 → 程序，就是它的完整来历。源代码里有一个变量 seed：变量是给一段数据起的名字，运行时会有一个位置保存它。样本把 当天 0 点至今的秒数除以 86400 得到日数，存进 seed 当种子；rand 再把种子喂给确定算法，生成所谓随机数。种子一旦固定，后续输出全部固定——所以同一天里种子不变，口令也不会变。",
       "completion": "acknowledge",
       "allowRun": false,
       "introduces": [
         { "id": "pseudo-random", "term": "伪随机数", "explanation": "rand 一类函数的输出由种子和算法完全决定；种子相同，生成的序列一定相同，所谓随机只是不可预先肉眼猜出。" },
-        { "id": "predictable-seed", "term": "可预测种子", "explanation": "样本用 当天 0 点至今的 86400 秒日数 当种子，一天之内不变，所以同一天里任何人运行都拿到同一个口令。" }
+        { "id": "predictable-seed", "term": "可预测种子", "explanation": "源代码把 当天 0 点至今的 86400 秒日数 存进变量 seed 当种子；一天之内这个变量不变，所以同一天里任何人运行都拿到同一个口令。" }
       ],
       "uses": ["pseudo-random", "predictable-seed"],
       "evidence": "observation",

@@ -2,10 +2,11 @@
   "$schema": "../course.schema.json",
   "schemaVersion": 3,
   "courseId": "pwnhub-foundations",
-  "chapterId": "vuln-first",
+  "chapterId": "vuln-logic",
   "labId": "vuln-race-condition-01",
   "title": "检查与扣款之间的时间窗",
   "summary": "让两次取款同时穿过 先检查、3 秒后才扣款 的时间窗，观察共享余额被超取。",
+  "story": "这是逻辑篇最后一关，依旧不需要内存知识。源代码里有一条 if 条件判断：if (余额够) 就放行，否则拒绝。问题在于检查（读余额 + if 判断）和行动（扣款写回）是分开的两步，中间隔了 3 秒。只要两个取款同时挤进这 3 秒，两次 if 都看到同一个旧余额，双双放行。",
   "goals": [
     "单独取款一次并确认余额检查在正常路径下有效",
     "解释检查与扣款分离造成的 3 秒竞态窗口",
@@ -16,7 +17,7 @@
   "kind": "pwn",
   "environmentProfile": "binary",
   "estimatedMinutes": { "min": 20, "max": 30 },
-  "unlockAfter": ["vuln-format-string-01"],
+  "unlockAfter": ["vuln-integer-overflow-01"],
   "artifacts": [
     {
       "path": "/opt/pwnhub/labs/vuln-race-condition-01/bank",
@@ -27,7 +28,7 @@
     }
   ],
   "concepts": [
-    { "id": "check-then-act", "term": "先检查后执行", "explanation": "样本读 balance.txt 判断够不够，通过后睡 3 秒才把新余额写回；检查和扣款之间没有任何锁。" },
+    { "id": "check-then-act", "term": "先检查后执行", "explanation": "源代码用一条 if 条件判断读 balance.txt 检查余额够不够，通过后睡 3 秒才把新余额写回；检查（读 + if 判断）和行动（扣款写回）是分开的两步，中间没有任何锁。" },
     { "id": "race-window", "term": "竞态窗口", "explanation": "检查之后那 3 秒里余额文件还停在旧值；只要另一个进程也在这 3 秒里通过检查，两个进程都会认为钱够。" },
     { "id": "concurrent-run", "term": "并发运行", "explanation": "用 & 把两个取款同时挂起、用 wait 等它们都跑完，就把两笔取款强行塞进了同一个 3 秒窗口。" }
   ],
@@ -37,11 +38,11 @@
       "type": "concept",
       "title": "先检查那 3 秒的裂缝",
       "objective": "认识检查与扣款不在同一瞬间完成",
-      "instruction": "样本先读 $HOME/vuln-race-condition-01/balance.txt 判断够不够，只有判断通过才会继续；它随后 nanosleep 3 秒模拟外部扣款，再写回新余额。检查这一刻看的余额和 3 秒后真正改写的余额，并非同一次读取，中间的 3 秒就是漏洞所在。",
+      "instruction": "样本先读 $HOME/vuln-race-condition-01/balance.txt，用一条 if 条件判断检查余额够不够——这就是源代码里 if (余额够) 就放行 的模样，只有判断通过才会继续；它随后 nanosleep 3 秒模拟外部扣款，再写回新余额。检查这一刻看的余额和 3 秒后真正改写的余额，并非同一次读取：检查与行动是分离的两步，中间的 3 秒就是漏洞所在。",
       "completion": "acknowledge",
       "allowRun": false,
       "introduces": [
-        { "id": "check-then-act", "term": "先检查后执行", "explanation": "样本读 balance.txt 判断够不够，通过后睡 3 秒才把新余额写回；检查和扣款之间没有任何锁。" },
+        { "id": "check-then-act", "term": "先检查后执行", "explanation": "源代码用一条 if 条件判断读 balance.txt 检查余额够不够，通过后睡 3 秒才把新余额写回；检查（读 + if 判断）和行动（扣款写回）是分开的两步，中间没有任何锁。" },
         { "id": "race-window", "term": "竞态窗口", "explanation": "检查之后那 3 秒里余额文件还停在旧值；只要另一个进程也在这 3 秒里通过检查，两个进程都会认为钱够。" }
       ],
       "uses": ["check-then-act", "race-window"],
@@ -126,6 +127,6 @@
   "completionSummary": {
     "solved": "通过真实账本验证了两笔并发取款同时穿过检查窗口、合计取走超过余额的钱。",
     "mastered": ["先检查后执行", "竞态窗口", "并发运行"],
-    "next": "下一实验是 asm-registers-01：从 i386 寄存器职责开始读汇编，观察 EAX、EBX、ECX 和 EDX 在真实指令中的变化。"
+    "next": "逻辑篇到此结束。下一章进入内存模型，从 memory-addresses-01 开始分清变量的地址、内存里的值和指针。"
   }
 }

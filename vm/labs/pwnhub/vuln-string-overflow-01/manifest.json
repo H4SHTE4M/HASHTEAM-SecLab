@@ -2,7 +2,7 @@
   "$schema": "../course.schema.json",
   "schemaVersion": 3,
   "courseId": "pwnhub-foundations",
-  "chapterId": "vuln-first",
+  "chapterId": "vuln-memory",
   "labId": "vuln-string-overflow-01",
   "title": "栈溢出盖掉返回地址",
   "summary": "用一段超过 16 字节缓冲区的输入，沿栈向高地址蔓延，覆盖保存的 EBP 与保存的返回地址，让函数返回时崩溃。",

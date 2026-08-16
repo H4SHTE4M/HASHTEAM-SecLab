@@ -16,7 +16,7 @@
   "kind": "visual",
   "environmentProfile": "binary",
   "estimatedMinutes": { "min": 20, "max": 40 },
-  "unlockAfter": [],
+  "unlockAfter": ["vuln-race-condition-01"],
   "artifacts": [
     {
       "path": "/opt/pwnhub/labs/memory-addresses-01/memory-addresses",

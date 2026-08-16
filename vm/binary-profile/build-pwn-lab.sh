@@ -7,6 +7,8 @@ case "$LAB_ID" in
     pwn-overflow-offset-01) source_name=overflow-offset.c; output_name=overflow-offset ;;
     pwn-ret2win-args-01) source_name=ret2win-args.c; output_name=ret2win-args ;;
     vuln-weak-random-01) source_name=rand-door.c; output_name=rand-door ;;
+    num-bases-01) source_name=bases.c; output_name=bases ;;
+    num-wrap-01) source_name=counter.c; output_name=counter ;;
     vuln-integer-overflow-01) source_name=wallet.c; output_name=wallet ;;
     vuln-overwrite-variable-01) source_name=door.c; output_name=door ;;
     vuln-string-overflow-01) source_name=frame.c; output_name=frame ;;

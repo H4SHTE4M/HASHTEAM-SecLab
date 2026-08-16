@@ -2,7 +2,7 @@
   "$schema": "../course.schema.json",
   "schemaVersion": 3,
   "courseId": "pwnhub-foundations",
-  "chapterId": "vuln-first",
+  "chapterId": "vuln-memory",
   "labId": "vuln-format-string-01",
   "title": "用 %x 读出栈上的秘密",
   "summary": "把名字写成格式串，让 printf 把 %x 当成指令逐格读取调用者栈，泄漏栈上遗留的秘密值。",
@@ -135,6 +135,6 @@
   "completionSummary": {
     "solved": "通过真实重放确认用 %x 逐格读出了调用者栈上遗留的秘密值。",
     "mastered": ["格式说明符即指令", "栈格泄漏", "栈上遗留的秘密"],
-    "next": "下一实验会让两次取款同时穿过检查与扣款之间的时间窗，触发竞争条件。"
+    "next": "内存篇到此结束。下一实验 asm-registers-01 从 i386 寄存器职责开始读汇编，观察 EAX、EBX、ECX 和 EDX 在真实指令中的变化。"
   }
 }

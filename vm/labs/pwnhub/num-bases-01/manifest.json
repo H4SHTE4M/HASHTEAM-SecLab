@@ -1,0 +1,193 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "number-bases",
+  "labId": "num-bases-01",
+  "title": "三种写法，同一个数",
+  "summary": "观察同一个字节 202 的十进制、十六进制与二进制写法，并用 printf 亲手完成 0xca 与 42 的换算。",
+  "story": "你第一次面对二进制世界。终端里的一个字节既不是 202、也不是 0xca 或 11001010——它只是一个字节，这些只是人类的三种写法。读懂写法，才算和机器对上话。",
+  "goals": [
+    "运行进制样本并读出 202 的三种写法",
+    "说明十进制、十六进制、二进制是同一个字节的不同写法",
+    "用 printf '%x' 与 '%d' 亲手把 202 换成 0xca、把 0x2a 换成 42",
+    "提交 0xca 与 42 并通过锁定样本真实重放校验"
+  ],
+  "prerequisites": [
+    "能在真实终端运行程序并观察输出"
+  ],
+  "kind": "pwn",
+  "environmentProfile": "binary",
+  "estimatedMinutes": {
+    "min": 10,
+    "max": 20
+  },
+  "unlockAfter": [],
+  "artifacts": [
+    {
+      "path": "/opt/pwnhub/labs/num-bases-01/bases",
+      "architecture": "i386",
+      "sha256": "8969acc17560423409d35e5a2443d26cb7ed71c0c7e50aca45167de948b8b3ef",
+      "purpose": "固定、离线、只打印一个字节三种进制写法的观察样本",
+      "downloadable": true
+    }
+  ],
+  "concepts": [
+    {
+      "id": "hexadecimal",
+      "term": "十六进制",
+      "explanation": "用 0-9 与 a-f 十六个符号记数；0xca 中 c 代表 12、a 代表 10，0xca = 12 × 16 + 10 = 202。"
+    },
+    {
+      "id": "binary",
+      "term": "二进制",
+      "explanation": "只有 0 和 1；11001010 每位对应 128、64、32、16、8、4、2、1，加起来正好是 202。"
+    },
+    {
+      "id": "byte",
+      "term": "一个字节",
+      "explanation": "一个字节有 8 个二进制位；202、0xca、11001010 是同一个字节的三种写法，值完全一样。"
+    }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "concept",
+      "title": "三种写法，同一个字节",
+      "objective": "把 202 的三种进制写法对上号",
+      "instruction": "机器里存的只是 8 个二进制位。人类为了方便，给同一串位起了三套名字：十进制写 202，十六进制写 0xca，二进制写 11001010。它们是完全相同的值，只是写法不同。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "hexadecimal",
+          "term": "十六进制",
+          "explanation": "用 0-9 与 a-f 十六个符号记数；0xca 中 c 代表 12、a 代表 10，0xca = 12 × 16 + 10 = 202。"
+        },
+        {
+          "id": "binary",
+          "term": "二进制",
+          "explanation": "只有 0 和 1；11001010 每位对应 128、64、32、16、8、4、2、1，加起来正好是 202。"
+        },
+        {
+          "id": "byte",
+          "term": "一个字节",
+          "explanation": "一个字节有 8 个二进制位；202、0xca、11001010 是同一个字节的三种写法，值完全一样。"
+        }
+      ],
+      "uses": [
+        "hexadecimal",
+        "binary",
+        "byte"
+      ],
+      "evidence": "observation",
+      "tool": "shell"
+    },
+    {
+      "id": 2,
+      "type": "terminal",
+      "title": "运行样本看三种写法",
+      "objective": "亲眼确认三种进制打印的是同一个数",
+      "instruction": "运行 ./bases。样本把同一个字节 202 用十进制 202、十六进制 0xca、二进制 11001010 各打印一行，最后还给了一个 0x2a 的例子。",
+      "completion": "acknowledge",
+      "allowRun": true,
+      "command": "./bases",
+      "uses": [
+        "hexadecimal",
+        "binary",
+        "byte"
+      ],
+      "evidence": "observation",
+      "tool": "shell",
+      "observation": "输出里依次出现 十进制 202、十六进制 0xca、二进制 11001010 三行，最后一行是 0x2a 写成十进制就是 42。",
+      "commonErrors": [
+        "0x 只是十六进制的写法前缀，不是数字的一部分。",
+        "三行写法对应同一个字节，别把它们当成三个不同的数。"
+      ],
+      "reinforcement": "看到三种写法打印同一个数，进制就只是同一字节的不同标签。"
+    },
+    {
+      "id": 3,
+      "type": "terminal",
+      "title": "用 printf 亲手换算",
+      "objective": "用 printf '%x' 与 '%d' 双向换算进制",
+      "instruction": "先用 printf '%x\\n' 202 把 202 换成十六进制（结果 ca，加上前缀就是 0xca）；再用 printf '%d\\n' 0x2a 把 0x2a 换成十进制（结果 42）。busybox 的 printf 认识 0x 前缀，可以直接吃十六进制。",
+      "completion": "acknowledge",
+      "allowRun": true,
+      "command": "printf '%x\\n' 202",
+      "uses": [
+        "hexadecimal",
+        "byte"
+      ],
+      "evidence": "observation",
+      "tool": "shell",
+      "observation": "printf '%x\\n' 202 打印 ca；printf '%d\\n' 0x2a 打印 42。",
+      "commonErrors": [
+        "printf '%x' 输出不带 0x 前缀，写答案时要自己把 ca 补成 0xca。",
+        "printf '%d\\n' 0x2a 里 0x 前缀让 printf 把它当十六进制读，删掉前缀结果就不对了。"
+      ],
+      "reinforcement": "能自己算出来，就不需要死记对照表；0xca 与 42 都是换算出来的。"
+    },
+    {
+      "id": 4,
+      "type": "terminal",
+      "title": "提交两个观察值",
+      "objective": "用 0xca 与 42 通过真实重放校验",
+      "instruction": "运行 check <十六进制写法> <十进制值>：第一格填 202 的十六进制写法 0xca，第二格填 0x2a 的十进制值 42。判题会把锁定样本真实重放，只接受与真实输出一致的一对观察值。",
+      "completion": "confirm",
+      "allowRun": false,
+      "uses": [
+        "hexadecimal",
+        "byte"
+      ],
+      "evidence": "answer",
+      "tool": "shell"
+    }
+  ],
+  "hints": [
+    {
+      "level": 1,
+      "kind": "direction",
+      "text": "先看样本输出里 202 的三种写法，再想 0x2a 换成十进制是什么。"
+    },
+    {
+      "level": 2,
+      "kind": "tool",
+      "text": "printf '%x\\n' 202 把十进制换成十六进制；printf '%d\\n' 0x2a 把十六进制换成十进制。"
+    },
+    {
+      "level": 3,
+      "kind": "structure",
+      "text": "最终结构是 check <十六进制写法> <十进制值>；第一格是 0xca，第二格是 42。"
+    }
+  ],
+  "verification": {
+    "type": "answer",
+    "usage": "check <十六进制写法> <十进制值>",
+    "instruction": "依次填入 202 的十六进制写法与 0x2a 的十进制值。",
+    "placeholders": [
+      {
+        "token": "<十六进制写法>",
+        "meaning": "202 的十六进制写法，带 0x 前缀（0xca）"
+      },
+      {
+        "token": "<十进制值>",
+        "meaning": "0x2a 的十进制值（42）"
+      }
+    ],
+    "feedback": {
+      "empty": "还没有提供两个观察值。",
+      "incorrect": "两个观察值与真实样本输出不一致，请重新核对 十六进制 行与 0x2a 例子的十进制值。",
+      "success": "真实进制样本重放确认了三种写法是同一个字节。"
+    }
+  },
+  "completionSummary": {
+    "solved": "认清了十进制、十六进制、二进制是同一个字节的三种写法，并亲手完成 0xca 与 42 的换算。",
+    "mastered": [
+      "十进制、十六进制与二进制",
+      "一个字节八位",
+      "printf 进制换算"
+    ],
+    "next": "下一实验会让 8 位计数器装到 255 后继续加 1，观察它如何回到 0。"
+  }
+}

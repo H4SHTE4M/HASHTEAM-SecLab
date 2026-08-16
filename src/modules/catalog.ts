@@ -21,9 +21,9 @@ export const MODULES: readonly ModuleSummary[] = [
   {
     moduleId: 'pwnhub',
     title: '二进制安全实验',
-    description: '从内存模型到 ROP 的二进制安全进阶',
+    description: '从数字与进制到 ROP 的二进制安全进阶',
     route: '/labs/pwnhub',
-    publishedCount: 12,
-    plannedCount: 24,
+    publishedCount: 20,
+    plannedCount: 32,
   },
 ]

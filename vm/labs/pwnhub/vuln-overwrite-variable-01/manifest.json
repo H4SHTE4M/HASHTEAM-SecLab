@@ -2,7 +2,7 @@
   "$schema": "../course.schema.json",
   "schemaVersion": 3,
   "courseId": "pwnhub-foundations",
-  "chapterId": "vuln-first",
+  "chapterId": "vuln-memory",
   "labId": "vuln-overwrite-variable-01",
   "title": "越界一字节打开权限门",
   "summary": "用一个超过 16 字节缓冲区的名字，越过边界改写紧邻的 is_admin 标志，让门直接打开。",
@@ -15,7 +15,7 @@
   "kind": "pwn",
   "environmentProfile": "binary",
   "estimatedMinutes": { "min": 15, "max": 25 },
-  "unlockAfter": ["vuln-integer-overflow-01"],
+  "unlockAfter": ["memory-register-stack-01"],
   "artifacts": [{
     "path": "/opt/pwnhub/labs/vuln-overwrite-variable-01/door",
     "architecture": "i386",

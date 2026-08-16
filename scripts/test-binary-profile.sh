@@ -673,6 +673,29 @@ if grep -Eq 'choose_path|jne|0x7' "$WORK/elf-disassembly-wrong.txt"; then
     exit 1
 fi
 
+echo '==> 数字与进制样本宿主重放'
+NUM_BASES_LAB="$ROOT/vm/labs/pwnhub/num-bases-01"
+BASES_ELF="$NUM_BASES_LAB/bases"
+chmod +x "$BASES_ELF"
+[ "$(sha256sum "$BASES_ELF" | cut -d ' ' -f 1)" = \
+    8969acc17560423409d35e5a2443d26cb7ed71c0c7e50aca45167de948b8b3ef ]
+BASES_OUTPUT="$($BASES_ELF)"
+printf '%s\n' "$BASES_OUTPUT" | grep -Fq '十进制 202'
+printf '%s\n' "$BASES_OUTPUT" | grep -Fq '十六进制 0xca'
+printf '%s\n' "$BASES_OUTPUT" | grep -Fq '二进制 11001010'
+printf '%s\n' "$BASES_OUTPUT" | grep -Fq '0x2a 写成十进制就是 42'
+
+NUM_WRAP_LAB="$ROOT/vm/labs/pwnhub/num-wrap-01"
+COUNTER_ELF="$NUM_WRAP_LAB/counter"
+chmod +x "$COUNTER_ELF"
+[ "$(sha256sum "$COUNTER_ELF" | cut -d ' ' -f 1)" = \
+    7d134b12682e6e3b770229de048c3c07091b5e3b6552cd374bd2de69be0e53a2 ]
+COUNTER_OUTPUT="$($COUNTER_ELF)"
+printf '%s\n' "$COUNTER_OUTPUT" | grep -Fq '252 253 254 255 0 1 2 3'
+"$COUNTER_ELF" 200 100 | grep -Fq '8 位结果: 44'
+"$COUNTER_ELF" 255 1 | grep -Fq '8 位结果: 0'
+echo '  ✓ 两个进制样本哈希与功能重放'
+
 echo '==> 第一批漏洞样本宿主重放'
 WEAK_RANDOM_LAB="$ROOT/vm/labs/pwnhub/vuln-weak-random-01"
 WEAK_RANDOM_ELF="$WEAK_RANDOM_LAB/rand-door"
@@ -764,6 +787,57 @@ grep -Fqx '取出 800 成功' "$WORK/race-home/vuln-race-condition-01/ledger"
 [ "$(grep -c '^取出 800 成功$' "$WORK/race-home/vuln-race-condition-01/ledger")" -eq 2 ]
 [ "$(cat "$WORK/race-home/vuln-race-condition-01/balance.txt")" = 200 ]
 echo '  ✓ 六个 vuln 样本哈希与功能重放'
+
+echo '==> 锁定 i686 工具链逐字节重建比对'
+I686_CC="${I686_CC:-}"
+if [ -z "$I686_CC" ] && command -v i686-linux-gnu-gcc >/dev/null 2>&1; then
+    I686_CC="$(command -v i686-linux-gnu-gcc)"
+fi
+if [ -z "$I686_CC" ] && [ -x "$HOME/toolchains/ubuntu-i686/root/usr/bin/i686-linux-gnu-gcc" ]; then
+    I686_CC="$HOME/toolchains/ubuntu-i686/root/usr/bin/i686-linux-gnu-gcc"
+fi
+TOOLCHAIN_VERIFIED=0
+if [ -n "$I686_CC" ] && \
+    [ "$(LC_ALL=C "$I686_CC" --version 2>/dev/null | sed -n '1p')" = \
+    'i686-linux-gnu-gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0' ] && \
+    [ "$(sha256sum "$I686_CC" | cut -d ' ' -f 1)" = \
+    '441d893628701a7e11c5be38d7aa3d295d2c3560dc1a38d441e1626f8e7d7c21' ]; then
+    TOOLCHAIN_VERIFIED=1
+fi
+if [ "$TOOLCHAIN_VERIFIED" = 1 ]; then
+    TOOLCHAIN_LIB="$(CDPATH= cd -- "$(dirname -- "$I686_CC")/../.." && pwd)/usr/lib/x86_64-linux-gnu"
+    REBUILD_ARTIFACTS="$(python3 - "$ROOT/vm/binary-profile/assets.json" <<'PY'
+import json
+import os
+import sys
+
+profile = json.load(open(sys.argv[1], encoding='utf-8'))
+for artifact in profile['artifacts']:
+    if artifact.get('buildScript') == 'vm/binary-profile/build-pwn-lab.sh':
+        print(artifact['id'], os.path.basename(artifact['path']))
+PY
+)"
+    while read -r REBUILD_LAB REBUILD_BIN; do
+        [ -n "$REBUILD_LAB" ] || continue
+        env LD_LIBRARY_PATH="${TOOLCHAIN_LIB}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+            CC="$I686_CC" bash "$ROOT/vm/binary-profile/build-pwn-lab.sh" \
+            "$REBUILD_LAB" "$WORK/rebuild-$REBUILD_LAB" > "$WORK/rebuild-$REBUILD_LAB.txt"
+        cmp -s "$WORK/rebuild-$REBUILD_LAB" "$ROOT/vm/labs/pwnhub/$REBUILD_LAB/$REBUILD_BIN" || {
+            echo "rebuilt $REBUILD_LAB is not byte-identical to the audited sample" >&2
+            exit 1
+        }
+        echo "  ✓ $REBUILD_LAB 锁定工具链重建与已审计样本逐字节一致"
+    done <<EOF
+$REBUILD_ARTIFACTS
+EOF
+else
+    echo '  ⚠ 找不到锁定的 i686 交叉工具链，跳过逐字节重建比对' >&2
+    if [ "${BINARY_PROFILE_REQUIRE_TOOLCHAIN:-0}" = 1 ]; then
+        echo 'the locked i686 toolchain is required for this smoke test' >&2
+        exit 2
+    fi
+fi
+
 
 if command -v gdb >/dev/null 2>&1; then
     gdb_output="$WORK/gdb.txt"

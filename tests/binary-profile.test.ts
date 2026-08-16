@@ -172,7 +172,7 @@ describe('staged i386 binary profile', () => {
 
     const parsed = parseCourseLabManifest(manifest, asmManifestPath)
     expect(parsed.labId).toBe('asm-registers-01')
-    expect(parsed.unlockAfter).toEqual(['vuln-race-condition-01'])
+    expect(parsed.unlockAfter).toEqual(['vuln-format-string-01'])
     expect(parsed.concepts.map((concept) => concept.term)).toEqual([
       '常见寄存器职责',
       'mov 的值复制',
@@ -652,7 +652,7 @@ describe('staged i386 binary profile', () => {
 
     expect([...order].sort()).toEqual(manifests)
     expect(new Set(order).size).toBe(order.length)
-    expect(order[0]).toBe('memory-addresses-01')
+    expect(order[0]).toBe('num-bases-01')
     expect(order.at(-1)).toBe('rop-call-chain-01')
   })
 })

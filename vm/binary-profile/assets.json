@@ -557,6 +557,52 @@
       }
     },
     {
+      "id": "num-bases-01",
+      "path": "vm/labs/pwnhub/num-bases-01/bases",
+      "architecture": "i386",
+      "endianness": "little",
+      "size": 9020,
+      "sha256": "8969acc17560423409d35e5a2443d26cb7ed71c0c7e50aca45167de948b8b3ef",
+      "source": "vm/binary-profile/num-bases-01/bases.c",
+      "sourceSha256": "e3e769768dc5a61729c3cd26ec213bc220f9dffbc263389b9086f3e2d5628dd9",
+      "buildScript": "vm/binary-profile/build-pwn-lab.sh",
+      "toolchainLock": "vm/binary-profile/num-bases-01/toolchain.lock",
+      "profile": "binary-i386",
+      "license": "PwnHub project source; no third party runtime",
+      "purpose": "固定、离线、无副作用文件的三种进制写法观察样本",
+      "downloadable": true,
+      "expected": {
+        "elfType": "EXEC",
+        "nx": true,
+        "pie": false,
+        "canary": false,
+        "relro": "none"
+      }
+    },
+    {
+      "id": "num-wrap-01",
+      "path": "vm/labs/pwnhub/num-wrap-01/counter",
+      "architecture": "i386",
+      "endianness": "little",
+      "size": 9428,
+      "sha256": "7d134b12682e6e3b770229de048c3c07091b5e3b6552cd374bd2de69be0e53a2",
+      "source": "vm/binary-profile/num-wrap-01/counter.c",
+      "sourceSha256": "27414be955715fcff00a8fc0b7b29cea7e5ca87ed189c7ba5dc7200f17a77b02",
+      "buildScript": "vm/binary-profile/build-pwn-lab.sh",
+      "toolchainLock": "vm/binary-profile/num-wrap-01/toolchain.lock",
+      "profile": "binary-i386",
+      "license": "PwnHub project source; no third party runtime",
+      "purpose": "固定、离线、无副作用文件的 8 位固定宽度回绕观察样本",
+      "downloadable": true,
+      "expected": {
+        "elfType": "EXEC",
+        "nx": true,
+        "pie": false,
+        "canary": false,
+        "relro": "none"
+      }
+    },
+    {
       "id": "vuln-weak-random-01",
       "path": "vm/labs/pwnhub/vuln-weak-random-01/rand-door",
       "architecture": "i386",
