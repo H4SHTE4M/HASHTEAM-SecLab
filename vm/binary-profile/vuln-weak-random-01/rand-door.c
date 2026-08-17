@@ -88,7 +88,11 @@ __attribute__((noreturn, noinline)) void _start(void) {
         __builtin_unreachable();
     }
 
-    unsigned today = (unsigned)syscall1(SYS_TIME, 0) / 86400u;
+    unsigned now = (unsigned)syscall1(SYS_TIME, 0);
+    unsigned today = now / 86400u;
+    print("门内时钟: ");
+    print_dec(now);
+    print(" 秒（从 1970-01-01 起算）\n");
     print("今日口令: ");
     print_password(today);
     syscall1(SYS_EXIT, 0);

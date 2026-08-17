@@ -4,10 +4,10 @@ set -eu
 LAB_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROGRAM="$LAB_DIR/counter"
 ANSWER_HASH="$LAB_DIR/answer.sha256"
-EXPECTED_SHA256='7d134b12682e6e3b770229de048c3c07091b5e3b6552cd374bd2de69be0e53a2'
+EXPECTED_SHA256='8cd1a3fe4198c65c49a9f1b631ca68a73ac93fc1b9d6e64b91d2b769e8fc9095'
 
 if [ "$#" -ne 2 ]; then
-    echo '用法：check <255+1 的结果> <200+100 的结果>，两个都是十进制数。' >&2
+    echo '用法：check <挑战一的 8 位结果> <挑战二的 8 位结果>，两个都要自己算。' >&2
     exit 2
 fi
 
@@ -32,30 +32,38 @@ esac
 expected_digest="$(tr -d '\r\n ' < "$ANSWER_HASH")"
 [ -n "$expected_digest" ] || { echo '答案哈希文件为空或损坏。' >&2; exit 2; }
 
-# 用锁定样本真实重放两组合计，输出里必须都出现 8 位结果行。
-replay_one() {
-    timeout 2 "$PROGRAM" "$1" "$2"
-}
-
-if ! first_output="$(replay_one 255 1)"; then
-    echo '计数器样本重放 255+1 失败或超时。' >&2
+# 用锁定样本真实重放无参数演示，从输出里读出两组挑战的操作数；
+# 再逐组带参重放，取真实 8 位结果。样本从不打印挑战的答案。
+if ! demo_output="$(timeout 2 "$PROGRAM")"; then
+    echo '计数器样本重放失败或超时。' >&2
     exit 2
 fi
-[ "$(printf '%s' "$first_output" | wc -c)" -le 2048 ] || {
-    echo '计数器样本输出超过长度上限。' >&2
-    exit 2
-}
-if ! second_output="$(replay_one 200 100)"; then
-    echo '计数器样本重放 200+100 失败或超时。' >&2
-    exit 2
-fi
-[ "$(printf '%s' "$second_output" | wc -c)" -le 2048 ] || {
+[ "$(printf '%s' "$demo_output" | wc -c)" -le 2048 ] || {
     echo '计数器样本输出超过长度上限。' >&2
     exit 2
 }
 
-first_result="$(printf '%s\n' "$first_output" | sed -n 's/^8 位结果: \([0-9][0-9]*\)$/\1/p' | head -n 1)"
-second_result="$(printf '%s\n' "$second_output" | sed -n 's/^8 位结果: \([0-9][0-9]*\)$/\1/p' | head -n 1)"
+pair1="$(printf '%s\n' "$demo_output" | sed -n 's/^挑战一：\([0-9][0-9]*\) + \([0-9][0-9]*\) 的 8 位结果.*$/\1 \2/p' | head -n 1)"
+pair2="$(printf '%s\n' "$demo_output" | sed -n 's/^挑战二：0x\([0-9a-f][0-9a-f]*\) + 0x\([0-9a-f][0-9a-f]*\) 的 8 位结果.*$/\1 \2/p' | head -n 1)"
+[ -n "$pair1" ] && [ -n "$pair2" ] || {
+    echo '无法从计数器样本的真实重放中读取挑战行。' >&2
+    exit 2
+}
+
+a1="${pair1% *}"
+b1="${pair1#* }"
+h1="${pair2% *}"
+h2="${pair2#* }"
+a2=$((0x${h1}))
+b2=$((0x${h2}))
+
+replay_result() {
+    timeout 2 "$PROGRAM" "$1" "$2" \
+        | sed -n 's/^8 位结果: \([0-9][0-9]*\)$/\1/p' | head -n 1
+}
+
+first_result="$(replay_result "$a1" "$b1")"
+second_result="$(replay_result "$a2" "$b2")"
 [ -n "$first_result" ] && [ -n "$second_result" ] || {
     echo '无法从计数器样本的真实重放中读取 8 位结果行。' >&2
     exit 2
@@ -72,8 +80,10 @@ submitted="$1,$2"
 submitted_digest="$(printf 'hashteam-lab answer v1 num-wrap-01:%s' "$submitted" | sha256sum | cut -d ' ' -f 1)"
 [ "$submitted_digest" = "$expected_digest" ] || {
     cat >&2 <<'TEXT'
-提交的两个观察值与真实计数器样本输出不一致。
-请回到终端运行 ./counter 255 1 与 ./counter 200 100，核对两行的 8 位结果。
+提交的两个值与真实计数器样本的挑战不一致。
+请回到终端运行 ./counter 看清两组挑战，
+再用 ./counter A B 或 python 的 (A+B) & 0xff 亲手算出它们的低 8 位；
+挑战二的两个数是十六进制写法，先换算成十进制再算。
 TEXT
     exit 1
 }

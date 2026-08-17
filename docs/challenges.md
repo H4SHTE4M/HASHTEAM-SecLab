@@ -268,10 +268,13 @@ PwnHub 内容与 SecLab 数字关卡并存，但不复用 `level-N` 编号：
 - 进制、整数溢出与格式化字符串的 canonical 答案由 `answer.sha256` 锁定：
   `validateAnswerHash` 校验文件存在与 64 位十六进制格式，`check.sh` 真实重放样本后按
   `printf 'hashteam-lab answer v1 <labId>:%s' "$canonical" | sha256sum`
-  比对（num-bases-01 canonical 为 `0xca,42`、num-wrap-01 为 `0,44`、整数溢出为
-  `256,0`、格式化字符串为 `0badf00d`）。弱随机不存
-  固定答案文件，判题时分别以 `seed_today` 与 `seed_today-1` 重放并接受任一口令，
-  以容忍跨午夜提交。
+  比对。进制与回绕两关的样本只演示方法、再打印两组不带答案的挑战，
+  `check.sh` 从重放输出里读出挑战值并复算答案（num-bases-01 canonical 为
+  `0xd9,95`，由挑战 217 与 0x5f 换算；num-wrap-01 为 `17,74`，由挑战
+  173+100 与 0xca+0x80 复算；整数溢出为 `256,0`、格式化字符串为 `0badf00d`）。
+  弱随机不存固定答案文件：样本打印门内时钟秒数，判题时以 `seed_today`、
+  `seed_today-1`、`seed_today-2` 重放——提交当天口令会被点名拒收，
+  只接受昨天或前天的口令，既逼学生由今天回推种子，也容忍跨午夜提交。
 - `payload-replay` 实验沿用与 `pwn-overflow-offset-01` 一致的 confinement：
   `check.sh` 只接受位于 `$HOME/<labId>/` 状态目录内的 payload（默认路径），拒绝
   任何 `..`、符号链接以及超过实验上限的字节数（覆盖变量 64、字符串溢出 48），

@@ -415,4 +415,29 @@ describe('chapter-first course components', () => {
     await wrapper.get('.btn-evidence').trigger('click')
     expect(wrapper.emitted('complete-step')?.at(-1)).toEqual(['asm-call-stack-01', 5])
   })
+
+  it('手动命令运行后输入框清空，仍可一键带入上一条', async () => {
+    const lab = getCourseLab('num-bases-01')!
+    const wrapper = mount(MissionPanel, {
+      props: {
+        level: lab,
+        completed: false,
+        hintsUsed: 0,
+        isLast: false,
+        mode: 'guided',
+        guideStep: 1,
+        completedSteps: [1],
+      },
+    })
+
+    const input = wrapper.get<HTMLInputElement>('.manual-form input')
+    await input.setValue('./bases')
+    await wrapper.get('.manual-form').trigger('submit')
+    expect(wrapper.emitted('run-command')?.at(-1)).toEqual(['./bases'])
+    expect(wrapper.get<HTMLInputElement>('.manual-form input').element.value).toBe('')
+
+    await wrapper.get('.btn-reuse-command').trigger('click')
+    expect(wrapper.get<HTMLInputElement>('.manual-form input').element.value).toBe('./bases')
+    wrapper.unmount()
+  })
 })

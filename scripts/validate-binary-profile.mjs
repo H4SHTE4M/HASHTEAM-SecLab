@@ -1254,8 +1254,8 @@ const numBasesAnswerFile = requireFile(
   'num bases answer hash',
 )
 if (readFileSync(numBasesAnswerFile.absolute, 'utf8').trim() !==
-    sha256(Buffer.from('hashteam-lab answer v1 num-bases-01:0xca,42'))) {
-  fail('num bases answer hash must pin the canonical observation pair 0xca,42')
+    sha256(Buffer.from('hashteam-lab answer v1 num-bases-01:0xd9,95'))) {
+  fail('num bases answer hash must pin the canonical challenge pair 0xd9,95')
 }
 
 const numWrapArtifact = requiredArtifact(artifacts, 'num-wrap-01')
@@ -1286,8 +1286,8 @@ const numWrapAnswerFile = requireFile(
   'num wrap answer hash',
 )
 if (readFileSync(numWrapAnswerFile.absolute, 'utf8').trim() !==
-    sha256(Buffer.from('hashteam-lab answer v1 num-wrap-01:0,44'))) {
-  fail('num wrap answer hash must pin the canonical observation pair 0,44')
+    sha256(Buffer.from('hashteam-lab answer v1 num-wrap-01:17,74'))) {
+  fail('num wrap answer hash must pin the canonical challenge pair 17,74')
 }
 
 const integerOverflowArtifact = requiredArtifact(artifacts, 'vuln-integer-overflow-01')

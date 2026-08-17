@@ -678,22 +678,32 @@ NUM_BASES_LAB="$ROOT/vm/labs/pwnhub/num-bases-01"
 BASES_ELF="$NUM_BASES_LAB/bases"
 chmod +x "$BASES_ELF"
 [ "$(sha256sum "$BASES_ELF" | cut -d ' ' -f 1)" = \
-    8969acc17560423409d35e5a2443d26cb7ed71c0c7e50aca45167de948b8b3ef ]
+    a8456936b1664b75051c8d55fc32f5f5cd140367a1514f47734442f6b2ca4056 ]
 BASES_OUTPUT="$($BASES_ELF)"
 printf '%s\n' "$BASES_OUTPUT" | grep -Fq '十进制 202'
 printf '%s\n' "$BASES_OUTPUT" | grep -Fq '十六进制 0xca'
 printf '%s\n' "$BASES_OUTPUT" | grep -Fq '二进制 11001010'
 printf '%s\n' "$BASES_OUTPUT" | grep -Fq '0x2a 写成十进制就是 42'
+printf '%s\n' "$BASES_OUTPUT" | grep -Fq '挑战一：这个字节的十进制写法是 217，它的十六进制写法是什么？'
+printf '%s\n' "$BASES_OUTPUT" | grep -Fq '挑战二：这个字节的十六进制写法是 0x5f，它的十进制值是多少？'
+# 样本不得直接打印挑战答案
+! printf '%s\n' "$BASES_OUTPUT" | grep -Fq '0xd9'
+! printf '%s\n' "$BASES_OUTPUT" | grep -Fq '十进制 95'
+! printf '%s\n' "$BASES_OUTPUT" | grep -Fqw '95'
 
 NUM_WRAP_LAB="$ROOT/vm/labs/pwnhub/num-wrap-01"
 COUNTER_ELF="$NUM_WRAP_LAB/counter"
 chmod +x "$COUNTER_ELF"
 [ "$(sha256sum "$COUNTER_ELF" | cut -d ' ' -f 1)" = \
-    7d134b12682e6e3b770229de048c3c07091b5e3b6552cd374bd2de69be0e53a2 ]
+    8cd1a3fe4198c65c49a9f1b631ca68a73ac93fc1b9d6e64b91d2b769e8fc9095 ]
 COUNTER_OUTPUT="$($COUNTER_ELF)"
 printf '%s\n' "$COUNTER_OUTPUT" | grep -Fq '252 253 254 255 0 1 2 3'
+printf '%s\n' "$COUNTER_OUTPUT" | grep -Fq '挑战一：173 + 100 的 8 位结果是多少？'
+printf '%s\n' "$COUNTER_OUTPUT" | grep -Fq '挑战二：0xca + 0x80 的 8 位结果是多少？（先换算成十进制再算）'
 "$COUNTER_ELF" 200 100 | grep -Fq '8 位结果: 44'
 "$COUNTER_ELF" 255 1 | grep -Fq '8 位结果: 0'
+"$COUNTER_ELF" 173 100 | grep -Fq '8 位结果: 17'
+"$COUNTER_ELF" 202 128 | grep -Fq '8 位结果: 74'
 echo '  ✓ 两个进制样本哈希与功能重放'
 
 echo '==> 第一批漏洞样本宿主重放'
@@ -701,18 +711,23 @@ WEAK_RANDOM_LAB="$ROOT/vm/labs/pwnhub/vuln-weak-random-01"
 WEAK_RANDOM_ELF="$WEAK_RANDOM_LAB/rand-door"
 chmod +x "$WEAK_RANDOM_ELF"
 [ "$(sha256sum "$WEAK_RANDOM_ELF" | cut -d ' ' -f 1)" = \
-    6a1171604bd85f018409de89477371edd7e60ce0bda83c11eafb60ecd889d6b5 ]
+    e7e61a9801d8c45a9b77254f9fdbee75822d91f44f413e4249c524649fa6303b ]
 WEAK_RANDOM_SEED=$(( $(date +%s) / 86400 ))
 WEAK_RANDOM_TODAY="$($WEAK_RANDOM_ELF)"
+printf '%s\n' "$WEAK_RANDOM_TODAY" | grep -Eq '^门内时钟: [0-9]+ 秒（从 1970-01-01 起算）$'
 WEAK_RANDOM_FIRST="$($WEAK_RANDOM_ELF --seed "$WEAK_RANDOM_SEED")"
 WEAK_RANDOM_SECOND="$($WEAK_RANDOM_ELF --seed "$WEAK_RANDOM_SEED")"
 [ "$WEAK_RANDOM_FIRST" = "$WEAK_RANDOM_SECOND" ]
+WEAK_RANDOM_YESTERDAY="$($WEAK_RANDOM_ELF --seed "$((WEAK_RANDOM_SEED - 1))")"
 WEAK_RANDOM_TODAY_CODE="$(printf '%s\n' "$WEAK_RANDOM_TODAY" \
     | sed -n 's/^今日口令: \([0-9][0-9]*\)$/\1/p')"
 WEAK_RANDOM_REPLAY_CODE="$(printf '%s\n' "$WEAK_RANDOM_FIRST" \
     | sed -n 's/^种子 [0-9][0-9]* 的口令: \([0-9][0-9]*\)$/\1/p')"
+WEAK_RANDOM_YESTERDAY_CODE="$(printf '%s\n' "$WEAK_RANDOM_YESTERDAY" \
+    | sed -n 's/^种子 [0-9][0-9]* 的口令: \([0-9][0-9]*\)$/\1/p')"
 echo "$WEAK_RANDOM_TODAY_CODE" | grep -Eq '^[0-9]{6}$'
 [ "$WEAK_RANDOM_REPLAY_CODE" = "$WEAK_RANDOM_TODAY_CODE" ]
+[ "$WEAK_RANDOM_YESTERDAY_CODE" != "$WEAK_RANDOM_TODAY_CODE" ]
 
 INTEGER_OVERFLOW_LAB="$ROOT/vm/labs/pwnhub/vuln-integer-overflow-01"
 INTEGER_OVERFLOW_ELF="$INTEGER_OVERFLOW_LAB/wallet"
