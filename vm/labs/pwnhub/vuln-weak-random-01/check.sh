@@ -50,6 +50,6 @@ fi
 
 cat >&2 <<'TEXT'
 提交的口令与今天或昨天的实际口令都不一致。
-请用 ./rand-door --seed $(( $(date +%s) / 86400 )) 重放今天后再提交。
+请用 ./rand-door --seed $(python -c "import time; print(int(time.time()) // 86400)") 重放今天后再提交。
 TEXT
 exit 1

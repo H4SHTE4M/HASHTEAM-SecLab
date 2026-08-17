@@ -370,6 +370,20 @@ OUT=$(run_check "$PWN_SB" 0xca 43) && RC=0 || RC=$?
 expect_eq "进制实验错误十进制值失败" "$RC" "1"
 expect_not_contains "$OUT" "进制实验失败不签发结果" '"type":"lab-result"'
 
+# 引导口径回归：引导已统一改用 python，VM 侧学生可见文案不得再教 printf 换算或 shell 算术
+grep -q 'python' "$ROOT/vm/labs/pwnhub/num-bases-01/init.sh" \
+    && ok "进制实验横幅使用 python 换算口径" \
+    || bad "进制实验横幅未使用 python 换算口径"
+grep -qE 'printf "%[xd]|用 printf' "$ROOT/vm/labs/pwnhub/num-bases-01/init.sh" \
+    && bad "进制实验横幅残留 printf 换算教学" \
+    || ok "进制实验横幅无 printf 换算教学"
+grep -qF -- '--seed $((' "$ROOT/vm/labs/pwnhub/vuln-weak-random-01/check.sh" \
+    && bad "弱随机失败提示残留 shell 算术教学" \
+    || ok "弱随机失败提示无 shell 算术教学"
+grep -q 'python' "$ROOT/vm/labs/pwnhub/vuln-weak-random-01/check.sh" \
+    && ok "弱随机失败提示使用 python 口径" \
+    || bad "弱随机失败提示未使用 python 口径"
+
 # 第 2 关：num-wrap-01（8 位计数器装满之后）
 pwn_goto num-wrap-01
 expect_eq "进制实验完成后可进入回绕实验" "$RC" "0"
