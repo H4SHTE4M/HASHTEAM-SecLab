@@ -107,7 +107,7 @@
   ],
   "hints": [
     { "level": 1, "kind": "direction", "text": "先用短名字看到门不开，再看清 name 和 is_admin 的地址相差几个字节。" },
-    { "level": 2, "kind": "tool", "text": "在 PayloadWorkbench 把 padding 字节数加到比 16 多，或用 printf 生成 17 个以上的 'A' 存成 input.txt。" },
+    { "level": 2, "kind": "tool", "text": "在 PayloadWorkbench 把 padding 字节数加到比 16 多，或用 python 生成：python -c \"open('input.txt','wb').write(b'A' * 17)\" 把 17 个 A 写进 input.txt。" },
     { "level": 3, "kind": "structure", "text": "name 占 0x0804b0c4..0x0804b0d3 共 16 字节，is_admin 在 0x0804b0d4；多写一字节就盖到 is_admin。" }
   ],
   "verification": {

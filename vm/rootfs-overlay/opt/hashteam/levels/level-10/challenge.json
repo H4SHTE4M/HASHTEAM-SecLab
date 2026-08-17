@@ -98,7 +98,7 @@
       "type": "observe",
       "title": "先看懂 sed 的替换结构",
       "objective": "在无关示例中观察 s/旧/新/，不直接修改答案文件",
-      "instruction": "这条示例把一小段标准输入中的旧颜色替换为新颜色，只打印结果，不修改任何文件。printf 里的 \\n 表示换行。观察斜杠分隔的三部分。",
+      "instruction": "这条示例把一小段标准输入中的旧颜色替换为新颜色，只打印结果，不修改任何文件。python 的 print 会在末尾自动换行。观察斜杠分隔的三部分。",
       "completion": "run",
       "allowRun": true,
       "introduces": [
@@ -109,7 +109,7 @@
         }
       ],
       "uses": ["pipeline", "shell-quotes"],
-      "command": "printf 'color=blue\\n' | sed 's/blue/green/'",
+      "command": "python -c \"print('color=blue')\" | sed 's/blue/green/'",
       "observation": "输出中的键保持不变，只有匹配到的值被替换；原始文件并不存在也未被修改。",
       "reinforcement": "先在无害数据上理解结构，再用于真实配置。"
     },

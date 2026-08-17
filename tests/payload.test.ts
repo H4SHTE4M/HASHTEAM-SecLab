@@ -50,11 +50,11 @@ describe('deterministic payload helpers', () => {
     ])
   })
 
-  it('生成 BusyBox Base64 回退命令并拒绝危险路径', () => {
+  it('生成 python Base64 写入命令并拒绝危险路径', () => {
     const bytes = Uint8Array.of(0x41, 0x00, 0xff)
     expect(bytesToBase64(bytes)).toBe('QQD/')
     expect(buildPayloadWriteCommand(bytes, 'work/payload.bin')).toBe(
-      "printf '%s' 'QQD/' | base64 -d > 'work/payload.bin'",
+      `python -c "import binascii; open('work/payload.bin','wb').write(binascii.a2b_base64('QQD/'))"`,
     )
     expect(() => buildPayloadWriteCommand(bytes, '../payload.bin')).toThrow('安全相对路径')
     expect(() => buildPayloadWriteCommand(bytes, 'payload;id')).toThrow('安全相对路径')

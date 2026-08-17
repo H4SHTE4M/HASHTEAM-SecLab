@@ -73,10 +73,10 @@
       "type": "terminal",
       "title": "用 --seed 重放今天",
       "objective": "证明指定种子就能算出当天口令",
-      "instruction": "运行 ./rand-door --seed $(( $(date +%s) / 86400 ))，把 $(date +%s) 除以 86400 取整得到今天的日数，直接喂给样本。这一行算出的口令应与第 2 步一致。想看清同样的种子同样的序列，输入 python，依次输入两行：import random; random.seed(20260817) 和 random.randrange(1000000)，记住结果后输入 exit() 退出，再进 python 重复同样两行——两次的数完全相同。",
+      "instruction": "运行 ./rand-door --seed $(python -c \"import time; print(int(time.time()) // 86400)\")：python 的 time.time() 给出当前秒数，整除 86400 得到今天的日数，直接喂给样本。这一行算出的口令应与第 2 步一致。想看清同样的种子同样的序列，输入 python，依次输入两行：import random; random.seed(20260817) 和 random.randrange(1000000)，记住结果后输入 exit() 退出，再进 python 重复同样两行——两次的数完全相同。",
       "completion": "acknowledge",
       "allowRun": true,
-      "command": "./rand-door --seed $(( $(date +%s) / 86400 ))",
+      "command": "./rand-door --seed $(python -c \"import time; print(int(time.time()) // 86400)\")",
       "introduces": [
         { "id": "seed-replay", "term": "种子重放", "explanation": "用 ./rand-door --seed N 可以指定任意一天，重算出那一天的口令；拿到种子就能提前知道口令。" }
       ],
@@ -85,7 +85,7 @@
       "tool": "shell",
       "observation": "--seed 重放今天得到的口令与第 2 步的口令完全相同。",
       "commonErrors": [
-        "种子要取整：$(date +%s) 除以 86400 后用整数除法，不要保留小数。",
+        "种子要取整：time.time() 除以 86400 要用 python 的整除 //，不要保留小数。",
         "--seed 之后跟着的是整数日数，不是日期字符串。"
       ],
       "reinforcement": "能自己算出种子，就等于能自己复算出口令，攻击者无需别的信息。"
@@ -105,7 +105,7 @@
   ],
   "hints": [
     { "level": 1, "kind": "direction", "text": "先运行两次样本确认口令不变，再想它由什么决定。python 里 random.seed(同一个数) 之后 random.randrange(1000000) 两次结果一样，说明随机其实是算出来的。" },
-    { "level": 2, "kind": "tool", "text": "./rand-door --seed N 可以重放任意种子的口令；今天的种子是 $(( $(date +%s) / 86400 ))。" },
+    { "level": 2, "kind": "tool", "text": "./rand-door --seed N 可以重放任意种子的口令；今天的种子用 python 算：python -c \"import time; print(int(time.time()) // 86400)\"。" },
     { "level": 3, "kind": "structure", "text": "最终结构是 check <口令>；口令就是用今天种子重放时打印的 6 位数字。" }
   ],
   "verification": {

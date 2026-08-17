@@ -5,12 +5,12 @@
   "chapterId": "number-bases",
   "labId": "num-bases-01",
   "title": "三种写法，同一个数",
-  "summary": "观察同一个字节 202 的十进制、十六进制与二进制写法，并用 printf 亲手完成 0xca 与 42 的换算。",
+  "summary": "观察同一个字节 202 的十进制、十六进制与二进制写法，并用 python 亲手完成 0xca 与 42 的换算。",
   "story": "你第一次面对二进制世界。终端里的一个字节既不是 202、也不是 0xca 或 11001010——它只是一个字节，这些只是人类的三种写法。读懂写法，才算和机器对上话。",
   "goals": [
     "运行进制样本并读出 202 的三种写法",
     "说明十进制、十六进制、二进制是同一个字节的不同写法",
-    "用 printf '%x' 与 '%d' 亲手把 202 换成 0xca、把 0x2a 换成 42",
+    "在 python 里用 hex() 与 0x 写法亲手把 202 换成 0xca、把 0x2a 换成 42",
     "提交 0xca 与 42 并通过锁定样本真实重放校验"
   ],
   "prerequisites": [
@@ -47,6 +47,11 @@
       "id": "byte",
       "term": "一个字节",
       "explanation": "一个字节有 8 个二进制位；202、0xca、11001010 是同一个字节的三种写法，值完全一样。"
+    },
+    {
+      "id": "python-repl",
+      "term": "python 交互解释器",
+      "explanation": "输入 python 进入，>>> 提示符后写的算式回车立即出结果：hex(202) 得 '0xca'，直接写 0x2a 得 42；输入 exit() 或按 Ctrl-D 退出回到终端。它是本课程换算数制、试算回绕、构造输入的随身工具。"
     }
   ],
   "steps": [
@@ -109,22 +114,23 @@
     {
       "id": 3,
       "type": "terminal",
-      "title": "用 printf 亲手换算",
-      "objective": "用 printf '%x' 与 '%d' 双向换算进制",
-      "instruction": "先用 printf '%x\\n' 202 把 202 换成十六进制（结果 ca，加上前缀就是 0xca）；再用 printf '%d\\n' 0x2a 把 0x2a 换成十进制（结果 42）。busybox 的 printf 认识 0x 前缀，可以直接吃十六进制。想多玩几种数，可以输入 python 打开交互解释器：输入 hex(202) 回车看到 0xca，输入 bin(202) 看到 0b11001010，输入 0x2a 直接回车看到 42。玩完输入 exit() 或按 Ctrl-D 退出，回到终端。",
+      "title": "用 python 亲手换算",
+      "objective": "在 python 里用 hex() 与 0x 写法双向换算进制",
+      "instruction": "输入 python 打开交互解释器，看到 >>> 提示符：输入 hex(202) 回车，python 回答 '0xca'——这就是 202 的十六进制写法（回答带引号，因为它是字符串）；再直接输入 0x2a 回车，python 回答 42——解释器认识 0x 前缀，会按十六进制读出十进制值。想试二进制写法，输入 bin(202) 看到 0b11001010。玩完输入 exit() 或按 Ctrl-D 退出，回到终端。",
       "completion": "acknowledge",
       "allowRun": true,
-      "command": "printf '%x\\n' 202",
+      "command": "python",
       "uses": [
         "hexadecimal",
-        "byte"
+        "byte",
+        "python-repl"
       ],
       "evidence": "observation",
       "tool": "shell",
-      "observation": "printf '%x\\n' 202 打印 ca；printf '%d\\n' 0x2a 打印 42。",
+      "observation": "hex(202) 回答 '0xca'；直接输入 0x2a 回车回答 42。",
       "commonErrors": [
-        "printf '%x' 输出不带 0x 前缀，写答案时要自己把 ca 补成 0xca。",
-        "printf '%d\\n' 0x2a 里 0x 前缀让 printf 把它当十六进制读，删掉前缀结果就不对了。"
+        "hex() 的回答带引号（'0xca'），因为结果是字符串；填答案时去掉引号写成 0xca。",
+        "要直接输入 0x2a 才会按十六进制读出 42；加上引号写成字符串，python 只当它是一串字符，不会换算。"
       ],
       "reinforcement": "能自己算出来，就不需要死记对照表；0xca 与 42 都是换算出来的。"
     },
@@ -153,7 +159,7 @@
     {
       "level": 2,
       "kind": "tool",
-      "text": "printf '%x\\n' 202 把十进制换成十六进制；printf '%d\\n' 0x2a 把十六进制换成十进制。也可以输入 python 后用 hex(202)、bin(202) 换算，exit() 退出。"
+      "text": "输入 python 打开解释器：hex(202) 给出 '0xca'，直接输入 0x2a 回车得到 42；exit() 退出。"
     },
     {
       "level": 3,
@@ -186,7 +192,7 @@
     "mastered": [
       "十进制、十六进制与二进制",
       "一个字节八位",
-      "printf 进制换算"
+      "python 进制换算"
     ],
     "next": "下一实验会让 8 位计数器装到 255 后继续加 1，观察它如何回到 0。"
   }

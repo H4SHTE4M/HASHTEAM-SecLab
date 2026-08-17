@@ -1357,6 +1357,9 @@ esac
 OUT=$(env "${HELP_ENV[@]}" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/help" all)
 expect_contains "$OUT" "help all 仍可查看完整备忘" "文件识别与本地 HTTP"
 
+OUT=$(env "${HELP_ENV[@]}" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/help" python)
+expect_contains "$OUT" "help python 提到 exit() 退出" "exit()"
+
 if OUT=$(env "${HELP_ENV[@]}" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/help" does-not-exist 2>&1); then
     RC=0
 else

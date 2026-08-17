@@ -107,7 +107,7 @@
   ],
   "hints": [
     { "level": 1, "kind": "direction", "text": "先用短输入记下 buf、保存的 EBP、返回地址三个地址，算出 buf 到返回地址差多少字节。" },
-    { "level": 2, "kind": "tool", "text": "在 PayloadWorkbench 把 padding 加到 32 以上，或用 printf 生成 32 个以上的 'A' 存成 payload.bin。" },
+    { "level": 2, "kind": "tool", "text": "在 PayloadWorkbench 把 padding 加到 32 以上，或用 python 生成：python -c \"open('payload.bin','wb').write(b'A' * 33)\" 把 33 个 A 写进 payload.bin。" },
     { "level": 3, "kind": "structure", "text": "buf 到保存的 EBP 差 24 字节，再 +4 到返回地址；要盖到返回地址至少写 32 个 'A'，0x41414141 就是四个 'A'。" }
   ],
   "verification": {
