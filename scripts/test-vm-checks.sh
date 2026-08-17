@@ -363,12 +363,15 @@ expect_contains "$OUT" "首关显示全局序号与标题" '第 1 关 · 三种�
 [ -x "$PWN_SB/home/guest/bases" ] \
     && ok "进制实验样本已复制到 HOME" \
     || bad "进制实验样本未复制到 HOME"
-if OUT=$(run_check "$PWN_SB" 0xca 42); then RC=0; else RC=$?; fi
-expect_eq "进制实验提交 0xca 42 通过" "$RC" "0"
+if OUT=$(run_check "$PWN_SB" 0xd9 95); then RC=0; else RC=$?; fi
+expect_eq "进制实验提交亲手换算的 0xd9 95 通过" "$RC" "0"
 expect_contains "$OUT" "进制实验发出签名结果" '"type":"lab-result","labId":"num-bases-01"'
-OUT=$(run_check "$PWN_SB" 0xca 43) && RC=0 || RC=$?
+OUT=$(run_check "$PWN_SB" 0xd9 96) && RC=0 || RC=$?
 expect_eq "进制实验错误十进制值失败" "$RC" "1"
 expect_not_contains "$OUT" "进制实验失败不签发结果" '"type":"lab-result"'
+OUT=$(run_check "$PWN_SB" 0xca 42) && RC=0 || RC=$?
+expect_eq "进制实验照抄演示值 0xca 42 失败" "$RC" "1"
+expect_not_contains "$OUT" "照抄演示值不签发结果" '"type":"lab-result"'
 
 # 引导口径回归：引导已统一改用 python，VM 侧学生可见文案不得再教 printf 换算或 shell 算术
 grep -q 'python' "$ROOT/vm/labs/pwnhub/num-bases-01/init.sh" \
@@ -409,39 +412,55 @@ else
 fi
 expect_eq "实验内 status 可用" "$RC" "0"
 expect_contains "$OUT" "status 显示与横幅一致的实验序号" '第 2 关 · 8 位计数器装满之后'
-if OUT=$(run_check "$PWN_SB" 0 44); then RC=0; else RC=$?; fi
-expect_eq "回绕实验提交 0 44 通过" "$RC" "0"
+if OUT=$(run_check "$PWN_SB" 17 74); then RC=0; else RC=$?; fi
+expect_eq "回绕实验提交亲手算出的 17 74 通过" "$RC" "0"
 expect_contains "$OUT" "回绕实验发出签名结果" '"type":"lab-result","labId":"num-wrap-01"'
-OUT=$(run_check "$PWN_SB" 0 45) && RC=0 || RC=$?
+OUT=$(run_check "$PWN_SB" 17 75) && RC=0 || RC=$?
 expect_eq "回绕实验错误结果失败" "$RC" "1"
 expect_not_contains "$OUT" "回绕实验失败不签发结果" '"type":"lab-result"'
+OUT=$(run_check "$PWN_SB" 0 44) && RC=0 || RC=$?
+expect_eq "回绕实验照抄演示值 0 44 失败" "$RC" "1"
+expect_not_contains "$OUT" "照抄演示值不签发结果" '"type":"lab-result"'
 
-# 3. 弱随机：当天口令由真实样本重放得出，提交后通过。
+# 3. 弱随机：今天口令被拒收，由今天日数推昨天种子重放后才通过。
 chmod +x "$PWNHUB_LABS_DIR/vuln-weak-random-01/rand-door"
 WEAK_RANDOM_OUTPUT="$(HOME="$PWN_SB/home/guest" \
     "$PWNHUB_LABS_DIR/vuln-weak-random-01/rand-door" 2>/dev/null || true)"
+printf '%s\n' "$WEAK_RANDOM_OUTPUT" | grep -Eq '^门内时钟: [0-9]+ 秒' \
+    && ok "弱随机样本打印门内时钟秒数" \
+    || bad "弱随机样本未打印门内时钟秒数"
 WEAK_RANDOM_SECRET="$(printf '%s\n' "$WEAK_RANDOM_OUTPUT" \
-    | "$STUB/awk" '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]{6}$/) { print $i; exit } }')"
+    | sed -n 's/^今日口令: \([0-9][0-9]*\)$/\1/p')"
 [ -n "$WEAK_RANDOM_SECRET" ] || WEAK_RANDOM_SECRET=000000
-WEAK_RANDOM_YESTERDAY_SEED=$(( $(date +%s) / 86400 - 1 ))
+WEAK_RANDOM_TODAY_SEED=$(( $(date +%s) / 86400 ))
 WEAK_RANDOM_YESTERDAY_SECRET="$(
-    "$PWNHUB_LABS_DIR/vuln-weak-random-01/rand-door" --seed "$WEAK_RANDOM_YESTERDAY_SEED" \
+    "$PWNHUB_LABS_DIR/vuln-weak-random-01/rand-door" --seed "$((WEAK_RANDOM_TODAY_SEED - 1))" \
+        | "$STUB/awk" '{ print $NF }'
+)"
+WEAK_RANDOM_DAY_BEFORE_SECRET="$(
+    "$PWNHUB_LABS_DIR/vuln-weak-random-01/rand-door" --seed "$((WEAK_RANDOM_TODAY_SEED - 2))" \
         | "$STUB/awk" '{ print $NF }'
 )"
 WEAK_RANDOM_WRONG_NUMBER=$(( (10#$WEAK_RANDOM_SECRET + 1) % 1000000 ))
 printf -v WEAK_RANDOM_WRONG '%06d' "$WEAK_RANDOM_WRONG_NUMBER"
-if [ "$WEAK_RANDOM_WRONG" = "$WEAK_RANDOM_YESTERDAY_SECRET" ]; then
+while [ "$WEAK_RANDOM_WRONG" = "$WEAK_RANDOM_SECRET" ] \
+    || [ "$WEAK_RANDOM_WRONG" = "$WEAK_RANDOM_YESTERDAY_SECRET" ] \
+    || [ "$WEAK_RANDOM_WRONG" = "$WEAK_RANDOM_DAY_BEFORE_SECRET" ]; do
     WEAK_RANDOM_WRONG_NUMBER=$(( (WEAK_RANDOM_WRONG_NUMBER + 1) % 1000000 ))
     printf -v WEAK_RANDOM_WRONG '%06d' "$WEAK_RANDOM_WRONG_NUMBER"
-fi
+done
 pwn_goto vuln-weak-random-01
 expect_eq "回绕实验完成后可进入弱随机实验" "$RC" "0"
 expect_contains "$OUT" "弱随机实验发出稳定 ready" '"type":"lab-ready","labId":"vuln-weak-random-01"'
 [ -x "$PWN_SB/home/guest/rand-door" ] \
     && ok "弱随机样本已复制到 HOME" \
     || bad "弱随机样本未复制到 HOME"
-if OUT=$(run_check "$PWN_SB" "$WEAK_RANDOM_SECRET"); then RC=0; else RC=$?; fi
-expect_eq "弱随机预测今日口令通过" "$RC" "0"
+OUT=$(run_check "$PWN_SB" "$WEAK_RANDOM_SECRET") && RC=0 || RC=$?
+expect_eq "弱随机提交今日口令被拒" "$RC" "1"
+expect_contains "$OUT" "拒收提示指出这是今天的口令" '这是今天的口令'
+expect_not_contains "$OUT" "今日口令不签发结果" '"type":"lab-result"'
+if OUT=$(run_check "$PWN_SB" "$WEAK_RANDOM_YESTERDAY_SECRET"); then RC=0; else RC=$?; fi
+expect_eq "弱随机重放昨日口令通过" "$RC" "0"
 expect_contains "$OUT" "弱随机发出签名结果" '"type":"lab-result","labId":"vuln-weak-random-01"'
 OUT=$(run_check "$PWN_SB" "$WEAK_RANDOM_WRONG") && RC=0 || RC=$?
 expect_eq "弱随机错误口令失败" "$RC" "1"

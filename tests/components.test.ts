@@ -437,6 +437,42 @@ describe('accessible components', () => {
     expect(wrapper.emitted('complete-step')?.at(-1)).toEqual([1, 4])
   })
 
+  it('手动命令运行后输入框清空，仍可一键带回上一条', async () => {
+    const manualLevel: LevelDef = {
+      ...level,
+      steps: [
+        ...level.steps.slice(0, 3),
+        {
+          id: 4,
+          type: 'manual-command',
+          title: '独立输入命令',
+          objective: '自己写出命令',
+          instruction: '在输入框写命令。',
+          completion: 'input',
+          allowRun: false,
+          observation: '确认输出符合预期。',
+          reinforcement: '真实终端操作同样有效。',
+        },
+      ],
+    }
+    const wrapper = mount(MissionPanel, {
+      props: missionProps({
+        level: manualLevel,
+        guideStep: 3,
+        completedSteps: [1, 2, 3],
+      }),
+    })
+
+    const input = wrapper.get<HTMLInputElement>('.manual-form input')
+    await input.setValue('cat README')
+    await wrapper.get('.manual-form').trigger('submit')
+    expect(wrapper.emitted('run-command')?.at(-1)).toEqual(['cat README'])
+    expect(wrapper.get<HTMLInputElement>('.manual-form input').element.value).toBe('')
+
+    await wrapper.get('.btn-reuse-command').trigger('click')
+    expect(wrapper.get<HTMLInputElement>('.manual-form input').element.value).toBe('cat README')
+  })
+
   it('挑战模式隐藏全部教学步骤，只保留目标、提示与开放的最终验证', async () => {
     const wrapper = mount(MissionPanel, {
       props: missionProps({

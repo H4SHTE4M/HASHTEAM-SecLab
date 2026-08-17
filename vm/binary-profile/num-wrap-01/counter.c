@@ -81,6 +81,9 @@ __attribute__((noreturn, noinline)) void _start(void) {
     print("8 位计数器装不下 256：256 = 100000000b 需要第 9 位，低 8 位全是 0。\n");
     print("所以 8 位里 255 + 1 = 0，这叫回绕（wraparound）。\n");
     print("带参数运行可试别的组合: ./counter A B 会打印 (A+B) 的低 8 位。\n");
+    print("自己试试下面两组，check 会问它们的结果：\n");
+    print("挑战一：173 + 100 的 8 位结果是多少？\n");
+    print("挑战二：0xca + 0x80 的 8 位结果是多少？（先换算成十进制再算）\n");
 
     syscall3(SYS_EXIT, 0, 0, 0);
     __builtin_unreachable();

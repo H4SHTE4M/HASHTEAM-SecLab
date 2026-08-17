@@ -234,6 +234,7 @@ function runManualCommand(): void {
   }
   emit('run-command', command)
   lastExecutedCommand.value = command
+  manualCommand.value = ''
   actionPerformed.value = true
   commandError.value = ''
 }

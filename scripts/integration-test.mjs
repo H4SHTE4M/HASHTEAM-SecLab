@@ -284,6 +284,17 @@ async function main() {
     )
 
     send('check 0xca 42')
+    await waitFor(
+      /@@HASHTEAM:\{"type":"error","message":"lab num-bases-01 check failed"\}/,
+      30000,
+      '进制实验照抄演示值应失败',
+    )
+
+    send('./bases')
+    await waitFor(/挑战一：这个字节的十进制写法是 217/)
+    await waitFor(/挑战二：这个字节的十六进制写法是 0x5f/)
+
+    send('check 0xd9 95')
     const passed = await waitFor(
       /@@HASHTEAM:\{"type":"lab-result","labId":"num-bases-01","status":"passed","sig":"([0-9a-f]{64})"\}/,
     )
@@ -309,6 +320,13 @@ async function main() {
     }
 
     send('check 0 44')
+    await waitFor(
+      /@@HASHTEAM:\{"type":"error","message":"lab num-wrap-01 check failed"\}/,
+      30000,
+      '回绕实验照抄演示值应失败',
+    )
+
+    send('check 17 74')
     const passed = await waitFor(
       /@@HASHTEAM:\{"type":"lab-result","labId":"num-wrap-01","status":"passed","sig":"([0-9a-f]{64})"\}/,
     )
@@ -486,7 +504,7 @@ async function main() {
     assertProtocolSignature(passed[1], `lab-result:${labId}:passed`, `${labId} lab-result`)
   }
 
-  await step('vuln-logic vuln-weak-random-01：重放当天口令并通过签名判题', async () => {
+  await step('vuln-logic vuln-weak-random-01：由今天推昨天种子重放旧口令', async () => {
     goToLab('vuln-weak-random-01')
     await waitFor(/第 3 关 · 会重播的口令/, 20000, '漏洞实验横幅序号与头部一致')
     await vulnLabReady('vuln-weak-random-01')
@@ -495,10 +513,19 @@ async function main() {
     send('help current')
     await waitFor(/当前是第 3 关 · 会重播的口令/, 20000, 'help 序号与横幅一致')
     send('./rand-door')
+    await waitFor(/门内时钟: [0-9]+ 秒（从 1970-01-01 起算）/)
     const today = await waitFor(/今日口令: ([0-9]{6})/)
     send('./rand-door --seed $(($(date +%s)/86400))')
     await waitFor(new RegExp(`种子 [0-9]+ 的口令: ${today[1]}`))
+    // 提交今天口令必须被拒：门只认过去签发的口令
     send(`check ${today[1]}`)
+    await waitFor(/这是今天的口令，门不认当天签发的口令/)
+    await waitFor(
+      /@@HASHTEAM:\{"type":"error","message":"lab vuln-weak-random-01 check failed"\}/,
+    )
+    send('./rand-door --seed $(($(date +%s)/86400 - 1))')
+    const replayed = await waitFor(/种子 [0-9]+ 的口令: ([0-9]{6})/)
+    send(`check ${replayed[1]}`)
     await vulnLabPassed('vuln-weak-random-01')
   })
 
