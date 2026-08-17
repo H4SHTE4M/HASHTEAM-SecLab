@@ -111,7 +111,7 @@
       "type": "terminal",
       "title": "用 printf 亲手换算",
       "objective": "用 printf '%x' 与 '%d' 双向换算进制",
-      "instruction": "先用 printf '%x\\n' 202 把 202 换成十六进制（结果 ca，加上前缀就是 0xca）；再用 printf '%d\\n' 0x2a 把 0x2a 换成十进制（结果 42）。busybox 的 printf 认识 0x 前缀，可以直接吃十六进制。",
+      "instruction": "先用 printf '%x\\n' 202 把 202 换成十六进制（结果 ca，加上前缀就是 0xca）；再用 printf '%d\\n' 0x2a 把 0x2a 换成十进制（结果 42）。busybox 的 printf 认识 0x 前缀，可以直接吃十六进制。想多玩几种数，可以输入 python 打开交互解释器：输入 hex(202) 回车看到 0xca，输入 bin(202) 看到 0b11001010，输入 0x2a 直接回车看到 42。玩完输入 exit() 或按 Ctrl-D 退出，回到终端。",
       "completion": "acknowledge",
       "allowRun": true,
       "command": "printf '%x\\n' 202",
@@ -153,7 +153,7 @@
     {
       "level": 2,
       "kind": "tool",
-      "text": "printf '%x\\n' 202 把十进制换成十六进制；printf '%d\\n' 0x2a 把十六进制换成十进制。"
+      "text": "printf '%x\\n' 202 把十进制换成十六进制；printf '%d\\n' 0x2a 把十六进制换成十进制。也可以输入 python 后用 hex(202)、bin(202) 换算，exit() 退出。"
     },
     {
       "level": 3,

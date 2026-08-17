@@ -1379,6 +1379,11 @@ OUT=$("$PYBIN" -c 'print("py", hex(255+1), 0x2a*2)')
 expect_eq "python 进制与算术输出" "$OUT" "py 0x100 84"
 OUT=$("$PYBIN" -c 'import struct,hashlib;print(struct.pack("<I",0x2a).hex(), hashlib.sha256(b"ht").digest().hex()[:8])')
 expect_eq "python struct 打包与 sha256 输出" "$OUT" "2a000000 712dd58e"
+OUT=$(printf 'exit()\n' | "$PYBIN" -i 2>&1)
+case "$OUT" in
+    *NameError*) expect_eq "python REPL 支持 exit() 退出" "NameError" "ok" ;;
+    *) expect_eq "python REPL 支持 exit() 退出" "ok" "ok" ;;
+esac
 [ "$(sha256sum "$PYBIN" | cut -d ' ' -f 1)" = "$(sha256sum "$ROOT/vm/binary-tools/staged/python" | cut -d ' ' -f 1)" ] \
     && expect_eq "python prebuilt 与 staged 审计副本一致" "ok" "ok" \
     || expect_eq "python prebuilt 与 staged 审计副本一致" "mismatch" "ok"

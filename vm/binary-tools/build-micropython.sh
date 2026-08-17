@@ -2,7 +2,8 @@
 # 构建 MicroPython htlab 教学解释器(静态 i386,逐字节可重现)。
 # 约定与 build-debugger.sh 一致:编译器/链接器/输出哈希全部钉在
 # vm/toolchain-source/micropython/toolchain.lock;不一致即失败。
-# 产物默认进 vm/.cache/(不进 initramfs);要随 VM 发布时再显式接线。
+# 产物默认写入 vm/binary-tools/prebuilt/python(生产打包源),并同步
+# vm/binary-tools/staged/python 审计副本;自定义输出路径时跳过 staged 同步。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -50,6 +51,17 @@ install -m 0644 "$VARIANT_DIR/mpconfigvariant.h" "$VARIANT_DIR/mpconfigvariant.m
     install -m 0644 "$VARIANT_DIR/mpconfigvariant.h" "$VARIANT_DIR/mpconfigvariant.mk" \
         "$SRC_CACHE/ports/unix/variants/htlab/"
 }
+
+# 教学补丁(幂等):REPL 注册 exit()/quit()(等价 sys.exit),防止新手
+# 困在解释器里。上游 py/modbuiltins.c 的内置表按名排序,插在 hex 之前。
+if ! grep -q 'MP_QSTR_quit' "$SRC_CACHE/py/modbuiltins.c"; then
+    sed -i '/{ MP_ROM_QSTR(MP_QSTR_hex), MP_ROM_PTR(&mp_builtin_hex_obj) },/i\
+    // HASHTEAM 教学补丁:exit()/quit() 等价 sys.exit()\
+    #if MICROPY_PY_SYS_EXIT\
+    { MP_ROM_QSTR(MP_QSTR_exit), MP_ROM_PTR(&mp_sys_exit_obj) },\
+    { MP_ROM_QSTR(MP_QSTR_quit), MP_ROM_PTR(&mp_sys_exit_obj) },\
+    #endif' "$SRC_CACHE/py/modbuiltins.c"
+fi
 
 env SOURCE_DATE_EPOCH="$(lock_value source_date_epoch)" TZ=UTC \
     make -C "$SRC_CACHE/ports/unix" VARIANT="$(lock_value micropython_variant)" \

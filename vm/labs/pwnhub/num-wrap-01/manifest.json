@@ -112,7 +112,7 @@
       "type": "terminal",
       "title": "用 ./counter 动手算",
       "objective": "亲手算出 255+1 与 200+100 的 8 位结果",
-      "instruction": "运行 ./counter 255 1，样本打印 8 位结果: 0，因为 256 的低 8 位全是 0；再运行 ./counter 200 100，样本打印 8 位结果: 44，因为 300 的低 8 位是 44。",
+      "instruction": "运行 ./counter 255 1，样本打印 8 位结果: 0，因为 256 的低 8 位全是 0；再运行 ./counter 200 100，样本打印 8 位结果: 44，因为 300 的低 8 位是 44。想自己验证，输入 python 打开解释器：输入 (255+1) & 0xff 回车看到 0，输入 (200+100) & 0xff 看到 44——& 0xff 就是只保留低 8 位的意思。玩完输入 exit() 退出。",
       "completion": "acknowledge",
       "allowRun": true,
       "command": "./counter 255 1",
@@ -153,7 +153,7 @@
     {
       "level": 2,
       "kind": "tool",
-      "text": "./counter A B 打印 (A+B) 的低 8 位；A+B 超过 255 时只保留低 8 位。"
+      "text": "./counter A B 打印 (A+B) 的低 8 位；A+B 超过 255 时只保留低 8 位。也可以用 python 算：(255+1) & 0xff 和 (200+100) & 0xff。"
     },
     {
       "level": 3,

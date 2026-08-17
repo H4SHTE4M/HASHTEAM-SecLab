@@ -73,7 +73,7 @@
       "type": "terminal",
       "title": "用 --seed 重放今天",
       "objective": "证明指定种子就能算出当天口令",
-      "instruction": "运行 ./rand-door --seed $(( $(date +%s) / 86400 ))，把 $(date +%s) 除以 86400 取整得到今天的日数，直接喂给样本。这一行算出的口令应与第 2 步一致。",
+      "instruction": "运行 ./rand-door --seed $(( $(date +%s) / 86400 ))，把 $(date +%s) 除以 86400 取整得到今天的日数，直接喂给样本。这一行算出的口令应与第 2 步一致。想看清同样的种子同样的序列，输入 python，依次输入两行：import random; random.seed(20260817) 和 random.randrange(1000000)，记住结果后输入 exit() 退出，再进 python 重复同样两行——两次的数完全相同。",
       "completion": "acknowledge",
       "allowRun": true,
       "command": "./rand-door --seed $(( $(date +%s) / 86400 ))",
@@ -104,7 +104,7 @@
     }
   ],
   "hints": [
-    { "level": 1, "kind": "direction", "text": "先运行两次样本确认口令不变，再想它由什么决定。" },
+    { "level": 1, "kind": "direction", "text": "先运行两次样本确认口令不变，再想它由什么决定。python 里 random.seed(同一个数) 之后 random.randrange(1000000) 两次结果一样，说明随机其实是算出来的。" },
     { "level": 2, "kind": "tool", "text": "./rand-door --seed N 可以重放任意种子的口令；今天的种子是 $(( $(date +%s) / 86400 ))。" },
     { "level": 3, "kind": "structure", "text": "最终结构是 check <口令>；口令就是用今天种子重放时打印的 6 位数字。" }
   ],

@@ -324,6 +324,11 @@ async function main() {
     await waitFor(/py 0x100 84/, 20000, 'python 进制与算术输出')
     send('python -c "import struct,hashlib;print(struct.pack(\'<I\',0x2a).hex(), hashlib.sha256(b\'ht\').digest().hex()[:8])"')
     await waitFor(/2a000000 712dd58e/, 20000, 'struct 小端打包与 sha256 输出')
+    send('python')
+    await waitFor(/Type "help\(\)" for more information\./, 20000, 'python REPL 横幅')
+    send('exit()')
+    send('echo repl-exited-ok')
+    await waitFor(/repl-exited-ok/, 20000, 'exit() 退出 REPL 回到 shell')
   })
 
   await step('第 2 关：隐藏文件', async () => {

@@ -1045,7 +1045,7 @@
       "architecture": "i386",
       "endianness": "little",
       "size": 979584,
-      "sha256": "8214950bc43ff770f1f1358fc0e02760e3f9b5d361453ac6dbad9a4462b9ee27",
+      "sha256": "87179b9914e657b990c1936446fd1bca224b991063324779df39ca063e5f896a",
       "upstreamVersion": "micropython@1f042fdd6ae2f7701c4aefb0f0f226f74b2f14d3",
       "source": "vm/toolchain-source/micropython/mpconfigvariant.h",
       "sourceSha256": "67530fd44429cc55669847fc4edbe0d19be0e86ca06e1ddb02e5dc10571261dc",
@@ -1054,7 +1054,7 @@
       "toolchainLock": "vm/toolchain-source/micropython/toolchain.lock",
       "profile": "binary-i386",
       "license": "MicroPython MIT; statically linked glibc LGPL-2.1-or-later",
-      "purpose": "零基础教学的交互式 Python REPL:进制/位运算、struct payload 构造、可预测种子对比、sha256 校验概念",
+      "purpose": "MicroPython htlab 教学解释器(REPL 已注册 exit()/quit());进制转换、struct 小端打包、随机数演示、hashlib/sha256 校验概念",
       "static": true,
       "stripped": true
     }
