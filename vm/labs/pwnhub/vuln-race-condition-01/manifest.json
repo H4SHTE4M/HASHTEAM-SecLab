@@ -1,0 +1,132 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "vuln-logic",
+  "labId": "vuln-race-condition-01",
+  "title": "检查与扣款之间的时间窗",
+  "summary": "让两次取款同时穿过 先检查、3 秒后才扣款 的时间窗，观察共享余额被超取。",
+  "story": "这是逻辑篇最后一关，依旧不需要内存知识。源代码里有一条 if 条件判断：if (余额够) 就放行，否则拒绝。问题在于检查（读余额 + if 判断）和行动（扣款写回）是分开的两步，中间隔了 3 秒。只要两个取款同时挤进这 3 秒，两次 if 都看到同一个旧余额，双双放行。",
+  "goals": [
+    "单独取款一次并确认余额检查在正常路径下有效",
+    "解释检查与扣款分离造成的 3 秒竞态窗口",
+    "用 ./bank 800 & ./bank 800 & wait 让两次取款挤进同一窗口",
+    "从账本读出两笔成功记录并通过真实账本校验"
+  ],
+  "prerequisites": ["能在真实终端运行程序并观察输出"],
+  "kind": "pwn",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 20, "max": 30 },
+  "unlockAfter": ["vuln-integer-overflow-01"],
+  "artifacts": [
+    {
+      "path": "/opt/pwnhub/labs/vuln-race-condition-01/bank",
+      "architecture": "i386",
+      "sha256": "a310eb2f9f8272aba2ef720ed8c259565325a2062cf156a3ec69b544ee1cbc10",
+      "purpose": "固定、离线、先检查后扣款留出竞态窗口的并发取款样本",
+      "downloadable": true
+    }
+  ],
+  "concepts": [
+    { "id": "check-then-act", "term": "先检查后执行", "explanation": "源代码用一条 if 条件判断读 balance.txt 检查余额够不够，通过后睡 3 秒才把新余额写回；检查（读 + if 判断）和行动（扣款写回）是分开的两步，中间没有任何锁。" },
+    { "id": "race-window", "term": "竞态窗口", "explanation": "检查之后那 3 秒里余额文件还停在旧值；只要另一个进程也在这 3 秒里通过检查，两个进程都会认为钱够。" },
+    { "id": "concurrent-run", "term": "并发运行", "explanation": "用 & 把两个取款同时挂起、用 wait 等它们都跑完，就把两笔取款强行塞进了同一个 3 秒窗口。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "concept",
+      "title": "先检查那 3 秒的裂缝",
+      "objective": "认识检查与扣款不在同一瞬间完成",
+      "instruction": "样本先读 $HOME/vuln-race-condition-01/balance.txt，用一条 if 条件判断检查余额够不够——这就是源代码里 if (余额够) 就放行 的模样，只有判断通过才会继续；它随后 nanosleep 3 秒模拟外部扣款，再写回新余额。检查这一刻看的余额和 3 秒后真正改写的余额，并非同一次读取：检查与行动是分离的两步，中间的 3 秒就是漏洞所在。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        { "id": "check-then-act", "term": "先检查后执行", "explanation": "源代码用一条 if 条件判断读 balance.txt 检查余额够不够，通过后睡 3 秒才把新余额写回；检查（读 + if 判断）和行动（扣款写回）是分开的两步，中间没有任何锁。" },
+        { "id": "race-window", "term": "竞态窗口", "explanation": "检查之后那 3 秒里余额文件还停在旧值；只要另一个进程也在这 3 秒里通过检查，两个进程都会认为钱够。" }
+      ],
+      "uses": ["check-then-act", "race-window"],
+      "evidence": "observation",
+      "tool": "shell"
+    },
+    {
+      "id": 2,
+      "type": "terminal",
+      "title": "先老老实实取一次",
+      "objective": "确认正常路径上检查有效",
+      "instruction": "运行 ./bank 800。样本打印 当前余额: 1000、余额检查通过，3 秒后扣款...，停 3 秒后报 取款成功 并把余额改成 200，账本里出现一行 取出 800 成功。看懂单次流程后运行 reset，把余额恢复成 1000 并清空账本再继续。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "uses": ["check-then-act"],
+      "evidence": "observation",
+      "tool": "shell",
+      "observation": "单次取款 800 成功，余额从 1000 变成 200；reset 后余额恢复成 1000，账本被清空。",
+      "commonErrors": [
+        "开始下一步前必须先运行 reset，否则余额不是 1000。",
+        "余额检查通过 后停顿约 3 秒是样本故意留出的窗口，不是程序卡死。"
+      ],
+      "reinforcement": "正常路径下检查是有效的；漏洞只在检查与扣款之间那 3 秒里出现。"
+    },
+    {
+      "id": 3,
+      "type": "terminal",
+      "title": "盯住停顿的那 3 秒",
+      "objective": "确认可被并发的窗口真实存在",
+      "instruction": "reset 后再运行一次 ./bank 800。注意 余额检查通过，3 秒后扣款... 这一行打印后，程序会停顿约 3 秒。检查在这行之前已经结束，而余额文件要等到停顿之后才被改写——如果还有一个进程也正好停在这 3 秒里，它读到的余额同样是 1000。",
+      "completion": "acknowledge",
+      "allowRun": true,
+      "command": "./bank 800",
+      "introduces": [
+        { "id": "concurrent-run", "term": "并发运行", "explanation": "用 & 把两个取款同时挂起、用 wait 等它们都跑完，就把两笔取款强行塞进了同一个 3 秒窗口。" }
+      ],
+      "uses": ["race-window", "concurrent-run"],
+      "evidence": "observation",
+      "tool": "shell",
+      "observation": "程序在 余额检查通过 之后、取款成功 之前停顿约 3 秒；这正是可被并发取款占据的窗口。",
+      "commonErrors": [
+        "这一步是顺序取款，只用来确认 3 秒停顿真实存在，不要在这里尝试并发。",
+        "运行结束别忘了再 reset 一次，保证下一步从余额 1000 开始。"
+      ],
+      "reinforcement": "先看清 3 秒停顿夹在哪两行之间，才能知道两笔取款要挤进哪段窗口。"
+    },
+    {
+      "id": 4,
+      "type": "terminal",
+      "title": "两笔取款挤进同一窗口",
+      "objective": "用并发运行取出超过余额的钱",
+      "instruction": "reset 后运行 ./bank 800 & ./bank 800 & wait：& 让两个 ./bank 800 同时启动，wait 等它们都结束。两次取款都停在 余额检查通过、3 秒后扣款 这一行的窗口里读余额，于是都读到 1000 并都通过检查；最后账本里出现两行 取出 800 成功，总共取出 1600 超过初始余额。结束后运行 check，让判题读取真实账本。",
+      "completion": "confirm",
+      "allowRun": false,
+      "uses": ["check-then-act", "race-window", "concurrent-run"],
+      "evidence": "observation",
+      "tool": "shell",
+      "observation": "两行 取出 800 成功；合计取走 1600 > 1000。",
+      "commonErrors": [
+        "两个 ./bank 800 必须同时用 & 挂起后用 wait，不能一个一个顺序运行。",
+        "没 reset 就直接并发会导致两次都按非 1000 余额判断，不一定能复现双成功。"
+      ],
+      "reinforcement": "并发让两次检查都读到旧的余额 1000；它们随后各自扣款并写回，所以同一笔余额被两个进程同时判为可用。"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "先单独取款看懂每一步输出，再想办法让两个进程都停在这 3 秒窗口里。" },
+    { "level": 2, "kind": "tool", "text": "shell 的 & 把命令放进后台同时运行，wait 等所有后台任务结束再回到前台。" },
+    { "level": 3, "kind": "structure", "text": "并发命令是 ./bank 800 & ./bank 800 & wait；账本里出现两行 取出 800 成功、合计大于 1000 才算成功。" }
+  ],
+  "verification": {
+    "type": "terminal-state",
+    "usage": "check",
+    "instruction": "按第 4 步完成并发取款后直接运行 check；判题只读取真实账本文件，不接受手填金额。",
+    "placeholders": [],
+    "feedback": {
+      "empty": "账本还没有任何成功记录，请先按第 4 步运行并发取款。",
+      "incorrect": "只成功取出一次：请用 & 让两次取款同时处在检查与扣款之间的 3 秒窗口里，重新运行第 4 步的并发命令。",
+      "success": "真实账本确认两笔并发取款都成功，合计超过初始余额 1000。"
+    }
+  },
+  "completionSummary": {
+    "solved": "通过真实账本验证了两笔并发取款同时穿过检查窗口、合计取走超过余额的钱。",
+    "mastered": ["先检查后执行", "竞态窗口", "并发运行"],
+    "next": "逻辑篇到此结束。下一章进入内存模型，从 memory-addresses-01 开始分清变量的地址、内存里的值和指针。"
+  }
+}

@@ -547,6 +547,17 @@ validateLabPackage(ret2winArtifact, 'pwn', 'ret2win')
 
 const memoryArtifact = requiredArtifact(artifacts, 'memory-addresses-01')
 const memoryManifest = validateLabPackage(memoryArtifact, 'visual', 'memory')
+if (JSON.stringify(memoryManifest.unlockAfter) !== JSON.stringify(['vuln-race-condition-01'])) {
+  fail('memory lab manifest must depend on vuln-race-condition-01')
+}
+const memoryUnlockLabs = requireFile(
+  'vm/labs/pwnhub/memory-addresses-01/unlock-labs',
+  'memory unlock-labs',
+)
+if (readFileSync(memoryUnlockLabs.absolute, 'utf8').trim() !== 'vuln-race-condition-01') {
+  fail('memory VM prerequisite does not match the course manifest')
+}
+
 if (!Array.isArray(memoryManifest.steps) || memoryManifest.steps.length !== 3) {
   fail('memory lab must have three focused steps')
 }
@@ -658,7 +669,7 @@ function validateAssemblyLab(id, prerequisite, label) {
 
 const { artifact: asmArtifact, manifest: asmManifest } = validateAssemblyLab(
   'asm-registers-01',
-  'memory-register-stack-01',
+  'vuln-format-string-01',
   'asm registers',
 )
 if (!Array.isArray(asmManifest.steps) || asmManifest.steps.length !== 5 ||
@@ -1191,10 +1202,143 @@ const pwnLabDefinitions = [
     steps: ['concept', 'prediction', 'payload-builder', 'terminal'],
     targetAddresses: ['0x08049020', '0x08049030', '0x0804904a'],
   },
+  {
+    id: 'vuln-overwrite-variable-01',
+    prerequisite: 'memory-register-stack-01',
+    steps: ['terminal', 'visual-trace', 'payload-builder', 'terminal'],
+    targetAddresses: [],
+  },
+  {
+    id: 'vuln-string-overflow-01',
+    prerequisite: 'vuln-overwrite-variable-01',
+    steps: ['terminal', 'visual-trace', 'payload-builder', 'terminal'],
+    targetAddresses: [],
+  },
 ]
 
 for (const definition of pwnLabDefinitions) validatePwnLab(definition)
 
+const weakRandomArtifact = requiredArtifact(artifacts, 'vuln-weak-random-01')
+const weakRandomManifest = validateLabPackage(weakRandomArtifact, 'pwn', 'weak random')
+if (JSON.stringify(weakRandomManifest.unlockAfter) !== JSON.stringify(['num-wrap-01'])) {
+  fail('weak random manifest must depend on num-wrap-01')
+}
+const weakRandomUnlockLabs = requireFile(
+  'vm/labs/pwnhub/vuln-weak-random-01/unlock-labs',
+  'weak random unlock-labs',
+)
+if (readFileSync(weakRandomUnlockLabs.absolute, 'utf8').trim() !== 'num-wrap-01') {
+  fail('weak random VM prerequisite does not match the course manifest')
+}
+if (weakRandomManifest.verification?.type !== 'answer') {
+  fail('weak random must use answer verification')
+}
+const numBasesArtifact = requiredArtifact(artifacts, 'num-bases-01')
+const numBasesManifest = validateLabPackage(numBasesArtifact, 'pwn', 'num bases')
+if (numBasesManifest.title !== '三种写法，同一个数') {
+  fail('num bases manifest must keep the contracted course title')
+}
+if (JSON.stringify(numBasesManifest.unlockAfter) !== JSON.stringify([])) {
+  fail('num bases manifest must open the course chain without a prerequisite')
+}
+if (numBasesManifest.artifacts[0]?.path !== '/opt/pwnhub/labs/num-bases-01/bases' ||
+    numBasesManifest.artifacts[0]?.architecture !== 'i386') {
+  fail('num bases artifact must ship the audited i386 bases sample at the course path')
+}
+if (numBasesManifest.verification?.type !== 'answer') {
+  fail('num bases must use answer verification')
+}
+validateAnswerHash(numBasesArtifact.id, 'num bases')
+const numBasesAnswerFile = requireFile(
+  'vm/labs/pwnhub/num-bases-01/answer.sha256',
+  'num bases answer hash',
+)
+if (readFileSync(numBasesAnswerFile.absolute, 'utf8').trim() !==
+    sha256(Buffer.from('hashteam-lab answer v1 num-bases-01:0xca,42'))) {
+  fail('num bases answer hash must pin the canonical observation pair 0xca,42')
+}
+
+const numWrapArtifact = requiredArtifact(artifacts, 'num-wrap-01')
+const numWrapManifest = validateLabPackage(numWrapArtifact, 'pwn', 'num wrap')
+if (numWrapManifest.title !== '8 位计数器装满之后') {
+  fail('num wrap manifest must keep the contracted course title')
+}
+if (JSON.stringify(numWrapManifest.unlockAfter) !== JSON.stringify(['num-bases-01'])) {
+  fail('num wrap manifest must depend on num-bases-01')
+}
+const numWrapUnlockLabs = requireFile(
+  'vm/labs/pwnhub/num-wrap-01/unlock-labs',
+  'num wrap unlock-labs',
+)
+if (readFileSync(numWrapUnlockLabs.absolute, 'utf8').trim() !== 'num-bases-01') {
+  fail('num wrap VM prerequisite does not match the course manifest')
+}
+if (numWrapManifest.artifacts[0]?.path !== '/opt/pwnhub/labs/num-wrap-01/counter' ||
+    numWrapManifest.artifacts[0]?.architecture !== 'i386') {
+  fail('num wrap artifact must ship the audited i386 counter sample at the course path')
+}
+if (numWrapManifest.verification?.type !== 'answer') {
+  fail('num wrap must use answer verification')
+}
+validateAnswerHash(numWrapArtifact.id, 'num wrap')
+const numWrapAnswerFile = requireFile(
+  'vm/labs/pwnhub/num-wrap-01/answer.sha256',
+  'num wrap answer hash',
+)
+if (readFileSync(numWrapAnswerFile.absolute, 'utf8').trim() !==
+    sha256(Buffer.from('hashteam-lab answer v1 num-wrap-01:0,44'))) {
+  fail('num wrap answer hash must pin the canonical observation pair 0,44')
+}
+
+const integerOverflowArtifact = requiredArtifact(artifacts, 'vuln-integer-overflow-01')
+const integerOverflowManifest = validateLabPackage(integerOverflowArtifact, 'pwn', 'integer overflow')
+if (JSON.stringify(integerOverflowManifest.unlockAfter) !== JSON.stringify(['vuln-weak-random-01'])) {
+  fail('integer overflow manifest must depend on vuln-weak-random-01')
+}
+const integerOverflowUnlockLabs = requireFile(
+  'vm/labs/pwnhub/vuln-integer-overflow-01/unlock-labs',
+  'integer overflow unlock-labs',
+)
+if (readFileSync(integerOverflowUnlockLabs.absolute, 'utf8').trim() !== 'vuln-weak-random-01') {
+  fail('integer overflow VM prerequisite does not match the course manifest')
+}
+if (integerOverflowManifest.verification?.type !== 'answer') {
+  fail('integer overflow must use answer verification')
+}
+validateAnswerHash(integerOverflowArtifact.id, 'integer overflow')
+
+const formatStringArtifact = requiredArtifact(artifacts, 'vuln-format-string-01')
+const formatStringManifest = validateLabPackage(formatStringArtifact, 'pwn', 'format string')
+if (JSON.stringify(formatStringManifest.unlockAfter) !== JSON.stringify(['vuln-string-overflow-01'])) {
+  fail('format string manifest must depend on vuln-string-overflow-01')
+}
+const formatStringUnlockLabs = requireFile(
+  'vm/labs/pwnhub/vuln-format-string-01/unlock-labs',
+  'format string unlock-labs',
+)
+if (readFileSync(formatStringUnlockLabs.absolute, 'utf8').trim() !== 'vuln-string-overflow-01') {
+  fail('format string VM prerequisite does not match the course manifest')
+}
+if (formatStringManifest.verification?.type !== 'answer') {
+  fail('format string must use answer verification')
+}
+validateAnswerHash(formatStringArtifact.id, 'format string')
+
+const raceConditionArtifact = requiredArtifact(artifacts, 'vuln-race-condition-01')
+const raceConditionManifest = validateLabPackage(raceConditionArtifact, 'pwn', 'race condition')
+if (JSON.stringify(raceConditionManifest.unlockAfter) !== JSON.stringify(['vuln-integer-overflow-01'])) {
+  fail('race condition manifest must depend on vuln-integer-overflow-01')
+}
+const raceConditionUnlockLabs = requireFile(
+  'vm/labs/pwnhub/vuln-race-condition-01/unlock-labs',
+  'race condition unlock-labs',
+)
+if (readFileSync(raceConditionUnlockLabs.absolute, 'utf8').trim() !== 'vuln-integer-overflow-01') {
+  fail('race condition VM prerequisite does not match the course manifest')
+}
+if (raceConditionManifest.verification?.type !== 'terminal-state') {
+  fail('race condition must use terminal-state verification')
+}
 if (profile.scriptTools === undefined || !Array.isArray(profile.scriptTools)) {
   fail('scriptTools must be present to audit the restricted payload teaching tools')
 }

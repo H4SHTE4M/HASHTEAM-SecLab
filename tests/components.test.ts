@@ -309,6 +309,9 @@ describe('accessible components', () => {
     expect(wrapper.text()).toContain('↑ / ↓')
     expect(wrapper.text()).toContain('鼠标滚轮')
     expect(wrapper.text()).toContain('Ctrl+C')
+    expect(wrapper.text()).toContain('中断卡住的程序')
+    expect(wrapper.text()).toContain('Ctrl+Shift+C')
+    expect(wrapper.text()).toContain('Ctrl+Shift+V')
     expect(wrapper.text()).toContain('Ctrl+V')
 
     await wrapper.get('.btn-primary').trigger('click')

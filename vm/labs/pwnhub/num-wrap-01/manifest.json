@@ -1,0 +1,193 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "number-bases",
+  "labId": "num-wrap-01",
+  "title": "8 位计数器装满之后",
+  "summary": "观察 8 位计数器从 255 再加 1 回到 0 的回绕，用 ./counter 亲手算 (A+B) 的低 8 位。",
+  "story": "上一个实验你学会了读写法，现在看写不下的时候会发生什么。8 位计数器最多装 255，装满之后再走一格，它不是报错，而是回到 0——就像里程表转满一圈归零。",
+  "goals": [
+    "运行计数器样本并说明 252 数 8 下如何回到 3",
+    "解释 8 位里 255 + 1 = 0 的回绕",
+    "用 ./counter A B 亲手算 255+1 与 200+100 的 8 位结果",
+    "提交 0 与 44 并通过锁定样本真实重放校验"
+  ],
+  "prerequisites": [
+    "认识二进制与十六进制写法"
+  ],
+  "kind": "pwn",
+  "environmentProfile": "binary",
+  "estimatedMinutes": {
+    "min": 10,
+    "max": 20
+  },
+  "unlockAfter": [
+    "num-bases-01"
+  ],
+  "artifacts": [
+    {
+      "path": "/opt/pwnhub/labs/num-wrap-01/counter",
+      "architecture": "i386",
+      "sha256": "7d134b12682e6e3b770229de048c3c07091b5e3b6552cd374bd2de69be0e53a2",
+      "purpose": "固定、离线、演示 8 位固定宽度回绕的计数器样本",
+      "downloadable": true
+    }
+  ],
+  "concepts": [
+    {
+      "id": "byte",
+      "term": "一个字节",
+      "explanation": "一个字节只有 8 个二进制位，最多装到 255；256 需要第 9 位，一个字节装不下。"
+    },
+    {
+      "id": "fixed-width",
+      "term": "固定位宽",
+      "explanation": "计数器只有 8 位宽，多出来的高位无处存放，只能丢掉高位、保留低 8 位。"
+    },
+    {
+      "id": "wraparound",
+      "term": "回绕",
+      "explanation": "255 再加 1 时，8 位结果重新从 0 开始，就像里程表转满一圈归零。"
+    }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "concept",
+      "title": "装满之后会怎样",
+      "objective": "认识 8 位固定宽度带来的回绕",
+      "instruction": "一个字节有 8 位，最大只能表示 255。再往上加 1，结果 256 = 100000000b 需要第 9 位才能写全，8 位格只装得下后半段 8 个 0，于是看到 0。这种转满一圈回到起点的现象叫回绕（wraparound）。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        {
+          "id": "byte",
+          "term": "一个字节",
+          "explanation": "一个字节只有 8 个二进制位，最多装到 255；256 需要第 9 位，一个字节装不下。"
+        },
+        {
+          "id": "fixed-width",
+          "term": "固定位宽",
+          "explanation": "计数器只有 8 位宽，多出来的高位无处存放，只能丢掉高位、保留低 8 位。"
+        },
+        {
+          "id": "wraparound",
+          "term": "回绕",
+          "explanation": "255 再加 1 时，8 位结果重新从 0 开始，就像里程表转满一圈归零。"
+        }
+      ],
+      "uses": [
+        "byte",
+        "fixed-width",
+        "wraparound"
+      ],
+      "evidence": "observation",
+      "tool": "shell"
+    },
+    {
+      "id": 2,
+      "type": "terminal",
+      "title": "看样本从 252 数 8 下",
+      "objective": "亲眼确认 255 后面回到 0",
+      "instruction": "运行 ./counter。样本让 8 位计数器从 252 开始数 8 下：252 253 254 255 0 1 2 3，最后停在 3。注意数到 255 之后不是 256，而是回到 0。",
+      "completion": "acknowledge",
+      "allowRun": true,
+      "command": "./counter",
+      "uses": [
+        "byte",
+        "wraparound"
+      ],
+      "evidence": "observation",
+      "tool": "shell",
+      "observation": "输出里依次出现 252 253 254 255 0 1 2 3，255 的下一格是 0。",
+      "commonErrors": [
+        "255 之后是 0 不是 256：256 需要第 9 位，8 位格装不下。",
+        "从 252 数 8 下是 252 到 3，最后一步正是 0 1 2 3 里的 3。"
+      ],
+      "reinforcement": "亲眼看到 255 后面回到 0，回绕就不再是纸上的规则。"
+    },
+    {
+      "id": 3,
+      "type": "terminal",
+      "title": "用 ./counter 动手算",
+      "objective": "亲手算出 255+1 与 200+100 的 8 位结果",
+      "instruction": "运行 ./counter 255 1，样本打印 8 位结果: 0，因为 256 的低 8 位全是 0；再运行 ./counter 200 100，样本打印 8 位结果: 44，因为 300 的低 8 位是 44。想自己验证，输入 python 打开解释器：输入 (255+1) & 0xff 回车看到 0，输入 (200+100) & 0xff 看到 44——& 0xff 就是只保留低 8 位的意思。玩完输入 exit() 退出。",
+      "completion": "acknowledge",
+      "allowRun": true,
+      "command": "./counter 255 1",
+      "uses": [
+        "fixed-width",
+        "wraparound"
+      ],
+      "evidence": "observation",
+      "tool": "shell",
+      "observation": "./counter 255 1 的 8 位结果是 0；./counter 200 100 的 8 位结果是 44。",
+      "commonErrors": [
+        "8 位结果只看低 8 位：300 的低 8 位是 44，不是 300 也不是 44 的十六进制。",
+        "运行带参形式时两个参数之间要有空格：./counter 255 1。"
+      ],
+      "reinforcement": "A+B 超过 255 时结果由低 8 位决定，两个例子正好一个归零、一个剩下 44。"
+    },
+    {
+      "id": 4,
+      "type": "terminal",
+      "title": "提交两个回绕结果",
+      "objective": "用 0 与 44 通过真实重放校验",
+      "instruction": "运行 check <255+1 的结果> <200+100 的结果>：第一格填 255+1 的 8 位结果 0，第二格填 200+100 的 8 位结果 44。判题会把锁定样本用这两组合计真实重放，只接受与真实输出一致的一对观察值。",
+      "completion": "confirm",
+      "allowRun": false,
+      "uses": [
+        "wraparound"
+      ],
+      "evidence": "answer",
+      "tool": "shell"
+    }
+  ],
+  "hints": [
+    {
+      "level": 1,
+      "kind": "direction",
+      "text": "先看无参数 ./counter 的输出，理解 255 后面为什么不是 256 而是 0。"
+    },
+    {
+      "level": 2,
+      "kind": "tool",
+      "text": "./counter A B 打印 (A+B) 的低 8 位；A+B 超过 255 时只保留低 8 位。也可以用 python 算：(255+1) & 0xff 和 (200+100) & 0xff。"
+    },
+    {
+      "level": 3,
+      "kind": "structure",
+      "text": "最终结构是 check <255+1 的结果> <200+100 的结果>；第一格是 0，第二格是 44。"
+    }
+  ],
+  "verification": {
+    "type": "answer",
+    "usage": "check <255+1 的结果> <200+100 的结果>",
+    "instruction": "依次填入 255+1 与 200+100 的 8 位结果。",
+    "placeholders": [
+      {
+        "token": "<255+1 的结果>",
+        "meaning": "255+1=256 的低 8 位结果（十进制，0）"
+      },
+      {
+        "token": "<200+100 的结果>",
+        "meaning": "200+100=300 的低 8 位结果（十进制，44）"
+      }
+    ],
+    "feedback": {
+      "empty": "还没有提供两个观察值。",
+      "incorrect": "两个观察值与真实计数器样本输出不一致，请重新核对两行的 8 位结果。",
+      "success": "真实计数器样本重放确认了 8 位固定宽度下的回绕。"
+    }
+  },
+  "completionSummary": {
+    "solved": "观察并验证了 8 位计数器 255+1 回到 0 的回绕，并亲手算出 300 的低 8 位是 44。",
+    "mastered": [
+      "一个字节八位",
+      "固定位宽",
+      "回绕"
+    ],
+    "next": "下一实验会看到同一天里完全相同的伪随机口令，理解种子如何决定所谓随机数。"
+  }
+}

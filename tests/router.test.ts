@@ -38,7 +38,7 @@ describe('lab module routing', () => {
     const wrapper = mount(LabSelectorView, { global: { plugins: [testRouter] } })
     expect(wrapper.findAll('.module-card')).toHaveLength(2)
     expect(wrapper.text()).toContain('0 / 10')
-    expect(wrapper.text()).toContain('0 / 12')
+    expect(wrapper.text()).toContain('0 / 20')
     expect(wrapper.text()).toContain('PwnHub 假设你已熟悉基本 Shell；仍可直接进入。')
 
     useLabProgress().complete(1, { path: 'guided', hintsUsed: 0 })
@@ -48,7 +48,7 @@ describe('lab module routing', () => {
     })
     await nextTick()
     expect(wrapper.text()).toContain('1 / 10')
-    expect(wrapper.text()).toContain('1 / 12')
+    expect(wrapper.text()).toContain('1 / 20')
     expect(wrapper.text()).toContain('建议继续完成 SecLab，也可直接进入。')
 
     await wrapper.findAll('.enter-button')[1].trigger('click')

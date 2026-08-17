@@ -1,0 +1,129 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "vuln-logic",
+  "labId": "vuln-weak-random-01",
+  "title": "会重播的口令",
+  "summary": "观察用当天种子算出的伪随机口令，用 --seed 重放任意一天并预测它。",
+  "story": "这一章不需要懂内存。先弄清三件平常事：程序不是凭空出现的，它是程序员写下的源代码被编译器翻译出来的；源代码里的变量是有名字的数据；而当一段数字完全由变量决定时，它就一定能被提前算出来。rand-door 的口令正是这种数字。",
+  "goals": [
+    "运行样本两次，确认同一天里口令完全相同",
+    "说明伪随机口令由种子决定，种子相同输出必然相同",
+    "用 --seed 重放指定种子得到同一口令",
+    "通过重放今天种子预测当日口令并用 check 通过真实重放"
+  ],
+  "prerequisites": ["能在真实终端运行样本并对照输出"],
+  "kind": "pwn",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 15, "max": 25 },
+  "unlockAfter": ["num-wrap-01"],
+  "artifacts": [
+    {
+      "path": "/opt/pwnhub/labs/vuln-weak-random-01/rand-door",
+      "architecture": "i386",
+      "sha256": "6a1171604bd85f018409de89477371edd7e60ce0bda83c11eafb60ecd889d6b5",
+      "purpose": "固定、离线、用当天种子算出 6 位口令的伪随机样本",
+      "downloadable": true
+    }
+  ],
+  "concepts": [
+    { "id": "pseudo-random", "term": "伪随机数", "explanation": "rand 一类函数的输出由种子和算法完全决定；种子相同，生成的序列一定相同，所谓随机只是不可预先肉眼猜出。" },
+    { "id": "predictable-seed", "term": "可预测种子", "explanation": "源代码把 当天 0 点至今的 86400 秒日数 存进变量 seed 当种子；一天之内这个变量不变，所以同一天里任何人运行都拿到同一个口令。" },
+    { "id": "seed-replay", "term": "种子重放", "explanation": "用 ./rand-door --seed N 可以指定任意一天，重算出那一天的口令；拿到种子就能提前知道口令。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "concept",
+      "title": "口令真的随机吗",
+      "objective": "把伪随机口令拆成种子和算法",
+      "instruction": "先认清单词：./rand-door 是一个程序。程序不是凭空出现的——程序员先写下 C 源代码，再用编译器把源代码翻译成机器能跑的指令，这一步叫编译；源代码 → 编译 → 程序，就是它的完整来历。源代码里有一个变量 seed：变量是给一段数据起的名字，运行时会有一个位置保存它。样本把 当天 0 点至今的秒数除以 86400 得到日数，存进 seed 当种子；rand 再把种子喂给确定算法，生成所谓随机数。种子一旦固定，后续输出全部固定——所以同一天里种子不变，口令也不会变。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        { "id": "pseudo-random", "term": "伪随机数", "explanation": "rand 一类函数的输出由种子和算法完全决定；种子相同，生成的序列一定相同，所谓随机只是不可预先肉眼猜出。" },
+        { "id": "predictable-seed", "term": "可预测种子", "explanation": "源代码把 当天 0 点至今的 86400 秒日数 存进变量 seed 当种子；一天之内这个变量不变，所以同一天里任何人运行都拿到同一个口令。" }
+      ],
+      "uses": ["pseudo-random", "predictable-seed"],
+      "evidence": "observation",
+      "tool": "shell"
+    },
+    {
+      "id": 2,
+      "type": "terminal",
+      "title": "同一天里口令不变",
+      "objective": "亲眼确认当天口令稳定",
+      "instruction": "运行 ./rand-door，记下打印的 6 位口令，再运行一次 ./rand-door。两次口令完全相同，因为同一天种子不变，算法也不变。",
+      "completion": "acknowledge",
+      "allowRun": true,
+      "command": "./rand-door",
+      "uses": ["pseudo-random", "predictable-seed"],
+      "evidence": "observation",
+      "tool": "shell",
+      "observation": "两次运行打印的 6 位口令完全相同。",
+      "commonErrors": [
+        "口令随种子换天才会变，同一天内反复运行不会变。",
+        "不要把 6 位数字当成一次性验证码，它在你重放当天时一直适用。"
+      ],
+      "reinforcement": "种子不变 → 输出不变，这是伪随机的本质，也是它可被重播的原因。"
+    },
+    {
+      "id": 3,
+      "type": "terminal",
+      "title": "用 --seed 重放今天",
+      "objective": "证明指定种子就能算出当天口令",
+      "instruction": "运行 ./rand-door --seed $(python -c \"import time; print(int(time.time()) // 86400)\")：python 的 time.time() 给出当前秒数，整除 86400 得到今天的日数，直接喂给样本。这一行算出的口令应与第 2 步一致。想看清同样的种子同样的序列，输入 python，依次输入两行：import random; random.seed(20260817) 和 random.randrange(1000000)，记住结果后输入 exit() 退出，再进 python 重复同样两行——两次的数完全相同。",
+      "completion": "acknowledge",
+      "allowRun": true,
+      "command": "./rand-door --seed $(python -c \"import time; print(int(time.time()) // 86400)\")",
+      "introduces": [
+        { "id": "seed-replay", "term": "种子重放", "explanation": "用 ./rand-door --seed N 可以指定任意一天，重算出那一天的口令；拿到种子就能提前知道口令。" }
+      ],
+      "uses": ["predictable-seed", "seed-replay"],
+      "evidence": "observation",
+      "tool": "shell",
+      "observation": "--seed 重放今天得到的口令与第 2 步的口令完全相同。",
+      "commonErrors": [
+        "种子要取整：time.time() 除以 86400 要用 python 的整除 //，不要保留小数。",
+        "--seed 之后跟着的是整数日数，不是日期字符串。"
+      ],
+      "reinforcement": "能自己算出种子，就等于能自己复算出口令，攻击者无需别的信息。"
+    },
+    {
+      "id": 4,
+      "type": "terminal",
+      "title": "提交预测的口令",
+      "objective": "用重放得到的口令通过真实校验",
+      "instruction": "运行 check <口令>，口令填你用 --seed 重放今天时样本打印的 6 位数字。判题会用锁定样本重新算今天与昨天的口令，提交其中任一即可通过。",
+      "completion": "confirm",
+      "allowRun": false,
+      "uses": ["seed-replay"],
+      "evidence": "answer",
+      "tool": "shell"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "先运行两次样本确认口令不变，再想它由什么决定。python 里 random.seed(同一个数) 之后 random.randrange(1000000) 两次结果一样，说明随机其实是算出来的。" },
+    { "level": 2, "kind": "tool", "text": "./rand-door --seed N 可以重放任意种子的口令；今天的种子用 python 算：python -c \"import time; print(int(time.time()) // 86400)\"。" },
+    { "level": 3, "kind": "structure", "text": "最终结构是 check <口令>；口令就是用今天种子重放时打印的 6 位数字。" }
+  ],
+  "verification": {
+    "type": "answer",
+    "usage": "check <口令>",
+    "instruction": "提交你用今天的种子重播得到的 6 位十进制数字口令。",
+    "placeholders": [
+      { "token": "<口令>", "meaning": "用今日种子重播时样本打印的 6 位十进制数字" }
+    ],
+    "feedback": {
+      "empty": "还没有提供口令。",
+      "incorrect": "口令不匹配，请用 --seed 重播今天或昨天的种子后再提交。",
+      "success": "真实样本重播确认了当天口令可以被预测。"
+    }
+  },
+  "completionSummary": {
+    "solved": "用种子重播预测并验证了当天口令，证明伪随机口令不是秘密。",
+    "mastered": ["伪随机数与种子", "可预测的时间种子", "种子重播"],
+    "next": "下一实验会观察 32 位整数乘法回绕如何让余额检查失效。"
+  }
+}

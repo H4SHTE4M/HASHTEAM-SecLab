@@ -77,20 +77,37 @@ function manifest(): Record<string, unknown> {
 }
 
 describe('course manifest v3 compatibility layer', () => {
-  it('只发布首批内存、汇编与 ELF 十二个实验', () => {
+  it('只发布生产清单中的数字与进制、逻辑、内存、汇编与 ELF 实验', () => {
     expect(COURSE.courseId).toBe('pwnhub-foundations')
     expect(COURSE.labs.map((lab) => lab.labId)).toEqual(PUBLISHED_PWNHUB_LAB_IDS)
     expect(COURSE.chapters.filter((chapter) => chapter.status === 'available').map((chapter) => chapter.chapterId))
-      .toEqual(['memory-model', 'asm-reading', 'elf-static'])
+      .toEqual(['number-bases', 'vuln-logic', 'memory-model', 'vuln-memory', 'asm-reading', 'elf-static'])
+    expect(getCourseLab('num-bases-01')).toMatchObject({
+      chapterId: 'number-bases',
+      unlockAfter: [],
+      environmentProfile: 'binary',
+    })
     expect(getCourseLab('memory-addresses-01')).toMatchObject({
       chapterId: 'memory-model',
-      unlockAfter: [],
+      unlockAfter: ['vuln-race-condition-01'],
       environmentProfile: 'binary',
     })
     expect(getCourseLab('elf-disassembly-01')).toMatchObject({
       chapterId: 'elf-static',
       unlockAfter: ['elf-symbols-01'],
     })
+  })
+  it('实验数字身份与 VM 终端横幅一致：从 1 开始连续编号', () => {
+    // 终端横幅第 N 关 = course-order 行序（hashteamctl course_number），
+    // 头部 TopBar 第 N 关 = availableLabs 下标 + 1；二者都以 id 字段为唯一来源
+    expect(COURSE.labs.map((lab) => lab.id)).toEqual(
+      PUBLISHED_PWNHUB_LAB_IDS.map((_, index) => index + 1),
+    )
+    expect(getCourseLab('num-bases-01')?.id).toBe(1)
+    expect(getCourseLab('vuln-weak-random-01')?.id).toBe(3)
+    expect(getCourseLab('memory-addresses-01')?.id).toBe(6)
+    expect(getCourseLab('vuln-overwrite-variable-01')?.id).toBe(9)
+    expect(getCourseLab('asm-registers-01')?.id).toBe(12)
   })
 
   it('保留后续章节路线图但不把未发布实验装入课程', () => {
@@ -102,16 +119,35 @@ describe('course manifest v3 compatibility layer', () => {
   })
 
   it('PwnHub 可独立进入并按稳定 labId 顺序解锁', () => {
-    const memory = COURSE.chapters[0]
-    const assembly = COURSE.chapters[1]
-    const elf = COURSE.chapters[2]
-    expect(isChapterUnlocked(memory, [])).toBe(true)
-    expect(isLabUnlocked(getCourseLab('memory-addresses-01')!, [], [])).toBe(true)
-    expect(isLabUnlocked(getCourseLab('memory-layout-01')!, [], [])).toBe(false)
+    const numberBases = COURSE.chapters[0]
+    const vulnLogic = COURSE.chapters[1]
+    const memory = COURSE.chapters[2]
+    const vulnMemory = COURSE.chapters[3]
+    const assembly = COURSE.chapters[4]
+    const elf = COURSE.chapters[5]
+    expect(isChapterUnlocked(numberBases, [])).toBe(true)
+    expect(isLabUnlocked(getCourseLab('num-bases-01')!, [], [])).toBe(true)
+    expect(isLabUnlocked(getCourseLab('num-wrap-01')!, [], [])).toBe(false)
+    expect(isLabUnlocked(getCourseLab('num-wrap-01')!, ['num-bases-01'], [])).toBe(true)
+    expect(isChapterUnlocked(vulnLogic, ['num-bases-01'])).toBe(false)
+    expect(isChapterUnlocked(vulnLogic, ['num-wrap-01'])).toBe(true)
+    expect(isLabUnlocked(getCourseLab('vuln-weak-random-01')!, ['num-wrap-01'], [])).toBe(true)
+    expect(isLabUnlocked(getCourseLab('vuln-integer-overflow-01')!, ['vuln-weak-random-01'], [])).toBe(true)
+    expect(isLabUnlocked(getCourseLab('vuln-race-condition-01')!, ['vuln-integer-overflow-01'], [])).toBe(true)
+    expect(isChapterUnlocked(memory, ['vuln-integer-overflow-01'])).toBe(false)
+    expect(isChapterUnlocked(memory, ['vuln-race-condition-01'])).toBe(true)
+    expect(isLabUnlocked(getCourseLab('memory-addresses-01')!, ['vuln-race-condition-01'], [])).toBe(true)
     expect(isLabUnlocked(getCourseLab('memory-layout-01')!, ['memory-addresses-01'], [])).toBe(true)
-    expect(isChapterUnlocked(assembly, ['memory-layout-01'])).toBe(false)
-    expect(isChapterUnlocked(assembly, ['memory-register-stack-01'])).toBe(true)
-    expect(isLabUnlocked(getCourseLab('asm-registers-01')!, ['memory-register-stack-01'], [])).toBe(true)
+    expect(isLabUnlocked(getCourseLab('memory-register-stack-01')!, ['memory-layout-01'], [])).toBe(true)
+    expect(isChapterUnlocked(vulnMemory, ['memory-layout-01'])).toBe(false)
+    expect(isChapterUnlocked(vulnMemory, ['memory-register-stack-01'])).toBe(true)
+    expect(isLabUnlocked(getCourseLab('vuln-overwrite-variable-01')!, ['memory-register-stack-01'], [])).toBe(true)
+    expect(isLabUnlocked(getCourseLab('vuln-string-overflow-01')!, ['vuln-overwrite-variable-01'], [])).toBe(true)
+    expect(isLabUnlocked(getCourseLab('vuln-format-string-01')!, ['vuln-string-overflow-01'], [])).toBe(true)
+    expect(isChapterUnlocked(assembly, ['vuln-string-overflow-01'])).toBe(false)
+    expect(isChapterUnlocked(assembly, ['vuln-format-string-01'])).toBe(true)
+    expect(isLabUnlocked(getCourseLab('asm-registers-01')!, ['memory-register-stack-01'], [])).toBe(false)
+    expect(isLabUnlocked(getCourseLab('asm-registers-01')!, ['vuln-format-string-01'], [])).toBe(true)
     expect(isLabUnlocked(getCourseLab('asm-arithmetic-01')!, ['asm-registers-01'], [])).toBe(true)
     expect(isLabUnlocked(getCourseLab('asm-stack-ops-01')!, ['asm-registers-01'], [])).toBe(false)
     expect(isLabUnlocked(getCourseLab('asm-stack-ops-01')!, ['asm-arithmetic-01'], [])).toBe(true)

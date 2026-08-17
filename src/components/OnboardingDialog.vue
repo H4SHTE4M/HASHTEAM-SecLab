@@ -208,10 +208,10 @@ onBeforeUnmount(() => {
             <li><kbd>Enter</kbd><span>提交并执行</span></li>
             <li><kbd>Backspace</kbd><span>删除输错字符</span></li>
             <li><kbd>↑ / ↓</kbd><span>找回历史命令</span></li>
-            <li><kbd>鼠标拖选</kbd><span>选择并复制输出</span></li>
+            <li><kbd>鼠标拖选</kbd><span>选择输出文字</span></li>
             <li><kbd>鼠标滚轮</kbd><span>查看终端上方的旧输出</span></li>
-            <li><kbd>Ctrl+C</kbd><span>中断卡住的程序；选中文字时是复制</span></li>
-            <li><kbd>Ctrl+V</kbd><span>粘贴复制的值到输入框或终端</span></li>
+            <li><kbd>Ctrl+C</kbd><span>中断卡住的程序（复制选中文字请用 Ctrl+Shift+C）</span></li>
+            <li><kbd>Ctrl+Shift+V</kbd><span>粘贴到终端；输入框里按 Ctrl+V</span></li>
           </ul>
         </div>
 

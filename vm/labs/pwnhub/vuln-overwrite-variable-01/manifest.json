@@ -1,0 +1,129 @@
+{
+  "$schema": "../course.schema.json",
+  "schemaVersion": 3,
+  "courseId": "pwnhub-foundations",
+  "chapterId": "vuln-memory",
+  "labId": "vuln-overwrite-variable-01",
+  "title": "越界一字节打开权限门",
+  "summary": "用一个超过 16 字节缓冲区的名字，越过边界改写紧邻的 is_admin 标志，让门直接打开。",
+  "goals": [
+    "说明缓冲区与紧邻变量在内存中连续排布",
+    "用越界写入把权限标志从 0 改成非 0",
+    "通过真实重放证明门被打开"
+  ],
+  "prerequisites": ["已能运行 i386 样本并记录输出"],
+  "kind": "pwn",
+  "environmentProfile": "binary",
+  "estimatedMinutes": { "min": 15, "max": 25 },
+  "unlockAfter": ["memory-register-stack-01"],
+  "artifacts": [{
+    "path": "/opt/pwnhub/labs/vuln-overwrite-variable-01/door",
+    "architecture": "i386",
+    "sha256": "e04f671dc760066aefed97188fef131a10630477be540c6a55227b1aaf1b40ff",
+    "purpose": "固定地址、只读一次名字、用邻接标志判断权限的离线样本",
+    "downloadable": true
+  }],
+  "concepts": [
+    { "id": "adjacent-variable", "term": "邻接变量覆盖", "explanation": "缓冲区与紧邻变量在编译后连续排布；越过缓冲区边界的写入会直接落到相邻变量上。" },
+    { "id": "off-by-one-overflow", "term": "越界一字节", "explanation": "只要比缓冲区多写一个字节，就会越过边界进入相邻变量；权限检查依赖的标志变量因此被改写。" },
+    { "id": "hidden-trust-flag", "term": "被信任的权限标志", "explanation": "用普通内存变量保存权限标志时，任何能越过缓冲区的写入都能伪造这个标志，权限判断随之失效。" }
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "type": "terminal",
+      "title": "短名字打不开门",
+      "objective": "确认样本用邻接的 is_admin 标志判断权限",
+      "instruction": "运行 ./door 并输入一个短名字（少于 16 字节）。样本会先打印 name 缓冲区地址 0x0804b0c4（只有 16 字节）和紧随其后的 is_admin 标志地址 0x0804b0d4（当前为 0），再提示权限不足、门没有开。记录这两个相邻地址。",
+      "completion": "acknowledge",
+      "allowRun": true,
+      "introduces": [
+        { "id": "adjacent-variable", "term": "邻接变量覆盖", "explanation": "缓冲区与紧邻变量在编译后连续排布；越过缓冲区边界的写入会直接落到相邻变量上。" },
+        { "id": "hidden-trust-flag", "term": "被信任的权限标志", "explanation": "用普通内存变量保存权限标志时，任何能越过缓冲区的写入都能伪造这个标志，权限判断随之失效。" }
+      ],
+      "uses": ["adjacent-variable", "hidden-trust-flag"],
+      "evidence": "observation",
+      "tool": "shell"
+    },
+    {
+      "id": 2,
+      "type": "visual-trace",
+      "title": "把缓冲区和标志画在一起",
+      "objective": "看清第 17 个字节怎样落进 is_admin",
+      "instruction": "name 缓冲区从 0x0804b0c4 起占 16 字节，is_admin 紧邻在 0x0804b0d4，两者地址相差 0x10=16。写入 17 个 'A' 时，前 16 字节正好填满缓冲区，第 17 个字节越过边界写进 is_admin 的最低字节，把它从 0 变成 0x41=65，门因此打开。",
+      "completion": "acknowledge",
+      "allowRun": false,
+      "introduces": [
+        { "id": "off-by-one-overflow", "term": "越界一字节", "explanation": "只要比缓冲区多写一个字节，就会越过边界进入相邻变量；权限检查依赖的标志变量因此被改写。" }
+      ],
+      "uses": ["adjacent-variable", "off-by-one-overflow"],
+      "evidence": "observation",
+      "tool": "elf",
+      "initialTab": "memory",
+      "workbench": {
+        "memory": {
+          "endian": "little",
+          "cells": [
+            { "address": 134525124, "name": "name[0..3]", "value": 1094795585, "kind": "value", "meaning": "name 缓冲区前 4 字节，写入 16 个 'A' 后存 0x41414141。" },
+            { "address": 134525128, "name": "name[4..7]", "value": 1094795585, "kind": "value", "meaning": "name 缓冲区 4-7 字节，同为 'A'。" },
+            { "address": 134525132, "name": "name[8..11]", "value": 1094795585, "kind": "value", "meaning": "name 缓冲区 8-11 字节，同为 'A'。" },
+            { "address": 134525136, "name": "name[12..15]", "value": 1094795585, "kind": "value", "meaning": "name 缓冲区最后 4 字节；下一格就是 is_admin。" },
+            { "address": 134525140, "name": "is_admin", "value": 65, "kind": "value", "meaning": "权限标志，紧邻 name 之后。第 17 个 'A' 越过 16 字节缓冲区写到这里，0 变成 0x41=65，门打开。" }
+          ]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "payload-builder",
+      "title": "拼出能越界的超长名字",
+      "objective": "把填充长度从 16 加到 17 以上越过缓冲区",
+      "instruction": "默认填 16 字节正好填满缓冲区、不越界。按上一步看到的布局，把 padding 长度加到 17（或更多），让第 17 个字节落进 is_admin。生成的 input.txt 会保存到 $HOME/vuln-overwrite-variable-01/。",
+      "completion": "confirm",
+      "allowRun": false,
+      "uses": ["off-by-one-overflow", "adjacent-variable"],
+      "evidence": "payload-replay",
+      "tool": "shell",
+      "payload": {
+        "outputPath": "vuln-overwrite-variable-01/input.txt",
+        "maxBytes": 64,
+        "segments": [
+          { "id": "flood", "label": "超长名字", "kind": "padding", "byte": 65, "length": 16 }
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "type": "terminal",
+      "title": "重放超长名字并提交",
+      "objective": "用真实重放证明门被打开",
+      "instruction": "运行 ./door < input.txt，观察到 is_admin 的值变成非 0、并打印 PwnHub_admin_door_open，然后运行 check。",
+      "completion": "confirm",
+      "allowRun": false,
+      "uses": ["hidden-trust-flag", "off-by-one-overflow"],
+      "evidence": "payload-replay",
+      "tool": "shell"
+    }
+  ],
+  "hints": [
+    { "level": 1, "kind": "direction", "text": "先用短名字看到门不开，再看清 name 和 is_admin 的地址相差几个字节。" },
+    { "level": 2, "kind": "tool", "text": "在 PayloadWorkbench 把 padding 字节数加到比 16 多，或用 python 生成：python -c \"open('input.txt','wb').write(b'A' * 17)\" 把 17 个 A 写进 input.txt。" },
+    { "level": 3, "kind": "structure", "text": "name 占 0x0804b0c4..0x0804b0d3 共 16 字节，is_admin 在 0x0804b0d4；多写一字节就盖到 is_admin。" }
+  ],
+  "verification": {
+    "type": "payload-replay",
+    "usage": "check",
+    "instruction": "把能打开门的 input.txt 放入 $HOME/vuln-overwrite-variable-01/ 后运行 check。",
+    "placeholders": [],
+    "feedback": {
+      "empty": "还没有 input.txt。",
+      "incorrect": "门没有开：填充还没越过 16 字节缓冲区，把名字长度加到 17 以上。",
+      "success": "真实重放确认 is_admin 被越界改写，门已打开。"
+    }
+  },
+  "completionSummary": {
+    "solved": "通过真实重放确认多写一字节就改写了紧邻的权限标志，门被打开。",
+    "mastered": ["邻接变量覆盖", "越界一字节", "被信任的权限标志"],
+    "next": "下一实验会在栈上做同样的越界写入，覆盖保存返回地址并亲眼看到程序崩溃。"
+  }
+}

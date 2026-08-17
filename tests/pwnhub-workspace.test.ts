@@ -80,9 +80,9 @@ describe('PwnHub workspace integration', () => {
     await nextTick()
     expect(vmMock.handoff).toHaveBeenCalledOnce()
     expect(vmMock.handoff.mock.calls[0]?.[1]).toBe('pwnhub')
-    expect(useLabProgress().state.currentLabId).toBe('memory-addresses-01')
+    expect(useLabProgress().state.currentLabId).toBe('num-bases-01')
     expect(vmMock.boot).toHaveBeenCalledOnce()
-    expect(wrapper.findAll('[data-lab-id]')).toHaveLength(3)
+    expect(wrapper.findAll('[data-lab-id]')).toHaveLength(2)
 
     await wrapper.get('button[aria-label="回到主页"]').trigger('click')
     await flushPromises()

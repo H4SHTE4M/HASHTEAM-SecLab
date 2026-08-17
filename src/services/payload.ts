@@ -218,5 +218,5 @@ export function validatePayloadPath(input: string): string {
 export function buildPayloadWriteCommand(bytes: Uint8Array, outputPath: string): string {
   const path = validatePayloadPath(outputPath)
   const base64 = bytesToBase64(bytes)
-  return `printf '%s' '${base64}' | base64 -d > '${path}'`
+  return `python -c "import binascii; open('${path}','wb').write(binascii.a2b_base64('${base64}'))"`
 }

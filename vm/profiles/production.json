@@ -1,8 +1,16 @@
 {
   "pwnhubLabs": [
+    "num-bases-01",
+    "num-wrap-01",
+    "vuln-weak-random-01",
+    "vuln-integer-overflow-01",
+    "vuln-race-condition-01",
     "memory-addresses-01",
     "memory-layout-01",
     "memory-register-stack-01",
+    "vuln-overwrite-variable-01",
+    "vuln-string-overflow-01",
+    "vuln-format-string-01",
     "asm-registers-01",
     "asm-arithmetic-01",
     "asm-stack-ops-01",
@@ -16,6 +24,7 @@
   "binaryTools": [
     "readelf",
     "nm",
-    "objdump"
+    "objdump",
+    "python"
   ]
 }

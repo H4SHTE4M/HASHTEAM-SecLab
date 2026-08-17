@@ -417,4 +417,19 @@ describe('responsive layout contract', () => {
     expect(app).toContain(':auto-focus="!backgroundInert"')
     expect(app).toContain('v-if="showOnboardingDialog"')
   })
+
+  it('keeps the pwnhub readiness note free of dead vertical space', () => {
+    const selector = source('src/views/LabSelectorView.vue')
+
+    // readiness 提示三种文案（0/10、x/10、10/10）在卡片内宽下都是单行
+    // （13px × 1.55 ≈ 20px）；若为该行保留 min-height，多出的高度会在
+    // 「已完成 x/10 个基础实验」与「模块仍在建设中」之间形成一片空白。
+    // 卡片纵向留白由 .enter-button 的 margin-top:auto 统一吸收。
+    const readinessBlock = selector.match(/\.readiness-note\s*\{[^}]*\}/)?.[0]
+    expect(readinessBlock).toBeDefined()
+    expect(readinessBlock).not.toMatch(/min-height/)
+    const enterButtonBlock = selector.match(/\.enter-button\s*\{[^}]*\}/)?.[0]
+    expect(enterButtonBlock).toBeDefined()
+    expect(enterButtonBlock).toContain('margin-top: auto')
+  })
 })

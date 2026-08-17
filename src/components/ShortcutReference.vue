@@ -49,6 +49,7 @@ const groups = [
   {
     title: '终端',
     items: [
+      { keys: ['Ctrl', 'C'], label: '中断卡住的程序' },
       { keys: ['Ctrl', 'Shift', 'C'], label: '复制选中内容' },
       { keys: ['Ctrl', 'Shift', 'V'], label: '粘贴剪贴板' },
       { keys: ['Ctrl', 'L'], label: '清空终端屏幕' },

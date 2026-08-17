@@ -555,6 +555,190 @@
         "canary": false,
         "relro": "none"
       }
+    },
+    {
+      "id": "num-bases-01",
+      "path": "vm/labs/pwnhub/num-bases-01/bases",
+      "architecture": "i386",
+      "endianness": "little",
+      "size": 9020,
+      "sha256": "8969acc17560423409d35e5a2443d26cb7ed71c0c7e50aca45167de948b8b3ef",
+      "source": "vm/binary-profile/num-bases-01/bases.c",
+      "sourceSha256": "e3e769768dc5a61729c3cd26ec213bc220f9dffbc263389b9086f3e2d5628dd9",
+      "buildScript": "vm/binary-profile/build-pwn-lab.sh",
+      "toolchainLock": "vm/binary-profile/num-bases-01/toolchain.lock",
+      "profile": "binary-i386",
+      "license": "PwnHub project source; no third party runtime",
+      "purpose": "固定、离线、无副作用文件的三种进制写法观察样本",
+      "downloadable": true,
+      "expected": {
+        "elfType": "EXEC",
+        "nx": true,
+        "pie": false,
+        "canary": false,
+        "relro": "none"
+      }
+    },
+    {
+      "id": "num-wrap-01",
+      "path": "vm/labs/pwnhub/num-wrap-01/counter",
+      "architecture": "i386",
+      "endianness": "little",
+      "size": 9428,
+      "sha256": "7d134b12682e6e3b770229de048c3c07091b5e3b6552cd374bd2de69be0e53a2",
+      "source": "vm/binary-profile/num-wrap-01/counter.c",
+      "sourceSha256": "27414be955715fcff00a8fc0b7b29cea7e5ca87ed189c7ba5dc7200f17a77b02",
+      "buildScript": "vm/binary-profile/build-pwn-lab.sh",
+      "toolchainLock": "vm/binary-profile/num-wrap-01/toolchain.lock",
+      "profile": "binary-i386",
+      "license": "PwnHub project source; no third party runtime",
+      "purpose": "固定、离线、无副作用文件的 8 位固定宽度回绕观察样本",
+      "downloadable": true,
+      "expected": {
+        "elfType": "EXEC",
+        "nx": true,
+        "pie": false,
+        "canary": false,
+        "relro": "none"
+      }
+    },
+    {
+      "id": "vuln-weak-random-01",
+      "path": "vm/labs/pwnhub/vuln-weak-random-01/rand-door",
+      "architecture": "i386",
+      "endianness": "little",
+      "size": 8984,
+      "sha256": "6a1171604bd85f018409de89477371edd7e60ce0bda83c11eafb60ecd889d6b5",
+      "source": "vm/binary-profile/vuln-weak-random-01/rand-door.c",
+      "sourceSha256": "fe8076a98d85e1211e6207e4fbe792582e986708d0136af15eb1734920e41b9e",
+      "buildScript": "vm/binary-profile/build-pwn-lab.sh",
+      "toolchainLock": "vm/binary-profile/vuln-weak-random-01/toolchain.lock",
+      "profile": "binary-i386",
+      "license": "PwnHub project source; no third party runtime",
+      "purpose": "固定、离线、可预测种子的伪随机口令观察样本",
+      "downloadable": true,
+      "expected": {
+        "elfType": "EXEC",
+        "nx": true,
+        "pie": false,
+        "canary": false,
+        "relro": "none"
+      }
+    },
+    {
+      "id": "vuln-integer-overflow-01",
+      "path": "vm/labs/pwnhub/vuln-integer-overflow-01/wallet",
+      "architecture": "i386",
+      "endianness": "little",
+      "size": 9060,
+      "sha256": "d5f8ad8aa9cc71a765431acfc59bda6890fdda90162ac002e048fa036c914564",
+      "source": "vm/binary-profile/vuln-integer-overflow-01/wallet.c",
+      "sourceSha256": "3c7a8dfd79203ab820239ff4776cea9d327840e0dc147cd3321917086ae6e919",
+      "buildScript": "vm/binary-profile/build-pwn-lab.sh",
+      "toolchainLock": "vm/binary-profile/vuln-integer-overflow-01/toolchain.lock",
+      "profile": "binary-i386",
+      "license": "PwnHub project source; no third party runtime",
+      "purpose": "固定、离线、无副作用文件的 32 位乘法回绕观察样本",
+      "downloadable": true,
+      "expected": {
+        "elfType": "EXEC",
+        "nx": true,
+        "pie": false,
+        "canary": false,
+        "relro": "none"
+      }
+    },
+    {
+      "id": "vuln-overwrite-variable-01",
+      "path": "vm/labs/pwnhub/vuln-overwrite-variable-01/door",
+      "architecture": "i386",
+      "endianness": "little",
+      "size": 9108,
+      "sha256": "e04f671dc760066aefed97188fef131a10630477be540c6a55227b1aaf1b40ff",
+      "source": "vm/binary-profile/vuln-overwrite-variable-01/door.c",
+      "sourceSha256": "f3e57b0c6911a53e921983241d9cb76256e45ab872714e16e16c18fcd2d79dda",
+      "buildScript": "vm/binary-profile/build-pwn-lab.sh",
+      "toolchainLock": "vm/binary-profile/vuln-overwrite-variable-01/toolchain.lock",
+      "profile": "binary-i386",
+      "license": "PwnHub project source; no third party runtime",
+      "purpose": "固定、离线、一次 stdin 越界写改写相邻全局标志的样本",
+      "downloadable": true,
+      "expected": {
+        "elfType": "EXEC",
+        "nx": true,
+        "pie": false,
+        "canary": false,
+        "relro": "none"
+      }
+    },
+    {
+      "id": "vuln-string-overflow-01",
+      "path": "vm/labs/pwnhub/vuln-string-overflow-01/frame",
+      "architecture": "i386",
+      "endianness": "little",
+      "size": 9128,
+      "sha256": "2cb4d2e6c6b80f9575fe6b1a612f9a5e744f450e72334ec1d159e6c23c35c4be",
+      "source": "vm/binary-profile/vuln-string-overflow-01/frame.c",
+      "sourceSha256": "51380ed165fbaab1fba5b7cec36428e27dca48e0f33feb587c4881692d897f20",
+      "buildScript": "vm/binary-profile/build-pwn-lab.sh",
+      "toolchainLock": "vm/binary-profile/vuln-string-overflow-01/toolchain.lock",
+      "profile": "binary-i386",
+      "license": "PwnHub project source; no third party runtime",
+      "purpose": "固定、离线、可复现展示栈帧保存 EBP 与返回地址被覆盖的样本",
+      "downloadable": true,
+      "expected": {
+        "elfType": "EXEC",
+        "nx": true,
+        "pie": false,
+        "canary": false,
+        "relro": "none"
+      }
+    },
+    {
+      "id": "vuln-format-string-01",
+      "path": "vm/labs/pwnhub/vuln-format-string-01/greeter",
+      "architecture": "i386",
+      "endianness": "little",
+      "size": 8872,
+      "sha256": "6d844f137c037eaa56736e7640048c04b21e69805abc645abb4ecf2d801da71e",
+      "source": "vm/binary-profile/vuln-format-string-01/greeter.c",
+      "sourceSha256": "0bb0c274eec1fb3ae2711180553e267c2c932f6f06edc36260b8fb551ef0415c",
+      "buildScript": "vm/binary-profile/build-pwn-lab.sh",
+      "toolchainLock": "vm/binary-profile/vuln-format-string-01/toolchain.lock",
+      "profile": "binary-i386",
+      "license": "PwnHub project source; no third party runtime",
+      "purpose": "固定、离线、只读不写内存的格式化字符串观察样本",
+      "downloadable": true,
+      "expected": {
+        "elfType": "EXEC",
+        "nx": true,
+        "pie": false,
+        "canary": false,
+        "relro": "none"
+      }
+    },
+    {
+      "id": "vuln-race-condition-01",
+      "path": "vm/labs/pwnhub/vuln-race-condition-01/bank",
+      "architecture": "i386",
+      "endianness": "little",
+      "size": 9184,
+      "sha256": "a310eb2f9f8272aba2ef720ed8c259565325a2062cf156a3ec69b544ee1cbc10",
+      "source": "vm/binary-profile/vuln-race-condition-01/bank.c",
+      "sourceSha256": "401177c4f83bd6ebdad7207837c8b5ac1e95c69fcdf589ec2f2d61b2eb7587f0",
+      "buildScript": "vm/binary-profile/build-pwn-lab.sh",
+      "toolchainLock": "vm/binary-profile/vuln-race-condition-01/toolchain.lock",
+      "profile": "binary-i386",
+      "license": "PwnHub project source; no third party runtime",
+      "purpose": "固定、离线、仅在实验状态目录内读写的检查与扣款分离样本",
+      "downloadable": true,
+      "expected": {
+        "elfType": "EXEC",
+        "nx": true,
+        "pie": false,
+        "canary": false,
+        "relro": "none"
+      }
     }
   ],
   "debuggerBundles": [
@@ -853,6 +1037,26 @@
       "static": true,
       "stripped": true,
       "installPath": "/usr/local/bin/gdb"
+    },
+    {
+      "id": "micropython-htlab-i386",
+      "command": "python",
+      "path": "vm/binary-tools/staged/python",
+      "architecture": "i386",
+      "endianness": "little",
+      "size": 979584,
+      "sha256": "87179b9914e657b990c1936446fd1bca224b991063324779df39ca063e5f896a",
+      "upstreamVersion": "micropython@1f042fdd6ae2f7701c4aefb0f0f226f74b2f14d3",
+      "source": "vm/toolchain-source/micropython/mpconfigvariant.h",
+      "sourceSha256": "67530fd44429cc55669847fc4edbe0d19be0e86ca06e1ddb02e5dc10571261dc",
+      "projectSource": true,
+      "buildScript": "vm/binary-tools/build-micropython.sh",
+      "toolchainLock": "vm/toolchain-source/micropython/toolchain.lock",
+      "profile": "binary-i386",
+      "license": "MicroPython MIT; statically linked glibc LGPL-2.1-or-later",
+      "purpose": "MicroPython htlab 教学解释器(REPL 已注册 exit()/quit());进制转换、struct 小端打包、随机数演示、hashlib/sha256 校验概念",
+      "static": true,
+      "stripped": true
     }
   ],
   "scriptTools": [

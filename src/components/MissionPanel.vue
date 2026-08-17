@@ -161,6 +161,16 @@ watch(
   },
 )
 
+// 「重置本关」只清 store 证据、不重挂载本组件；本地缓存必须同步失效，
+// 否则 currentStepResolved 依旧成立，引导可以在没有证据的情况下被连点到末尾。
+watch(
+  () => props.completedSteps,
+  (steps) => {
+    const persisted = new Set(steps)
+    localCompletedIds.value = localCompletedIds.value.filter((id) => persisted.has(id))
+  },
+)
+
 function isUnreplacedPlaceholder(command: string): boolean {
   return /<[^<>\n]+>|\{\{[^{}\n]+\}\}/.test(command)
 }

@@ -154,6 +154,16 @@ watch(
   },
 )
 
+// 与 SecLab MissionPanel 同理：「重置本实验」清空 store 证据后，
+// 本地缓存必须同步失效，否则引导可以无证据连点到末尾。
+watch(
+  () => props.completedSteps,
+  (steps) => {
+    const persisted = new Set(steps)
+    localCompletedIds.value = localCompletedIds.value.filter((id) => persisted.has(id))
+  },
+)
+
 function isUnreplacedPlaceholder(command: string): boolean {
   return /<[^<>\n]+>|\{\{[^{}\n]+\}\}/.test(command)
 }

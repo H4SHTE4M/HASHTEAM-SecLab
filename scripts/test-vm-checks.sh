@@ -39,6 +39,9 @@ WORK="$(mktemp -d)"
 export PWNHUB_LABS_DIR="$WORK/labs"
 export PWNHUB_COURSE_ORDER="$OVERLAY/opt/pwnhub/course-order"
 mkdir -p "$PWNHUB_LABS_DIR/runtime-smoke-01"
+for num_lab in num-bases-01 num-wrap-01; do
+    cp -R "$ROOT/vm/labs/pwnhub/$num_lab" "$PWNHUB_LABS_DIR/"
+done
 cp -R "$ROOT/vm/labs/pwnhub/memory-addresses-01" "$PWNHUB_LABS_DIR/"
 cp -R "$ROOT/vm/labs/pwnhub/memory-layout-01" "$PWNHUB_LABS_DIR/"
 cp -R "$ROOT/vm/labs/pwnhub/memory-register-stack-01" "$PWNHUB_LABS_DIR/"
@@ -60,6 +63,17 @@ done
 for pwn_lab in pwn-overflow-offset-01 pwn-ret2win-01 pwn-ret2win-args-01 \
     rop-gadget-stack-01 rop-register-chain-01 rop-call-chain-01; do
     cp -R "$ROOT/vm/labs/pwnhub/$pwn_lab" "$PWNHUB_LABS_DIR/"
+done
+for vuln_lab in vuln-weak-random-01 vuln-integer-overflow-01 vuln-overwrite-variable-01 \
+    vuln-string-overflow-01 vuln-format-string-01 vuln-race-condition-01; do
+    cp -R "$ROOT/vm/labs/pwnhub/$vuln_lab" "$PWNHUB_LABS_DIR/"
+done
+for num_lab in num-bases-01 num-wrap-01; do
+    chmod +x "$PWNHUB_LABS_DIR/$num_lab"/*.sh
+    for num_bin in bases counter; do
+        [ -f "$PWNHUB_LABS_DIR/$num_lab/$num_bin" ] \
+            && chmod +x "$PWNHUB_LABS_DIR/$num_lab/$num_bin" || true
+    done
 done
 chmod +x "$PWNHUB_LABS_DIR/memory-addresses-01"/*.sh "$PWNHUB_LABS_DIR/memory-addresses-01/memory-addresses"
 chmod +x "$PWNHUB_LABS_DIR/memory-layout-01"/*.sh
@@ -94,6 +108,14 @@ chmod +x "$PWNHUB_READELF"
 chmod +x "$PWNHUB_NM"
 chmod +x "$PWNHUB_OBJDUMP"
 chmod +x "$PWNHUB_GDB"
+for vuln_lab in vuln-weak-random-01 vuln-integer-overflow-01 vuln-overwrite-variable-01 \
+    vuln-string-overflow-01 vuln-format-string-01 vuln-race-condition-01; do
+    chmod +x "$PWNHUB_LABS_DIR/$vuln_lab"/*.sh
+    for vuln_bin in rand-door wallet door frame greeter bank; do
+        [ -f "$PWNHUB_LABS_DIR/$vuln_lab/$vuln_bin" ] \
+            && chmod +x "$PWNHUB_LABS_DIR/$vuln_lab/$vuln_bin" || true
+    done
+done
 stop_test_httpd() {
     if [ -n "${HASHTEAM_HTTP_PORT:-}" ]; then
         pkill -f "httpd -p 127.0.0.1:${HASHTEAM_HTTP_PORT}" 2>/dev/null || true
@@ -311,117 +333,291 @@ HOME="$LAB_SB/home/guest" PATH="$STUB:$PATH" \
     && ok "reset-level 可重置稳定实验" \
     || bad "reset-level 未重置稳定实验"
 
+echo "—— PwnHub 20 关新链（数字与进制 → 逻辑漏洞 → 内存 → 内存漏洞 → 汇编 → ELF）——"
 sandbox 1
-MEMORY_SB="$SB_DIR"
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
-    HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
-    "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab memory-addresses-01 2>&1); then
+PWN_SB="$SB_DIR"
+pwn_goto() {
+    if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
+        HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
+        HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
+        "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab "$1" 2>&1); then
+        RC=0
+    else
+        RC=$?
+    fi
+}
+
+# 链序锁定：任何实验未完成时，后置实验都必须拒绝进入。
+pwn_goto num-wrap-01
+expect_eq "回绕实验在进制实验完成前保持锁定" "$RC" "3"
+pwn_goto memory-addresses-01
+expect_eq "内存实验在竞争条件实验完成前保持锁定" "$RC" "3"
+pwn_goto asm-registers-01
+expect_eq "汇编实验在格式化字符串实验完成前保持锁定" "$RC" "3"
+
+# 第 1 关：num-bases-01（三种写法，同一个数）
+pwn_goto num-bases-01
+expect_eq "进制实验可无前置进入" "$RC" "0"
+expect_contains "$OUT" "进制实验发出稳定 ready" '"type":"lab-ready","labId":"num-bases-01"'
+expect_contains "$OUT" "首关显示全局序号与标题" '第 1 关 · 三种写法，同一个数'
+[ -x "$PWN_SB/home/guest/bases" ] \
+    && ok "进制实验样本已复制到 HOME" \
+    || bad "进制实验样本未复制到 HOME"
+if OUT=$(run_check "$PWN_SB" 0xca 42); then RC=0; else RC=$?; fi
+expect_eq "进制实验提交 0xca 42 通过" "$RC" "0"
+expect_contains "$OUT" "进制实验发出签名结果" '"type":"lab-result","labId":"num-bases-01"'
+OUT=$(run_check "$PWN_SB" 0xca 43) && RC=0 || RC=$?
+expect_eq "进制实验错误十进制值失败" "$RC" "1"
+expect_not_contains "$OUT" "进制实验失败不签发结果" '"type":"lab-result"'
+
+# 引导口径回归：引导已统一改用 python，VM 侧学生可见文案不得再教 printf 换算或 shell 算术
+grep -q 'python' "$ROOT/vm/labs/pwnhub/num-bases-01/init.sh" \
+    && ok "进制实验横幅使用 python 换算口径" \
+    || bad "进制实验横幅未使用 python 换算口径"
+grep -qE 'printf "%[xd]|用 printf' "$ROOT/vm/labs/pwnhub/num-bases-01/init.sh" \
+    && bad "进制实验横幅残留 printf 换算教学" \
+    || ok "进制实验横幅无 printf 换算教学"
+grep -qF -- '--seed $((' "$ROOT/vm/labs/pwnhub/vuln-weak-random-01/check.sh" \
+    && bad "弱随机失败提示残留 shell 算术教学" \
+    || ok "弱随机失败提示无 shell 算术教学"
+grep -q 'python' "$ROOT/vm/labs/pwnhub/vuln-weak-random-01/check.sh" \
+    && ok "弱随机失败提示使用 python 口径" \
+    || bad "弱随机失败提示未使用 python 口径"
+
+# 第 2 关：num-wrap-01（8 位计数器装满之后）
+pwn_goto num-wrap-01
+expect_eq "进制实验完成后可进入回绕实验" "$RC" "0"
+expect_contains "$OUT" "回绕实验发出稳定 ready" '"type":"lab-ready","labId":"num-wrap-01"'
+[ -x "$PWN_SB/home/guest/counter" ] \
+    && ok "回绕实验样本已复制到 HOME" \
+    || bad "回绕实验样本未复制到 HOME"
+if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
+    HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
+    "$BUSYBOX" sh "$OVERLAY/usr/local/bin/help" current 2>&1); then
     RC=0
 else
     RC=$?
 fi
-expect_eq "内存实验可独立进入" "$RC" "0"
-expect_contains "$OUT" "内存实验发出稳定 ready" '"type":"lab-ready","labId":"memory-addresses-01"'
-expect_contains "$OUT" "稳定实验显示全局序号与标题" '第 11 关 · 地址、值与指针'
-[ -x "$MEMORY_SB/home/guest/memory-addresses" ] \
-    && ok "内存实验样本已复制到 HOME" \
-    || bad "内存实验样本未复制到 HOME"
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
-    HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
-    "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab asm-registers-01 2>&1); then
+expect_eq "实验内 help current 可用" "$RC" "0"
+expect_contains "$OUT" "help 显示与横幅一致的实验序号" '第 2 关 · 8 位计数器装满之后'
+if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
+    HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
+    "$BUSYBOX" sh "$OVERLAY/usr/local/bin/status" 2>&1); then
     RC=0
 else
     RC=$?
 fi
-expect_eq "汇编实验在内存实验完成前保持锁定" "$RC" "3"
-if OUT=$(run_check "$MEMORY_SB" 0x0804b140 0xdec0de42 0x0804b140 -42); then RC=0; else RC=$?; fi
-expect_eq "内存实验重放真实 ELF 后通过" "$RC" "0"
-expect_contains "$OUT" "内存实验发出签名结果" '"type":"lab-result","labId":"memory-addresses-01"'
-OUT=$(run_check "$MEMORY_SB" 0x0804b140 0xdec0de42 0x0804b140 42) && RC=0 || RC=$?
-expect_eq "内存实验错误补码值失败" "$RC" "1"
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
-    HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
-    "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab memory-register-stack-01 2>&1); then
-    RC=0
-else
-    RC=$?
+expect_eq "实验内 status 可用" "$RC" "0"
+expect_contains "$OUT" "status 显示与横幅一致的实验序号" '第 2 关 · 8 位计数器装满之后'
+if OUT=$(run_check "$PWN_SB" 0 44); then RC=0; else RC=$?; fi
+expect_eq "回绕实验提交 0 44 通过" "$RC" "0"
+expect_contains "$OUT" "回绕实验发出签名结果" '"type":"lab-result","labId":"num-wrap-01"'
+OUT=$(run_check "$PWN_SB" 0 45) && RC=0 || RC=$?
+expect_eq "回绕实验错误结果失败" "$RC" "1"
+expect_not_contains "$OUT" "回绕实验失败不签发结果" '"type":"lab-result"'
+
+# 3. 弱随机：当天口令由真实样本重放得出，提交后通过。
+chmod +x "$PWNHUB_LABS_DIR/vuln-weak-random-01/rand-door"
+WEAK_RANDOM_OUTPUT="$(HOME="$PWN_SB/home/guest" \
+    "$PWNHUB_LABS_DIR/vuln-weak-random-01/rand-door" 2>/dev/null || true)"
+WEAK_RANDOM_SECRET="$(printf '%s\n' "$WEAK_RANDOM_OUTPUT" \
+    | "$STUB/awk" '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]{6}$/) { print $i; exit } }')"
+[ -n "$WEAK_RANDOM_SECRET" ] || WEAK_RANDOM_SECRET=000000
+WEAK_RANDOM_YESTERDAY_SEED=$(( $(date +%s) / 86400 - 1 ))
+WEAK_RANDOM_YESTERDAY_SECRET="$(
+    "$PWNHUB_LABS_DIR/vuln-weak-random-01/rand-door" --seed "$WEAK_RANDOM_YESTERDAY_SEED" \
+        | "$STUB/awk" '{ print $NF }'
+)"
+WEAK_RANDOM_WRONG_NUMBER=$(( (10#$WEAK_RANDOM_SECRET + 1) % 1000000 ))
+printf -v WEAK_RANDOM_WRONG '%06d' "$WEAK_RANDOM_WRONG_NUMBER"
+if [ "$WEAK_RANDOM_WRONG" = "$WEAK_RANDOM_YESTERDAY_SECRET" ]; then
+    WEAK_RANDOM_WRONG_NUMBER=$(( (WEAK_RANDOM_WRONG_NUMBER + 1) % 1000000 ))
+    printf -v WEAK_RANDOM_WRONG '%06d' "$WEAK_RANDOM_WRONG_NUMBER"
 fi
+pwn_goto vuln-weak-random-01
+expect_eq "回绕实验完成后可进入弱随机实验" "$RC" "0"
+expect_contains "$OUT" "弱随机实验发出稳定 ready" '"type":"lab-ready","labId":"vuln-weak-random-01"'
+[ -x "$PWN_SB/home/guest/rand-door" ] \
+    && ok "弱随机样本已复制到 HOME" \
+    || bad "弱随机样本未复制到 HOME"
+if OUT=$(run_check "$PWN_SB" "$WEAK_RANDOM_SECRET"); then RC=0; else RC=$?; fi
+expect_eq "弱随机预测今日口令通过" "$RC" "0"
+expect_contains "$OUT" "弱随机发出签名结果" '"type":"lab-result","labId":"vuln-weak-random-01"'
+OUT=$(run_check "$PWN_SB" "$WEAK_RANDOM_WRONG") && RC=0 || RC=$?
+expect_eq "弱随机错误口令失败" "$RC" "1"
+expect_not_contains "$OUT" "弱随机失败不签发结果" '"type":"lab-result"'
+
+# 4. 整数溢出：提交 数量=256、回绕金额=0 通过。
+pwn_goto vuln-integer-overflow-01
+expect_eq "弱随机完成后可进入整数溢出实验" "$RC" "0"
+expect_contains "$OUT" "整数溢出实验发出稳定 ready" '"type":"lab-ready","labId":"vuln-integer-overflow-01"'
+[ -x "$PWN_SB/home/guest/wallet" ] \
+    && ok "整数溢出样本已复制到 HOME" \
+    || bad "整数溢出样本未复制到 HOME"
+if OUT=$(run_check "$PWN_SB" 256 0); then RC=0; else RC=$?; fi
+expect_eq "整数溢出提交 256,0 通过" "$RC" "0"
+expect_contains "$OUT" "整数溢出发出签名结果" '"type":"lab-result","labId":"vuln-integer-overflow-01"'
+OUT=$(run_check "$PWN_SB" 256 1) && RC=0 || RC=$?
+expect_eq "整数溢出错误回绕金额失败" "$RC" "1"
+expect_not_contains "$OUT" "整数溢出失败不签发结果" '"type":"lab-result"'
+
+# 5. 竞争条件：两次并发取款都成功，ledger 两行。
+chmod +x "$PWNHUB_LABS_DIR/vuln-race-condition-01/bank"
+pwn_goto vuln-race-condition-01
+expect_eq "整数溢出完成后可进入竞争条件实验" "$RC" "0"
+expect_contains "$OUT" "竞争条件实验发出稳定 ready" '"type":"lab-ready","labId":"vuln-race-condition-01"'
+[ -x "$PWN_SB/home/guest/bank" ] \
+    && ok "竞争条件样本已复制到 HOME" \
+    || bad "竞争条件样本未复制到 HOME"
+RACE_DIR="$PWN_SB/home/guest/vuln-race-condition-01"
+mkdir -p "$RACE_DIR"
+OUT=$(run_check "$PWN_SB") && RC=0 || RC=$?
+expect_eq "竞争条件无成功记录时失败" "$RC" "1"
+HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
+    "$STUB/timeout" 15 "$BUSYBOX" sh -c \
+    '"$1" 800 & "$1" 800 & wait' sh "$PWNHUB_LABS_DIR/vuln-race-condition-01/bank" \
+    >/dev/null 2>&1 || true
+if OUT=$(run_check "$PWN_SB"); then RC=0; else RC=$?; fi
+expect_eq "竞争条件两次并发扣款通过" "$RC" "0"
+expect_contains "$OUT" "竞争条件发出签名结果" '"type":"lab-result","labId":"vuln-race-condition-01"'
+
+# 第 6 关：memory-addresses-01（地址、值与指针）
+pwn_goto memory-addresses-01
+expect_eq "竞争条件实验完成后可进入地址实验" "$RC" "0"
+expect_contains "$OUT" "地址实验发出稳定 ready" '"type":"lab-ready","labId":"memory-addresses-01"'
+expect_contains "$OUT" "稳定实验显示全局序号与标题" '第 6 关 · 地址、值与指针'
+[ -x "$PWN_SB/home/guest/memory-addresses" ] \
+    && ok "地址实验样本已复制到 HOME" \
+    || bad "地址实验样本未复制到 HOME"
+if OUT=$(run_check "$PWN_SB" 0x0804b140 0xdec0de42 0x0804b140 -42); then RC=0; else RC=$?; fi
+expect_eq "地址实验重放真实 ELF 后通过" "$RC" "0"
+expect_contains "$OUT" "地址实验发出签名结果" '"type":"lab-result","labId":"memory-addresses-01"'
+OUT=$(run_check "$PWN_SB" 0x0804b140 0xdec0de42 0x0804b140 42) && RC=0 || RC=$?
+expect_eq "地址实验错误补码值失败" "$RC" "1"
+
+# 第 7 关：memory-layout-01（进程内存布局与 rwx）
+pwn_goto memory-register-stack-01
 expect_eq "栈实验在内存布局实验完成前保持锁定" "$RC" "3"
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
-    HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
-    "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab memory-layout-01 2>&1); then
-    RC=0
-else
-    RC=$?
-fi
+pwn_goto memory-layout-01
 expect_eq "地址实验完成后可进入内存布局实验" "$RC" "0"
 expect_contains "$OUT" "内存布局实验发出稳定 ready" '"type":"lab-ready","labId":"memory-layout-01"'
-[ ! -e "$MEMORY_SB/home/guest/memory-addresses" ] && [ -x "$MEMORY_SB/home/guest/inspect-memory-layout.sh" ] \
+[ ! -e "$PWN_SB/home/guest/memory-addresses" ] && [ -x "$PWN_SB/home/guest/inspect-memory-layout.sh" ] \
     && ok "切换实验会清理旧样本并复制新样本" \
     || bad "切换实验未正确清理或复制 HOME 样本"
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
-    HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
-    "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab memory-register-stack-01 2>&1); then
-    RC=0
-else
-    RC=$?
-fi
-expect_eq "栈实验在内存布局实验完成前保持锁定" "$RC" "3"
-if OUT=$(run_check "$MEMORY_SB" r-x rw- rw- rw-); then RC=0; else RC=$?; fi
+if OUT=$(run_check "$PWN_SB" r-x rw- rw- rw-); then RC=0; else RC=$?; fi
 expect_eq "内存布局实验重读真实映射后通过" "$RC" "0"
 expect_contains "$OUT" "内存布局实验发出签名结果" '"type":"lab-result","labId":"memory-layout-01"'
-OUT=$(run_check "$MEMORY_SB" rwx rw- rw- rw-) && RC=0 || RC=$?
+OUT=$(run_check "$PWN_SB" rwx rw- rw- rw-) && RC=0 || RC=$?
 expect_eq "内存布局实验错误权限失败" "$RC" "1"
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
-    HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
-    "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab memory-register-stack-01 2>&1); then
-    RC=0
-else
-    RC=$?
-fi
+
+# 第 8 关：memory-register-stack-01
+pwn_goto memory-register-stack-01
 expect_eq "内存布局实验完成后可进入栈实验" "$RC" "0"
 expect_contains "$OUT" "栈实验发出稳定 ready" '"type":"lab-ready","labId":"memory-register-stack-01"'
-[ ! -e "$MEMORY_SB/home/guest/inspect-memory-layout.sh" ] && [ -x "$MEMORY_SB/home/guest/memory-register-stack" ] \
+[ ! -e "$PWN_SB/home/guest/inspect-memory-layout.sh" ] && [ -x "$PWN_SB/home/guest/memory-register-stack" ] \
     && ok "切换到栈实验会清理布局脚本并复制栈样本" \
     || bad "切换到栈实验未正确清理或复制 HOME 文件"
-if OUT=$(run_check "$MEMORY_SB" 0x0804c158 0x22222222 0x11111111 0x11111111); then RC=0; else RC=$?; fi
+if OUT=$(run_check "$PWN_SB" 0x0804c158 0x22222222 0x11111111 0x11111111); then RC=0; else RC=$?; fi
 expect_eq "栈实验重放真实 ELF 后通过" "$RC" "0"
 expect_contains "$OUT" "栈实验发出签名结果" '"type":"lab-result","labId":"memory-register-stack-01"'
-OUT=$(run_check "$MEMORY_SB" 0x0804c15c 0x22222222 0x11111111 0x11111111) && RC=0 || RC=$?
+OUT=$(run_check "$PWN_SB" 0x0804c15c 0x22222222 0x11111111 0x11111111) && RC=0 || RC=$?
 expect_eq "栈实验错误栈顶失败" "$RC" "1"
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+
+# 9. 覆盖变量：17 个 A 越过 16 字节缓冲区改写 is_admin。
+pwn_goto vuln-overwrite-variable-01
+expect_eq "栈实验完成后可进入覆盖变量实验" "$RC" "0"
+expect_contains "$OUT" "覆盖变量实验发出稳定 ready" '"type":"lab-ready","labId":"vuln-overwrite-variable-01"'
+[ -x "$PWN_SB/home/guest/door" ] \
+    && ok "覆盖变量样本已复制到 HOME" \
+    || bad "覆盖变量样本未复制到 HOME"
+OVERWRITE_DIR="$PWN_SB/home/guest/vuln-overwrite-variable-01"
+mkdir -p "$OVERWRITE_DIR"
+OUT=$(run_check "$PWN_SB") && RC=0 || RC=$?
+expect_eq "覆盖变量缺 payload 失败" "$RC" "2"
+expect_contains "$OUT" "覆盖变量给出缺失反馈" "payload file is missing"
+OUT=$(run_check "$PWN_SB" "$OVERWRITE_DIR/../outside.bin") && RC=0 || RC=$?
+expect_eq "覆盖变量拒绝路径穿越 payload" "$RC" "2"
+expect_contains "$OUT" "覆盖变量给出穿越反馈" "path traversal is not allowed"
+python3 -c "import sys; sys.stdout.write('A' * 17)" > "$OVERWRITE_DIR/input.txt"
+if OUT=$(run_check "$PWN_SB"); then RC=0; else RC=$?; fi
+expect_eq "覆盖变量真实重放通过" "$RC" "0"
+expect_contains "$OUT" "覆盖变量发出签名结果" '"type":"lab-result","labId":"vuln-overwrite-variable-01"'
+python3 -c "import sys; sys.stdout.write('A' * 5)" > "$OVERWRITE_DIR/input.txt"
+OUT=$(run_check "$PWN_SB") && RC=0 || RC=$?
+expect_eq "覆盖变量过短 payload 失败" "$RC" "1"
+python3 -c "import sys; sys.stdout.write('A' * 65)" > "$OVERWRITE_DIR/input.txt"
+OUT=$(run_check "$PWN_SB") && RC=0 || RC=$?
+expect_eq "覆盖变量拒绝超限 payload" "$RC" "2"
+expect_contains "$OUT" "覆盖变量给出超限反馈" "exceeds the 64 byte limit"
+
+# 10. 字符串溢出：36 个 A 覆盖到保存的返回地址并崩溃。
+pwn_goto vuln-string-overflow-01
+expect_eq "覆盖变量完成后可进入字符串溢出实验" "$RC" "0"
+expect_contains "$OUT" "字符串溢出实验发出稳定 ready" '"type":"lab-ready","labId":"vuln-string-overflow-01"'
+[ -x "$PWN_SB/home/guest/frame" ] \
+    && ok "字符串溢出样本已复制到 HOME" \
+    || bad "字符串溢出样本未复制到 HOME"
+STRING_DIR="$PWN_SB/home/guest/vuln-string-overflow-01"
+mkdir -p "$STRING_DIR"
+OUT=$(run_check "$PWN_SB") && RC=0 || RC=$?
+expect_eq "字符串溢出缺 payload 失败" "$RC" "2"
+expect_contains "$OUT" "字符串溢出给出缺失反馈" "payload file is missing"
+OUT=$(run_check "$PWN_SB" "$STRING_DIR/../outside.bin") && RC=0 || RC=$?
+expect_eq "字符串溢出拒绝路径穿越 payload" "$RC" "2"
+expect_contains "$OUT" "字符串溢出给出穿越反馈" "path traversal is not allowed"
+python3 -c "import sys; sys.stdout.write('A' * 36)" > "$STRING_DIR/payload.bin"
+if OUT=$(run_check "$PWN_SB"); then RC=0; else RC=$?; fi
+expect_eq "字符串溢出真实重放通过" "$RC" "0"
+expect_contains "$OUT" "字符串溢出发出签名结果" '"type":"lab-result","labId":"vuln-string-overflow-01"'
+python3 -c "import sys; sys.stdout.write('A' * 5)" > "$STRING_DIR/payload.bin"
+OUT=$(run_check "$PWN_SB") && RC=0 || RC=$?
+expect_eq "字符串溢出过短 payload 失败" "$RC" "1"
+python3 -c "import sys; sys.stdout.write('A' * 49)" > "$STRING_DIR/payload.bin"
+OUT=$(run_check "$PWN_SB") && RC=0 || RC=$?
+expect_eq "字符串溢出拒绝超限 payload" "$RC" "2"
+expect_contains "$OUT" "字符串溢出给出超限反馈" "exceeds the 48 byte limit"
+
+# 11. 格式化字符串：提交 leaked 的 0badf00d 通过。
+pwn_goto vuln-format-string-01
+expect_eq "字符串溢出完成后可进入格式化字符串实验" "$RC" "0"
+expect_contains "$OUT" "格式化字符串实验发出稳定 ready" '"type":"lab-ready","labId":"vuln-format-string-01"'
+[ -x "$PWN_SB/home/guest/greeter" ] \
+    && ok "格式化字符串样本已复制到 HOME" \
+    || bad "格式化字符串样本未复制到 HOME"
+if OUT=$(run_check "$PWN_SB" 0badf00d); then RC=0; else RC=$?; fi
+expect_eq "格式化字符串提交 0badf00d 通过" "$RC" "0"
+expect_contains "$OUT" "格式化字符串发出签名结果" '"type":"lab-result","labId":"vuln-format-string-01"'
+OUT=$(run_check "$PWN_SB" deadbeef) && RC=0 || RC=$?
+expect_eq "格式化字符串错误秘密值失败" "$RC" "1"
+expect_not_contains "$OUT" "格式化字符串失败不签发结果" '"type":"lab-result"'
+
+if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+    HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
     "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab asm-registers-01 2>&1); then
     RC=0
 else
     RC=$?
 fi
-expect_eq "栈实验完成后可进入汇编实验" "$RC" "0"
+expect_eq "格式化字符串实验完成后可进入汇编实验" "$RC" "0"
 expect_contains "$OUT" "汇编实验发出稳定 ready" '"type":"lab-ready","labId":"asm-registers-01"'
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+    HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
     "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab asm-arithmetic-01 2>&1); then
     RC=0
 else
     RC=$?
 fi
 expect_eq "算术实验在寄存器实验完成前保持锁定" "$RC" "3"
-if OUT=$(run_check "$MEMORY_SB" 0x11223344 0x0000100c ESP); then RC=0; else RC=$?; fi
+if OUT=$(run_check "$PWN_SB" 0x11223344 0x0000100c ESP); then RC=0; else RC=$?; fi
 expect_eq "寄存器实验重放真实 ELF 后通过" "$RC" "0"
 expect_contains "$OUT" "寄存器实验发出签名结果" '"type":"lab-result","labId":"asm-registers-01"'
-OUT=$(run_check "$MEMORY_SB" 0x11223344 0x00001008 ESP) && RC=0 || RC=$?
+OUT=$(run_check "$PWN_SB" 0x11223344 0x00001008 ESP) && RC=0 || RC=$?
 expect_eq "寄存器实验错误 lea 结果失败" "$RC" "1"
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+    HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
     "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab asm-arithmetic-01 2>&1); then
     RC=0
 else
@@ -429,23 +625,23 @@ else
 fi
 expect_eq "寄存器实验完成后可进入算术实验" "$RC" "0"
 expect_contains "$OUT" "算术实验发出稳定 ready" '"type":"lab-ready","labId":"asm-arithmetic-01"'
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+    HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
     "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab asm-stack-ops-01 2>&1); then
     RC=0
 else
     RC=$?
 fi
 expect_eq "栈操作实验在算术实验完成前保持锁定" "$RC" "3"
-if OUT=$(run_check "$MEMORY_SB" 0x0000000d 0x0000002a 0x00000008 0x00000003 0x00000022); then RC=0; else RC=$?; fi
+if OUT=$(run_check "$PWN_SB" 0x0000000d 0x0000002a 0x00000008 0x00000003 0x00000022); then RC=0; else RC=$?; fi
 expect_eq "算术实验重放真实 ELF 后通过" "$RC" "0"
 expect_contains "$OUT" "算术实验发出签名结果" '"type":"lab-result","labId":"asm-arithmetic-01"'
-OUT=$(run_check "$MEMORY_SB" 0x0000000d 0x0000002a 0x00000008 0x00000004 0x00000022) && RC=0 || RC=$?
+OUT=$(run_check "$PWN_SB" 0x0000000d 0x0000002a 0x00000008 0x00000004 0x00000022) && RC=0 || RC=$?
 expect_eq "算术实验错误余数失败" "$RC" "1"
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+    HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
     "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab asm-stack-ops-01 2>&1); then
     RC=0
 else
@@ -453,23 +649,23 @@ else
 fi
 expect_eq "算术实验完成后可进入栈操作实验" "$RC" "0"
 expect_contains "$OUT" "栈操作实验发出稳定 ready" '"type":"lab-ready","labId":"asm-stack-ops-01"'
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+    HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
     "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab asm-branches-01 2>&1); then
     RC=0
 else
     RC=$?
 fi
 expect_eq "条件分支实验在栈操作实验完成前保持锁定" "$RC" "3"
-if OUT=$(run_check "$MEMORY_SB" 0x0804c0dc 0x0804c0d8 0x22222222 0x11111111); then RC=0; else RC=$?; fi
+if OUT=$(run_check "$PWN_SB" 0x0804c0dc 0x0804c0d8 0x22222222 0x11111111); then RC=0; else RC=$?; fi
 expect_eq "栈操作实验重放真实 ELF 后通过" "$RC" "0"
 expect_contains "$OUT" "栈操作实验发出签名结果" '"type":"lab-result","labId":"asm-stack-ops-01"'
-OUT=$(run_check "$MEMORY_SB" 0x0804c0dc 0x0804c0d8 0x11111111 0x22222222) && RC=0 || RC=$?
+OUT=$(run_check "$PWN_SB" 0x0804c0dc 0x0804c0d8 0x11111111 0x22222222) && RC=0 || RC=$?
 expect_eq "栈操作实验错误取值顺序失败" "$RC" "1"
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+    HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
     "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab asm-branches-01 2>&1); then
     RC=0
 else
@@ -477,23 +673,23 @@ else
 fi
 expect_eq "栈操作实验完成后可进入条件分支实验" "$RC" "0"
 expect_contains "$OUT" "条件分支实验发出稳定 ready" '"type":"lab-ready","labId":"asm-branches-01"'
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+    HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
     "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab asm-call-stack-01 2>&1); then
     RC=0
 else
     RC=$?
 fi
 expect_eq "call/ret 实验在条件分支实验完成前保持锁定" "$RC" "3"
-if OUT=$(run_check "$MEMORY_SB" 1 1 1 ZF SF=OF); then RC=0; else RC=$?; fi
+if OUT=$(run_check "$PWN_SB" 1 1 1 ZF SF=OF); then RC=0; else RC=$?; fi
 expect_eq "条件分支实验重放真实 ELF 后通过" "$RC" "0"
 expect_contains "$OUT" "条件分支实验发出签名结果" '"type":"lab-result","labId":"asm-branches-01"'
-OUT=$(run_check "$MEMORY_SB" 1 1 0 ZF SF=OF) && RC=0 || RC=$?
+OUT=$(run_check "$PWN_SB" 1 1 0 ZF SF=OF) && RC=0 || RC=$?
 expect_eq "条件分支实验错误跳转结果失败" "$RC" "1"
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+    HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
     "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab asm-call-stack-01 2>&1); then
     RC=0
 else
@@ -501,27 +697,27 @@ else
 fi
 expect_eq "条件分支实验完成后可进入 call/ret 实验" "$RC" "0"
 expect_contains "$OUT" "call/ret 实验发出稳定 ready" '"type":"lab-ready","labId":"asm-call-stack-01"'
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+    HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
     "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab elf-bytes-01 2>&1); then
     RC=0
 else
     RC=$?
 fi
 expect_eq "ELF 实验在 call/ret 实验完成前保持锁定" "$RC" "3"
-if OUT=$(run_check "$MEMORY_SB" 0x08049081 0x00000015 0x0000002b 4 0x0000002b); then RC=0; else RC=$?; fi
+if OUT=$(run_check "$PWN_SB" 0x08049081 0x00000015 0x0000002b 4 0x0000002b); then RC=0; else RC=$?; fi
 expect_eq "call/ret 实验重放真实 ELF 后通过" "$RC" "0"
 expect_contains "$OUT" "call/ret 实验发出签名结果" '"type":"lab-result","labId":"asm-call-stack-01"'
-OUT=$(run_check "$MEMORY_SB" 0x08049081 0x00000015 0x0000002a 4 0x0000002b) && RC=0 || RC=$?
+OUT=$(run_check "$PWN_SB" 0x08049081 0x00000015 0x0000002a 4 0x0000002b) && RC=0 || RC=$?
 expect_eq "call/ret 实验错误局部值失败" "$RC" "1"
-OUT=$(run_check "$MEMORY_SB" 0x08049081 0x00000015 0x0000002b 8 0x0000002b) && RC=0 || RC=$?
+OUT=$(run_check "$PWN_SB" 0x08049081 0x00000015 0x0000002b 8 0x0000002b) && RC=0 || RC=$?
 expect_eq "call/ret 实验错误清理值失败" "$RC" "1"
 expect_not_contains "$OUT" "call/ret 失败反馈不泄露清理答案" "必须是 4"
 expect_not_contains "$OUT" "call/ret 失败反馈不泄露紧凑答案" "必须是4"
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+    HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
     "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab elf-bytes-01 2>&1); then
     RC=0
 else
@@ -536,27 +732,27 @@ case "$VM_FILE_OUTPUT" in
         ;;
     *) bad "VM 简化 file 未识别 i386 ELF" ;;
 esac
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+    HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
     "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab elf-sections-01 2>&1); then
     RC=0
 else
     RC=$?
 fi
 expect_eq "节表实验在 ELF 字节实验完成前保持锁定" "$RC" "3"
-if OUT=$(run_check "$MEMORY_SB" 7f454c46 01 01 ORBIT-386); then RC=0; else RC=$?; fi
+if OUT=$(run_check "$PWN_SB" 7f454c46 01 01 ORBIT-386); then RC=0; else RC=$?; fi
 expect_eq "ELF 实验重新读取真实文件后通过" "$RC" "0"
 expect_contains "$OUT" "ELF 实验发出签名结果" '"type":"lab-result","labId":"elf-bytes-01"'
-OUT=$(run_check "$MEMORY_SB" 7f454c46 02 01 ORBIT-386) && RC=0 || RC=$?
+OUT=$(run_check "$PWN_SB" 7f454c46 02 01 ORBIT-386) && RC=0 || RC=$?
 expect_eq "ELF 实验错误位数标记失败" "$RC" "1"
 expect_not_contains "$OUT" "ELF 失败反馈不泄露正确位数标记" "位数标记必须是 01"
-OUT=$(run_check "$MEMORY_SB" 7f454c46 01 01 WRONG-MARKER) && RC=0 || RC=$?
+OUT=$(run_check "$PWN_SB" 7f454c46 01 01 WRONG-MARKER) && RC=0 || RC=$?
 expect_eq "ELF 实验错误字符串标记失败" "$RC" "1"
 expect_not_contains "$OUT" "ELF 失败反馈不泄露正确字符串标记" "ORBIT-386"
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+    HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
     "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab elf-sections-01 2>&1); then
     RC=0
 else
@@ -564,24 +760,24 @@ else
 fi
 expect_eq "ELF 字节实验完成后可进入节表实验" "$RC" "0"
 expect_contains "$OUT" "节表实验发出稳定 ready" '"type":"lab-ready","labId":"elf-sections-01"'
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+    HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
     "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab elf-symbols-01 2>&1); then
     RC=0
 else
     RC=$?
 fi
 expect_eq "符号实验在节表实验完成前保持锁定" "$RC" "3"
-if OUT=$(run_check "$MEMORY_SB" 0x8049033 08049000 NOBITS WA); then RC=0; else RC=$?; fi
+if OUT=$(run_check "$PWN_SB" 0x8049033 08049000 NOBITS WA); then RC=0; else RC=$?; fi
 expect_eq "节表实验调用锁定 readelf 后通过" "$RC" "0"
 expect_contains "$OUT" "节表实验发出签名结果" '"type":"lab-result","labId":"elf-sections-01"'
-OUT=$(run_check "$MEMORY_SB" 0x8049033 08049000 PROGBITS WA) && RC=0 || RC=$?
+OUT=$(run_check "$PWN_SB" 0x8049033 08049000 PROGBITS WA) && RC=0 || RC=$?
 expect_eq "节表实验错误 .bss 类型失败" "$RC" "1"
 expect_not_contains "$OUT" "节表失败反馈不泄露正确类型" "必须是 NOBITS"
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+    HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
     "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab elf-symbols-01 2>&1); then
     RC=0
 else
@@ -589,24 +785,24 @@ else
 fi
 expect_eq "节表实验完成后可进入符号实验" "$RC" "0"
 expect_contains "$OUT" "符号实验发出稳定 ready" '"type":"lab-ready","labId":"elf-symbols-01"'
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+    HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
     "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab elf-disassembly-01 2>&1); then
     RC=0
 else
     RC=$?
 fi
 expect_eq "反汇编实验在符号实验完成前保持锁定" "$RC" "3"
-if OUT=$(run_check "$MEMORY_SB" 0x08049031 T t B); then RC=0; else RC=$?; fi
+if OUT=$(run_check "$PWN_SB" 0x08049031 T t B); then RC=0; else RC=$?; fi
 expect_eq "符号实验调用锁定 nm 后通过" "$RC" "0"
 expect_contains "$OUT" "符号实验发出签名结果" '"type":"lab-result","labId":"elf-symbols-01"'
-OUT=$(run_check "$MEMORY_SB" 0x08049031 t t B) && RC=0 || RC=$?
+OUT=$(run_check "$PWN_SB" 0x08049031 t t B) && RC=0 || RC=$?
 expect_eq "符号实验错误函数可见性失败" "$RC" "1"
 expect_not_contains "$OUT" "符号失败反馈不泄露正确类型" "compute_total 类型必须是 T"
-if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-    HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+    HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
     "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab elf-disassembly-01 2>&1); then
     RC=0
 else
@@ -614,10 +810,10 @@ else
 fi
 expect_eq "符号实验完成后可进入反汇编实验" "$RC" "0"
 expect_contains "$OUT" "反汇编实验发出稳定 ready" '"type":"lab-ready","labId":"elf-disassembly-01"'
-if OUT=$(run_check "$MEMORY_SB" 08049020 choose_path jne 7); then RC=0; else RC=$?; fi
+if OUT=$(run_check "$PWN_SB" 08049020 choose_path jne 7); then RC=0; else RC=$?; fi
 expect_eq "反汇编实验调用锁定 objdump 后通过" "$RC" "0"
 expect_contains "$OUT" "反汇编实验发出签名结果" '"type":"lab-result","labId":"elf-disassembly-01"'
-OUT=$(run_check "$MEMORY_SB" 08049020 call jne 7) && RC=0 || RC=$?
+OUT=$(run_check "$PWN_SB" 08049020 call jne 7) && RC=0 || RC=$?
 expect_eq "反汇编实验错误调用目标失败" "$RC" "1"
 expect_not_contains "$OUT" "反汇编失败反馈不泄露正确目标" "choose_path"
 
@@ -630,9 +826,9 @@ gdb-input-crash-01|gdb-stack-frames-01|SIGSEGV crash_from_input 0x41414142|SIGSE
 CASES
 )
 while IFS='|' read -r lab_id prerequisite wrong_args correct_args; do
-    if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+    if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
         HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-        HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+        HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
         "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab "$lab_id" 2>&1); then
         RC=0
     else
@@ -640,14 +836,14 @@ while IFS='|' read -r lab_id prerequisite wrong_args correct_args; do
     fi
     expect_eq "$prerequisite 完成后可进入 $lab_id" "$RC" "0"
     expect_contains "$OUT" "$lab_id 发出稳定 ready" "\"type\":\"lab-ready\",\"labId\":\"$lab_id\""
-    [ -x "$MEMORY_SB/home/guest/gdb-runtime" ] && [ -f "$MEMORY_SB/home/guest/gdb-runtime.c" ] && \
-        [ -f "$MEMORY_SB/home/guest/session.gdb" ] \
+    [ -x "$PWN_SB/home/guest/gdb-runtime" ] && [ -f "$PWN_SB/home/guest/gdb-runtime.c" ] && \
+        [ -f "$PWN_SB/home/guest/session.gdb" ] \
         && ok "$lab_id 将样本、源码和交互会话复制到 HOME" \
         || bad "$lab_id 的 HOME 调试资产不完整"
-    OUT=$(run_check "$MEMORY_SB" $wrong_args) && RC=0 || RC=$?
+    OUT=$(run_check "$PWN_SB" $wrong_args) && RC=0 || RC=$?
     expect_eq "$lab_id 错误观察值失败" "$RC" "1"
     expect_not_contains "$OUT" "$lab_id 失败反馈不打印完整正确答案" "$correct_args"
-    if OUT=$(run_check "$MEMORY_SB" $correct_args); then RC=0; else RC=$?; fi
+    if OUT=$(run_check "$PWN_SB" $correct_args); then RC=0; else RC=$?; fi
     expect_eq "$lab_id 真实 GDB 重放通过" "$RC" "0"
     expect_contains "$OUT" "$lab_id 发出签名结果" "\"type\":\"lab-result\",\"labId\":\"$lab_id\""
 done <<< "$GDB_CASES"
@@ -659,9 +855,9 @@ rev-functions-flow-01|rev-strings-xrefs-01|0x804904e stage_gate 46 jne|0x804904e
 CASES
 )
 while IFS='|' read -r lab_id prerequisite wrong_args correct_args; do
-    if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+    if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
         HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-        HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+        HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
         "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab "$lab_id" 2>&1); then
         RC=0
     else
@@ -669,13 +865,13 @@ while IFS='|' read -r lab_id prerequisite wrong_args correct_args; do
     fi
     expect_eq "$prerequisite 完成后可进入 $lab_id" "$RC" "0"
     expect_contains "$OUT" "$lab_id 发出稳定 ready" "\"type\":\"lab-ready\",\"labId\":\"$lab_id\""
-    [ -x "$MEMORY_SB/home/guest/reverse-companion" ] && [ -x "$MEMORY_SB/home/guest/inspect.sh" ] \
+    [ -x "$PWN_SB/home/guest/reverse-companion" ] && [ -x "$PWN_SB/home/guest/inspect.sh" ] \
         && ok "$lab_id 将样本和终端等价路线复制到 HOME" \
         || bad "$lab_id 的 HOME 静态分析资产不完整"
-    OUT=$(run_check "$MEMORY_SB" $wrong_args) && RC=0 || RC=$?
+    OUT=$(run_check "$PWN_SB" $wrong_args) && RC=0 || RC=$?
     expect_eq "$lab_id 错误静态事实失败" "$RC" "1"
     expect_not_contains "$OUT" "$lab_id 失败反馈不打印完整正确答案" "$correct_args"
-    if OUT=$(run_check "$MEMORY_SB" $correct_args); then RC=0; else RC=$?; fi
+    if OUT=$(run_check "$PWN_SB" $correct_args); then RC=0; else RC=$?; fi
     expect_eq "$lab_id 锁定工具重放通过" "$RC" "0"
     expect_contains "$OUT" "$lab_id 发出签名结果" "\"type\":\"lab-result\",\"labId\":\"$lab_id\""
 done <<< "$REVERSE_CASES"
@@ -702,9 +898,9 @@ PY
 }
 while IFS='|' read -r lab_id prerequisite bin_name correct_spec wrong_spec; do
     [ -n "$lab_id" ] || continue
-    if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+    if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
         HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-        HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+        HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
         "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab "$lab_id" 2>&1); then
         RC=0
     else
@@ -712,40 +908,40 @@ while IFS='|' read -r lab_id prerequisite bin_name correct_spec wrong_spec; do
     fi
     expect_eq "$prerequisite 完成后可进入 $lab_id" "$RC" "0"
     expect_contains "$OUT" "$lab_id 发出稳定 ready" "\"type\":\"lab-ready\",\"labId\":\"$lab_id\""
-    [ -x "$MEMORY_SB/home/guest/$bin_name" ] \
+    [ -x "$PWN_SB/home/guest/$bin_name" ] \
         && ok "$lab_id 样本已复制到 HOME" \
         || bad "$lab_id 样本未复制到 HOME"
-    OUT=$(run_check "$MEMORY_SB") && RC=0 || RC=$?
+    OUT=$(run_check "$PWN_SB") && RC=0 || RC=$?
     expect_eq "$lab_id 缺少 payload 时失败" "$RC" "2"
     expect_contains "$OUT" "$lab_id 给出缺失反馈" "payload file is missing"
-    OUT=$(run_check "$MEMORY_SB" "$MEMORY_SB/home/guest/$lab_id/../outside.bin") && RC=0 || RC=$?
+    OUT=$(run_check "$PWN_SB" "$PWN_SB/home/guest/$lab_id/../outside.bin") && RC=0 || RC=$?
     expect_eq "$lab_id 拒绝路径穿越 payload" "$RC" "2"
     expect_contains "$OUT" "$lab_id 给出穿越反馈" "path traversal is not allowed"
-    write_pwn_payload "$MEMORY_SB/home/guest/$lab_id" "$wrong_spec"
-    OUT=$(run_check "$MEMORY_SB") && RC=0 || RC=$?
+    write_pwn_payload "$PWN_SB/home/guest/$lab_id" "$wrong_spec"
+    OUT=$(run_check "$PWN_SB") && RC=0 || RC=$?
     expect_eq "$lab_id 错误 payload 失败" "$RC" "1"
     expect_contains "$OUT" "$lab_id 失败不签发结果" '"type":"error"'
-    write_pwn_payload "$MEMORY_SB/home/guest/$lab_id" "$correct_spec"
-    if OUT=$(run_check "$MEMORY_SB"); then RC=0; else RC=$?; fi
+    write_pwn_payload "$PWN_SB/home/guest/$lab_id" "$correct_spec"
+    if OUT=$(run_check "$PWN_SB"); then RC=0; else RC=$?; fi
     expect_eq "$lab_id 真实重放通过" "$RC" "0"
     expect_contains "$OUT" "$lab_id 发出签名结果" "\"type\":\"lab-result\",\"labId\":\"$lab_id\""
     expect_contains "$OUT" "$lab_id 结果带有效签名" \
         "\"sig\":\"$(expected_message_sig "lab-result:$lab_id:passed")\""
-    printf '%*s' 513 '' | tr ' ' A > "$MEMORY_SB/home/guest/$lab_id/payload.bin"
-    OUT=$(run_check "$MEMORY_SB") && RC=0 || RC=$?
+    printf '%*s' 513 '' | tr ' ' A > "$PWN_SB/home/guest/$lab_id/payload.bin"
+    OUT=$(run_check "$PWN_SB") && RC=0 || RC=$?
     expect_eq "$lab_id 拒绝超限 payload" "$RC" "2"
     expect_contains "$OUT" "$lab_id 给出超限反馈" "exceeds the 512 byte limit"
-    if OUT=$(HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+    if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
         HASHTEAM_HTCHECK="$HTCHECK" HASHTEAM_KEY_FILE="$TEST_KEY" \
-        HASHTEAM_STATE_DIR="$MEMORY_SB/home/guest/.hashteam" \
+        HASHTEAM_STATE_DIR="$PWN_SB/home/guest/.hashteam" \
         "$BUSYBOX" sh "$OVERLAY/usr/local/bin/hashteamctl" goto-lab "$lab_id" >/dev/null 2>&1); then
         RC=0
     else
         RC=$?
     fi
     expect_eq "reset-level 后 $lab_id 环境恢复" "$RC" "0"
-    write_pwn_payload "$MEMORY_SB/home/guest/$lab_id" "$correct_spec"
-    if OUT=$(run_check "$MEMORY_SB"); then RC=0; else RC=$?; fi
+    write_pwn_payload "$PWN_SB/home/guest/$lab_id" "$correct_spec"
+    if OUT=$(run_check "$PWN_SB"); then RC=0; else RC=$?; fi
     expect_eq "$lab_id 重置后仍可重放通过" "$RC" "0"
 done <<< "$PWN_CASES"
 
@@ -771,21 +967,21 @@ if PATH="$STUB:$PATH" "$BUSYBOX" sh "$ROOT/vm/binary-tools/staged/hex2bin" zz >/
 else
     ok "hex2bin 拒绝非十六进制输入"
 fi
-if OUT=$(cd "$MEMORY_SB/home/guest" && HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+if OUT=$(cd "$PWN_SB/home/guest" && HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     PWNHUB_LABS_DIR="$PWNHUB_LABS_DIR" \
     "$BUSYBOX" sh "$ROOT/vm/binary-tools/staged/payload-run" not-in-home rop-call-chain-01/payload.bin 2>&1); then
     bad "payload-run 接受了非实验样本"
 else
     ok "payload-run 拒绝非实验样本"
 fi
-if OUT=$(cd "$MEMORY_SB/home/guest" && HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+if OUT=$(cd "$PWN_SB/home/guest" && HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     PWNHUB_LABS_DIR="$PWNHUB_LABS_DIR" \
     "$BUSYBOX" sh "$ROOT/vm/binary-tools/staged/payload-run" rop-call-chain rop-call-chain-01/../payload.bin 2>&1); then
     bad "payload-run 接受了路径穿越"
 else
     ok "payload-run 拒绝路径穿越"
 fi
-if OUT=$(cd "$MEMORY_SB/home/guest" && HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+if OUT=$(cd "$PWN_SB/home/guest" && HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     PWNHUB_LABS_DIR="$PWNHUB_LABS_DIR" \
     "$BUSYBOX" sh "$ROOT/vm/binary-tools/staged/payload-run" rop-call-chain rop-call-chain-01/payload.bin 2>&1); then
     RC=0
@@ -794,7 +990,7 @@ else
 fi
 expect_eq "payload-run 重放当前实验 payload" "$RC" "0"
 expect_contains "$OUT" "payload-run 输出真实标记" "PwnHub ROP calls complete"
-if OUT=$(cd "$MEMORY_SB/home/guest" && HOME="$MEMORY_SB/home/guest" PATH="$STUB:$PATH" \
+if OUT=$(cd "$PWN_SB/home/guest" && HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
     PWNHUB_LABS_DIR="$PWNHUB_LABS_DIR" \
     "$BUSYBOX" sh "$ROOT/vm/binary-tools/staged/payload-run" rop-call-chain other.bin 2>&1); then
     bad "payload-run 接受了实验目录外的 payload"
@@ -1175,6 +1371,9 @@ esac
 OUT=$(env "${HELP_ENV[@]}" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/help" all)
 expect_contains "$OUT" "help all 仍可查看完整备忘" "文件识别与本地 HTTP"
 
+OUT=$(env "${HELP_ENV[@]}" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/help" python)
+expect_contains "$OUT" "help python 提到 exit() 退出" "exit()"
+
 if OUT=$(env "${HELP_ENV[@]}" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/help" does-not-exist 2>&1); then
     RC=0
 else
@@ -1184,11 +1383,27 @@ expect_eq "未知 help 主题退出码为 2" "$RC" "2"
 expect_contains "$OUT" "未知 help 主题给出下一步" "输入 help 查看可查询的命令和主题"
 
 echo "—— 占位命令 ——"
-for cmd in man nano python; do
+for cmd in man nano; do
     OUT=$(PATH="$STUB:$PATH" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/$cmd" 2>&1) && RC=0 || RC=$?
     expect_eq "$cmd 退出码为 127" "$RC" "127"
     expect_contains "$OUT" "$cmd 提示输入 help" "输入 help"
 done
+
+echo "—— 内置 python(MicroPython htlab)——"
+PYBIN="$ROOT/vm/binary-tools/prebuilt/python"
+[ -x "$PYBIN" ] || { echo "缺少 $PYBIN" >&2; exit 1; }
+OUT=$("$PYBIN" -c 'print("py", hex(255+1), 0x2a*2)')
+expect_eq "python 进制与算术输出" "$OUT" "py 0x100 84"
+OUT=$("$PYBIN" -c 'import struct,hashlib;print(struct.pack("<I",0x2a).hex(), hashlib.sha256(b"ht").digest().hex()[:8])')
+expect_eq "python struct 打包与 sha256 输出" "$OUT" "2a000000 712dd58e"
+OUT=$(printf 'exit()\n' | "$PYBIN" -i 2>&1)
+case "$OUT" in
+    *NameError*) expect_eq "python REPL 支持 exit() 退出" "NameError" "ok" ;;
+    *) expect_eq "python REPL 支持 exit() 退出" "ok" "ok" ;;
+esac
+[ "$(sha256sum "$PYBIN" | cut -d ' ' -f 1)" = "$(sha256sum "$ROOT/vm/binary-tools/staged/python" | cut -d ' ' -f 1)" ] \
+    && expect_eq "python prebuilt 与 staged 审计副本一致" "ok" "ok" \
+    || expect_eq "python prebuilt 与 staged 审计副本一致" "mismatch" "ok"
 
 echo
 echo "—— 结果：$PASS 通过，$FAIL 失败 ——"

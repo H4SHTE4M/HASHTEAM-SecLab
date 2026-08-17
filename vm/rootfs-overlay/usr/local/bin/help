@@ -3,9 +3,19 @@ set -eu
 
 HELP_FILE="${HASHTEAM_HELP_FILE:-/etc/hashteam/help.txt}"
 STATE_DIR="${HASHTEAM_STATE_DIR:-$HOME/.hashteam}"
-level=$(cat "$STATE_DIR/level" 2>/dev/null || echo 1)
+. "${HASHTEAM_LIB_DIR:-/etc/hashteam}/lab.sh"
 
 show_current() {
+    lab=$(ht_current_lab)
+    if [ -n "$lab" ]; then
+        number=$(ht_lab_number "$lab" || printf '?')
+        title=$(ht_lab_title "$lab")
+        [ -n "$title" ] || title="$lab"
+        echo "当前是第 $number 关 · $title，建议先查这些命令："
+        echo "  status  hint  check"
+        return
+    fi
+    level=$(cat "$STATE_DIR/level" 2>/dev/null || echo 1)
     echo "当前是第 $level 关，建议先查这些命令："
     case "$level" in
         1) echo "  whoami  pwd  ls  cat  check" ;;
@@ -34,6 +44,7 @@ HASHTEAM 零基础命令备忘
   help analysis   查看搜索与统计命令列表
   help security   查看权限、进程与网络命令列表
   help web        查看文件识别与本地 HTTP 命令列表
+  help python     查看 python 交互解释器用法
   help all        查看完整备忘（内容较长，可用鼠标滚轮回看）
 
 卡住时输入 hint；完成后输入 check；需要恢复环境时输入 reset-level。
@@ -101,6 +112,7 @@ EOF
         strings) header='  strings 文件' ;;
         curl) header='  curl URL' ;;
         sed) header="  sed 's/旧/新/' 文件" ;;
+        python) header='  python 或 python -c "算式"' ;;
         *)
             echo "没有找到“$topic”的实验帮助。"
             echo "输入 help 查看可查询的命令和主题。"

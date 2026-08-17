@@ -76,7 +76,8 @@ function recordLabel(record?: LevelCompletionRecord): string {
         这正是安全工作的日常缩影。
       </p>
       <p v-else class="intro">
-        你已从内存模型走到汇编与 ELF 静态分析，并完成了真实 i386 实验的验证。
+        你已从数字与进制出发，经过逻辑漏洞、内存模型与内存漏洞，走到汇编读写
+        与 ELF 静态分析，完成了全部 20 个真实 i386 实验的验证。
         后续章节会按发布计划逐步开放。
       </p>
 

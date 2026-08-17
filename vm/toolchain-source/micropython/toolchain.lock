@@ -1,0 +1,19 @@
+format=1
+distribution=AOSC OS optenv(32)
+packages=gcc=14.3.0.20250523;binutils=2.46.0.20260210
+compiler=/opt/32/bin/i686-aosc-linux-gnu-gcc
+compiler_version=i686-aosc-linux-gnu-gcc (GCC) 14.3.0 20250523 (AOSC OS, optenv(32))
+compiler_sha256=a791daecf0a00a888b4791026da452ea320ab066a32ee7a05ef071c11d2129fc
+linker=/opt/32/bin/i686-aosc-linux-gnu-ld
+linker_version=GNU ld (GNU Binutils) 2.46.0.20260210
+linker_sha256=2e46094c9318c4e2b69203f12ef93e3623fec21a66633489fd80870c23f25f41
+micropython_commit=1f042fdd6ae2f7701c4aefb0f0f226f74b2f14d3
+micropython_variant=htlab
+source_date_epoch=0
+architecture=i386
+endianness=little
+compile_flags=-static -Os -Wl,--build-id=none -Wl,-z,noexecstack -Wl,-z,relro,-z,now (VARIANT=htlab,详见 mpconfigvariant.h/mk)
+# 教学补丁(幂等,构建脚本内应用):py/modbuiltins.c 内置表注册 exit()/quit() 等价 sys.exit(),防止新手困在 REPL
+output_size=979584
+output_gzip9_size=483469
+output_sha256=87179b9914e657b990c1936446fd1bca224b991063324779df39ca063e5f896a

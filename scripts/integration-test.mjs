@@ -258,42 +258,78 @@ async function main() {
     await waitFor(/@@HASHTEAM:\{"type":"hint-request","level":1\}/)
   })
   await step('PwnHub 首个实验可独立进入并按稳定 labId 验签', async () => {
-    goToLab('memory-addresses-01')
+    goToLab('num-bases-01')
+    await waitFor(/第 1 关 · 三种写法，同一个数/, 20000, '终端横幅序号与头部一致')
     const ready = await waitFor(
-      /@@HASHTEAM:\{"type":"lab-ready","labId":"memory-addresses-01","sig":"([0-9a-f]{64})"\}/,
+      /@@HASHTEAM:\{"type":"lab-ready","labId":"num-bases-01","sig":"([0-9a-f]{64})"\}/,
     )
     const expectedReady = createHmac('sha256', Buffer.from(sessionKeyB64, 'base64'))
-      .update('lab-ready:memory-addresses-01', 'utf8')
+      .update('lab-ready:num-bases-01', 'utf8')
       .digest('hex')
     if (ready[1] !== expectedReady) {
       throw new Error(`lab-ready 签名不符：${ready[1]} != ${expectedReady}`)
     }
 
-    goToLab('memory-layout-01')
+    goToLab('num-wrap-01')
     await waitFor(/这个实验尚未解锁，请先完成前置实验/)
 
     send(
-      "mkdir -p /tmp/fake-labs/memory-addresses-01 && " +
-      "printf '#!/bin/sh\\nexit 0\\n' > /tmp/fake-labs/memory-addresses-01/check.sh && " +
-      "chmod +x /tmp/fake-labs/memory-addresses-01/check.sh && " +
+      "mkdir -p /tmp/fake-labs/num-bases-01 && " +
+      "printf '#!/bin/sh\\nexit 0\\n' > /tmp/fake-labs/num-bases-01/check.sh && " +
+      "chmod +x /tmp/fake-labs/num-bases-01/check.sh && " +
       'PWNHUB_LABS_DIR=/tmp/fake-labs check wrong',
     )
     await waitFor(
-      /@@HASHTEAM:\{"type":"error","message":"lab memory-addresses-01 check failed"\}/,
+      /@@HASHTEAM:\{"type":"error","message":"lab num-bases-01 check failed"\}/,
     )
 
-    send('check 0x0804b140 0xdec0de42 0x0804b140 -42')
+    send('check 0xca 42')
     const passed = await waitFor(
-      /@@HASHTEAM:\{"type":"lab-result","labId":"memory-addresses-01","status":"passed","sig":"([0-9a-f]{64})"\}/,
+      /@@HASHTEAM:\{"type":"lab-result","labId":"num-bases-01","status":"passed","sig":"([0-9a-f]{64})"\}/,
     )
     const expectedPassed = createHmac('sha256', Buffer.from(sessionKeyB64, 'base64'))
-      .update('lab-result:memory-addresses-01:passed', 'utf8')
+      .update('lab-result:num-bases-01:passed', 'utf8')
       .digest('hex')
     if (passed[1] !== expectedPassed) {
       throw new Error(`lab-result 签名不符：${passed[1]} != ${expectedPassed}`)
     }
   })
 
+  await step('num-wrap-01：8 位计数器装满之后回绕', async () => {
+    goToLab('num-wrap-01')
+    await waitFor(/第 2 关 · 8 位计数器装满之后/, 20000, '进制实验横幅序号与头部一致')
+    const ready = await waitFor(
+      /@@HASHTEAM:\{"type":"lab-ready","labId":"num-wrap-01","sig":"([0-9a-f]{64})"\}/,
+    )
+    const expectedReady = createHmac('sha256', Buffer.from(sessionKeyB64, 'base64'))
+      .update('lab-ready:num-wrap-01', 'utf8')
+      .digest('hex')
+    if (ready[1] !== expectedReady) {
+      throw new Error(`lab-ready 签名不符：${ready[1]} != ${expectedReady}`)
+    }
+
+    send('check 0 44')
+    const passed = await waitFor(
+      /@@HASHTEAM:\{"type":"lab-result","labId":"num-wrap-01","status":"passed","sig":"([0-9a-f]{64})"\}/,
+    )
+    const expectedPassed = createHmac('sha256', Buffer.from(sessionKeyB64, 'base64'))
+      .update('lab-result:num-wrap-01:passed', 'utf8')
+      .digest('hex')
+    if (passed[1] !== expectedPassed) {
+      throw new Error(`lab-result 签名不符：${passed[1]} != ${expectedPassed}`)
+    }
+  })
+  await step('VM 内置 python 解释器冒烟(教学工具)', async () => {
+    send('python -c "print(\'py\', hex(255+1), 0x2a*2)"')
+    await waitFor(/py 0x100 84/, 20000, 'python 进制与算术输出')
+    send('python -c "import struct,hashlib;print(struct.pack(\'<I\',0x2a).hex(), hashlib.sha256(b\'ht\').digest().hex()[:8])"')
+    await waitFor(/2a000000 712dd58e/, 20000, 'struct 小端打包与 sha256 输出')
+    send('python')
+    await waitFor(/Type "help\(\)" for more information\./, 20000, 'python REPL 横幅')
+    send('exit()')
+    send('echo repl-exited-ok')
+    await waitFor(/repl-exited-ok/, 20000, 'exit() 退出 REPL 回到 shell')
+  })
 
   await step('第 2 关：隐藏文件', async () => {
     goToLevel(2)
@@ -437,17 +473,132 @@ async function main() {
     await waitFor(/DIRECT_DEBUGGER_COMPLETE_RC=2/)
   })
 
-  const debuggerLabs = [
+  const vulnLabReady = async (labId) => {
+    const ready = await waitFor(
+      new RegExp(`@@HASHTEAM:\\{"type":"lab-ready","labId":"${labId}","sig":"([0-9a-f]{64})"\\}`),
+    )
+    assertProtocolSignature(ready[1], `lab-ready:${labId}`, `${labId} lab-ready`)
+  }
+  const vulnLabPassed = async (labId) => {
+    const passed = await waitFor(
+      new RegExp(`@@HASHTEAM:\\{"type":"lab-result","labId":"${labId}","status":"passed","sig":"([0-9a-f]{64})"\\}`),
+    )
+    assertProtocolSignature(passed[1], `lab-result:${labId}:passed`, `${labId} lab-result`)
+  }
+
+  await step('vuln-logic vuln-weak-random-01：重放当天口令并通过签名判题', async () => {
+    goToLab('vuln-weak-random-01')
+    await waitFor(/第 3 关 · 会重播的口令/, 20000, '漏洞实验横幅序号与头部一致')
+    await vulnLabReady('vuln-weak-random-01')
+    send('status')
+    await waitFor(/当前实验：第 3 关 · 会重播的口令/, 20000, 'status 序号与横幅一致')
+    send('help current')
+    await waitFor(/当前是第 3 关 · 会重播的口令/, 20000, 'help 序号与横幅一致')
+    send('./rand-door')
+    const today = await waitFor(/今日口令: ([0-9]{6})/)
+    send('./rand-door --seed $(($(date +%s)/86400))')
+    await waitFor(new RegExp(`种子 [0-9]+ 的口令: ${today[1]}`))
+    send(`check ${today[1]}`)
+    await vulnLabPassed('vuln-weak-random-01')
+  })
+
+  await step('vuln-logic vuln-integer-overflow-01：乘法回绕白拿商品', async () => {
+    goToLab('vuln-integer-overflow-01')
+    await vulnLabReady('vuln-integer-overflow-01')
+    send('printf "1\\n" | ./wallet')
+    await waitFor(/余额不足，需要 16777216/)
+    send('printf "256\\n" | ./wallet')
+    await waitFor(/系统计算: 256 x 16777216 = 0/)
+    await waitFor(/PwnHub_integer_wrap/)
+    send('check 256 0')
+    await vulnLabPassed('vuln-integer-overflow-01')
+  })
+
+  await step('vuln-logic vuln-race-condition-01：并发取款突破余额', async () => {
+    goToLab('vuln-race-condition-01')
+    await vulnLabReady('vuln-race-condition-01')
+    send('./bank 800 & ./bank 800 & wait')
+    await waitFor(/(取款成功: 800[\s\S]*?){2}/, 30000, 'bank 两次并发取款成功')
+    send('check')
+    await vulnLabPassed('vuln-race-condition-01')
+  })
+
+  const memoryDebuggerLabs = [
     ['memory-addresses-01', 'memory_addresses_checkpoint'],
     ['memory-layout-01', 'layout_checkpoint'],
     ['memory-register-stack-01', 'stack_checkpoint'],
+  ]
+  for (const [labId, checkpoint] of memoryDebuggerLabs) {
+    await step(`debugger ${labId}：实时状态、条件文件与动态 key 闭环`, async () => {
+      goToLab(labId)
+      if (labId === 'memory-addresses-01') {
+        await waitFor(/第 6 关 · 地址、值与指针/, 20000, '内存实验横幅序号与头部一致')
+      }
+      const ready = await waitFor(
+        new RegExp(`@@HASHTEAM:\\{"type":"lab-ready","labId":"${labId}","sig":"([0-9a-f]{64})"\\}`),
+      )
+      assertProtocolSignature(ready[1], `lab-ready:${labId}`, `${labId} debugger lab-ready`)
+      send('debugger')
+      await waitFor(/@@HASHTEAM:\{"type":"debugger-state","state":"ready"\}/)
+      await waitFor(/dbg>/)
+      send('check')
+      await waitFor(new RegExp('当前 CPU/内存状态还没有满足本关条件。'))
+      send(`until ${checkpoint}`)
+      await waitFor(/状态满足，正在使用一次性动态 key 验证实验。/)
+      const passed = await waitFor(
+        new RegExp(`@@HASHTEAM:\\{"type":"lab-result","labId":"${labId}","status":"passed","sig":"([0-9a-f]{64})"\\}`),
+      )
+      assertProtocolSignature(passed[1], `lab-result:${labId}:passed`, `${labId} debugger lab-result`)
+      await waitFor(/@@HASHTEAM:\{"type":"debugger-state","state":"exited"\}/)
+      await waitFor(GUEST_PROMPT, 30000, `${labId} debugger 退出后的 guest 提示符`)
+      send(`test ! -e /tmp/.pwnhub-debugger-${labId} && printf '\\nDEBUGGER_TOKEN_CLEAN_${labId}\\n'`)
+      await waitFor(new RegExp(`DEBUGGER_TOKEN_CLEAN_${labId}`))
+    })
+  }
+
+  await step('汇编实验在完成 vuln-format-string-01 前保持锁定', async () => {
+    goToLab('asm-registers-01')
+    await waitFor(/这个实验尚未解锁，请先完成前置实验/)
+  })
+
+  await step('vuln-memory vuln-overwrite-variable-01：超长名字改写相邻标志', async () => {
+    goToLab('vuln-overwrite-variable-01')
+    await vulnLabReady('vuln-overwrite-variable-01')
+    send("printf 'AAAAAAAAAAAAAAAAA\\n' > vuln-overwrite-variable-01/input.txt")
+    send('./door < vuln-overwrite-variable-01/input.txt')
+    await waitFor(/PwnHub_admin_door_open/)
+    send('check')
+    await vulnLabPassed('vuln-overwrite-variable-01')
+  })
+
+  await step('vuln-memory vuln-string-overflow-01：覆盖返回地址并崩溃', async () => {
+    goToLab('vuln-string-overflow-01')
+    await vulnLabReady('vuln-string-overflow-01')
+    send("printf 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' > vuln-string-overflow-01/payload.bin")
+    send('./frame < vuln-string-overflow-01/payload.bin')
+    await waitFor(/保存的返回地址现在是: 0x41414141/)
+    await waitFor(GUEST_PROMPT, 30000, 'frame 崩溃后的 guest 提示符')
+    send('check')
+    await vulnLabPassed('vuln-string-overflow-01')
+  })
+
+  await step('vuln-memory vuln-format-string-01：%x 从栈上读出秘密', async () => {
+    goToLab('vuln-format-string-01')
+    await vulnLabReady('vuln-format-string-01')
+    send("printf '%s' '%x%x%x%x%x%x%x%x%x%x%x' | ./greeter")
+    await waitFor(/0badf00d/)
+    send('check 0badf00d')
+    await vulnLabPassed('vuln-format-string-01')
+  })
+
+  const asmDebuggerLabs = [
     ['asm-registers-01', 'registers_checkpoint'],
     ['asm-arithmetic-01', 'arithmetic_checkpoint'],
     ['asm-stack-ops-01', 'stack_ops_checkpoint'],
     ['asm-branches-01', 'branches_checkpoint'],
     ['asm-call-stack-01', 'call_stack_checkpoint'],
   ]
-  for (const [labId, checkpoint] of debuggerLabs) {
+  for (const [labId, checkpoint] of asmDebuggerLabs) {
     await step(`debugger ${labId}：实时状态、条件文件与动态 key 闭环`, async () => {
       goToLab(labId)
       const ready = await waitFor(
@@ -481,7 +632,7 @@ async function main() {
 const watchdog = setTimeout(() => {
   console.error(`\n全局超时。\n—— 最近输出 ——\n${buffer.slice(-1500)}`)
   process.exit(1)
-}, 120000)
+}, 240000)
 
 main().catch((error) => {
   console.error('\n集成测试失败：', error.message)

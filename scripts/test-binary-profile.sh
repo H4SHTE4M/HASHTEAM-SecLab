@@ -673,6 +673,172 @@ if grep -Eq 'choose_path|jne|0x7' "$WORK/elf-disassembly-wrong.txt"; then
     exit 1
 fi
 
+echo '==> 数字与进制样本宿主重放'
+NUM_BASES_LAB="$ROOT/vm/labs/pwnhub/num-bases-01"
+BASES_ELF="$NUM_BASES_LAB/bases"
+chmod +x "$BASES_ELF"
+[ "$(sha256sum "$BASES_ELF" | cut -d ' ' -f 1)" = \
+    8969acc17560423409d35e5a2443d26cb7ed71c0c7e50aca45167de948b8b3ef ]
+BASES_OUTPUT="$($BASES_ELF)"
+printf '%s\n' "$BASES_OUTPUT" | grep -Fq '十进制 202'
+printf '%s\n' "$BASES_OUTPUT" | grep -Fq '十六进制 0xca'
+printf '%s\n' "$BASES_OUTPUT" | grep -Fq '二进制 11001010'
+printf '%s\n' "$BASES_OUTPUT" | grep -Fq '0x2a 写成十进制就是 42'
+
+NUM_WRAP_LAB="$ROOT/vm/labs/pwnhub/num-wrap-01"
+COUNTER_ELF="$NUM_WRAP_LAB/counter"
+chmod +x "$COUNTER_ELF"
+[ "$(sha256sum "$COUNTER_ELF" | cut -d ' ' -f 1)" = \
+    7d134b12682e6e3b770229de048c3c07091b5e3b6552cd374bd2de69be0e53a2 ]
+COUNTER_OUTPUT="$($COUNTER_ELF)"
+printf '%s\n' "$COUNTER_OUTPUT" | grep -Fq '252 253 254 255 0 1 2 3'
+"$COUNTER_ELF" 200 100 | grep -Fq '8 位结果: 44'
+"$COUNTER_ELF" 255 1 | grep -Fq '8 位结果: 0'
+echo '  ✓ 两个进制样本哈希与功能重放'
+
+echo '==> 第一批漏洞样本宿主重放'
+WEAK_RANDOM_LAB="$ROOT/vm/labs/pwnhub/vuln-weak-random-01"
+WEAK_RANDOM_ELF="$WEAK_RANDOM_LAB/rand-door"
+chmod +x "$WEAK_RANDOM_ELF"
+[ "$(sha256sum "$WEAK_RANDOM_ELF" | cut -d ' ' -f 1)" = \
+    6a1171604bd85f018409de89477371edd7e60ce0bda83c11eafb60ecd889d6b5 ]
+WEAK_RANDOM_SEED=$(( $(date +%s) / 86400 ))
+WEAK_RANDOM_TODAY="$($WEAK_RANDOM_ELF)"
+WEAK_RANDOM_FIRST="$($WEAK_RANDOM_ELF --seed "$WEAK_RANDOM_SEED")"
+WEAK_RANDOM_SECOND="$($WEAK_RANDOM_ELF --seed "$WEAK_RANDOM_SEED")"
+[ "$WEAK_RANDOM_FIRST" = "$WEAK_RANDOM_SECOND" ]
+WEAK_RANDOM_TODAY_CODE="$(printf '%s\n' "$WEAK_RANDOM_TODAY" \
+    | sed -n 's/^今日口令: \([0-9][0-9]*\)$/\1/p')"
+WEAK_RANDOM_REPLAY_CODE="$(printf '%s\n' "$WEAK_RANDOM_FIRST" \
+    | sed -n 's/^种子 [0-9][0-9]* 的口令: \([0-9][0-9]*\)$/\1/p')"
+echo "$WEAK_RANDOM_TODAY_CODE" | grep -Eq '^[0-9]{6}$'
+[ "$WEAK_RANDOM_REPLAY_CODE" = "$WEAK_RANDOM_TODAY_CODE" ]
+
+INTEGER_OVERFLOW_LAB="$ROOT/vm/labs/pwnhub/vuln-integer-overflow-01"
+INTEGER_OVERFLOW_ELF="$INTEGER_OVERFLOW_LAB/wallet"
+chmod +x "$INTEGER_OVERFLOW_ELF"
+[ "$(sha256sum "$INTEGER_OVERFLOW_ELF" | cut -d ' ' -f 1)" = \
+    d5f8ad8aa9cc71a765431acfc59bda6890fdda90162ac002e048fa036c914564 ]
+INTEGER_OVERFLOW_OUTPUT="$(printf '256\n' | timeout 2 "$INTEGER_OVERFLOW_ELF")"
+grep -Fq '系统计算: 256 x 16777216 = 0' <<EOF
+$INTEGER_OVERFLOW_OUTPUT
+EOF
+grep -Fq 'PwnHub_integer_wrap: 乘积回绕为 0，余额检查失效' <<EOF
+$INTEGER_OVERFLOW_OUTPUT
+EOF
+printf '1\n' | timeout 2 "$INTEGER_OVERFLOW_ELF" | grep -Fq '余额不足'
+
+OVERWRITE_LAB="$ROOT/vm/labs/pwnhub/vuln-overwrite-variable-01"
+OVERWRITE_ELF="$OVERWRITE_LAB/door"
+chmod +x "$OVERWRITE_ELF"
+[ "$(sha256sum "$OVERWRITE_ELF" | cut -d ' ' -f 1)" = \
+    e04f671dc760066aefed97188fef131a10630477be540c6a55227b1aaf1b40ff ]
+printf 'hi\n' | timeout 2 "$OVERWRITE_ELF" | grep -Fq '权限不足，门没有开'
+python3 -c "import sys; sys.stdout.write('A' * 17)" | timeout 2 "$OVERWRITE_ELF" \
+    | grep -Fq 'PwnHub_admin_door_open'
+
+STRING_OVERFLOW_LAB="$ROOT/vm/labs/pwnhub/vuln-string-overflow-01"
+STRING_OVERFLOW_ELF="$STRING_OVERFLOW_LAB/frame"
+chmod +x "$STRING_OVERFLOW_ELF"
+[ "$(sha256sum "$STRING_OVERFLOW_ELF" | cut -d ' ' -f 1)" = \
+    2cb4d2e6c6b80f9575fe6b1a612f9a5e744f450e72334ec1d159e6c23c35c4be ]
+printf 'hi\n' | timeout 2 "$STRING_OVERFLOW_ELF" | grep -Fq '正常结束'
+python3 -c "import sys; sys.stdout.write('A' * 36)" > "$WORK/frame-input.txt"
+set +e
+{ timeout 2 "$STRING_OVERFLOW_ELF" < "$WORK/frame-input.txt" \
+    > "$WORK/frame-output.txt"; } 2>/dev/null
+STRING_OVERFLOW_STATUS=$?
+set -e
+[ "$STRING_OVERFLOW_STATUS" -ge 128 ]
+grep -Fq '保存的返回地址现在是: 0x41414141' "$WORK/frame-output.txt"
+grep -Fq '读完后，保存的 EBP 现在是: 0x41414141' "$WORK/frame-output.txt"
+
+FORMAT_STRING_LAB="$ROOT/vm/labs/pwnhub/vuln-format-string-01"
+FORMAT_STRING_ELF="$FORMAT_STRING_LAB/greeter"
+chmod +x "$FORMAT_STRING_ELF"
+[ "$(sha256sum "$FORMAT_STRING_ELF" | cut -d ' ' -f 1)" = \
+    6d844f137c037eaa56736e7640048c04b21e69805abc645abb4ecf2d801da71e ]
+printf 'tom' | timeout 2 "$FORMAT_STRING_ELF" | grep -Fq '你好， tom!'
+FORMAT_STRING_ELEVENTH="$(printf '%s' '%x%x%x%x%x%x%x%x%x%x%x' \
+    | timeout 2 "$FORMAT_STRING_ELF" \
+    | awk '/你好，/ { sub(/^.*你好，[[:space:]]*/, ""); gsub(/[^ 0-9a-f]/, ""); n = split($0, words, /[[:space:]]+/); print words[11] }')"
+[ "$FORMAT_STRING_ELEVENTH" = 0badf00d ]
+
+RACE_CONDITION_LAB="$ROOT/vm/labs/pwnhub/vuln-race-condition-01"
+RACE_CONDITION_ELF="$RACE_CONDITION_LAB/bank"
+chmod +x "$RACE_CONDITION_ELF"
+[ "$(sha256sum "$RACE_CONDITION_ELF" | cut -d ' ' -f 1)" = \
+    a310eb2f9f8272aba2ef720ed8c259565325a2062cf156a3ec69b544ee1cbc10 ]
+mkdir -p "$WORK/race-home/vuln-race-condition-01"
+printf '1000' > "$WORK/race-home/vuln-race-condition-01/balance.txt"
+HOME="$WORK/race-home" timeout 10 "$RACE_CONDITION_ELF" 800 \
+    > "$WORK/race-single.txt"
+grep -Fq '取款成功: 800，余额剩余 200' "$WORK/race-single.txt"
+[ "$(cat "$WORK/race-home/vuln-race-condition-01/balance.txt")" = 200 ]
+rm -f "$WORK/race-home/vuln-race-condition-01/balance.txt" \
+    "$WORK/race-home/vuln-race-condition-01/ledger"
+printf '1000' > "$WORK/race-home/vuln-race-condition-01/balance.txt"
+HOME="$WORK/race-home" timeout 10 sh -c \
+    '"$1" 800 & "$1" 800 & wait' sh "$RACE_CONDITION_ELF" \
+    > "$WORK/race-double.txt"
+RACE_LEDGER_LINES=$(wc -l < "$WORK/race-home/vuln-race-condition-01/ledger")
+[ "$RACE_LEDGER_LINES" -eq 2 ]
+grep -Fqx '取出 800 成功' "$WORK/race-home/vuln-race-condition-01/ledger"
+[ "$(grep -c '^取出 800 成功$' "$WORK/race-home/vuln-race-condition-01/ledger")" -eq 2 ]
+[ "$(cat "$WORK/race-home/vuln-race-condition-01/balance.txt")" = 200 ]
+echo '  ✓ 六个 vuln 样本哈希与功能重放'
+
+echo '==> 锁定 i686 工具链逐字节重建比对'
+I686_CC="${I686_CC:-}"
+if [ -z "$I686_CC" ] && command -v i686-linux-gnu-gcc >/dev/null 2>&1; then
+    I686_CC="$(command -v i686-linux-gnu-gcc)"
+fi
+if [ -z "$I686_CC" ] && [ -x "$HOME/toolchains/ubuntu-i686/root/usr/bin/i686-linux-gnu-gcc" ]; then
+    I686_CC="$HOME/toolchains/ubuntu-i686/root/usr/bin/i686-linux-gnu-gcc"
+fi
+TOOLCHAIN_VERIFIED=0
+if [ -n "$I686_CC" ] && \
+    [ "$(LC_ALL=C "$I686_CC" --version 2>/dev/null | sed -n '1p')" = \
+    'i686-linux-gnu-gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0' ] && \
+    [ "$(sha256sum "$I686_CC" | cut -d ' ' -f 1)" = \
+    '441d893628701a7e11c5be38d7aa3d295d2c3560dc1a38d441e1626f8e7d7c21' ]; then
+    TOOLCHAIN_VERIFIED=1
+fi
+if [ "$TOOLCHAIN_VERIFIED" = 1 ]; then
+    TOOLCHAIN_LIB="$(CDPATH= cd -- "$(dirname -- "$I686_CC")/../.." && pwd)/usr/lib/x86_64-linux-gnu"
+    REBUILD_ARTIFACTS="$(python3 - "$ROOT/vm/binary-profile/assets.json" <<'PY'
+import json
+import os
+import sys
+
+profile = json.load(open(sys.argv[1], encoding='utf-8'))
+for artifact in profile['artifacts']:
+    if artifact.get('buildScript') == 'vm/binary-profile/build-pwn-lab.sh':
+        print(artifact['id'], os.path.basename(artifact['path']))
+PY
+)"
+    while read -r REBUILD_LAB REBUILD_BIN; do
+        [ -n "$REBUILD_LAB" ] || continue
+        env LD_LIBRARY_PATH="${TOOLCHAIN_LIB}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+            CC="$I686_CC" bash "$ROOT/vm/binary-profile/build-pwn-lab.sh" \
+            "$REBUILD_LAB" "$WORK/rebuild-$REBUILD_LAB" > "$WORK/rebuild-$REBUILD_LAB.txt"
+        cmp -s "$WORK/rebuild-$REBUILD_LAB" "$ROOT/vm/labs/pwnhub/$REBUILD_LAB/$REBUILD_BIN" || {
+            echo "rebuilt $REBUILD_LAB is not byte-identical to the audited sample" >&2
+            exit 1
+        }
+        echo "  ✓ $REBUILD_LAB 锁定工具链重建与已审计样本逐字节一致"
+    done <<EOF
+$REBUILD_ARTIFACTS
+EOF
+else
+    echo '  ⚠ 找不到锁定的 i686 交叉工具链，跳过逐字节重建比对' >&2
+    if [ "${BINARY_PROFILE_REQUIRE_TOOLCHAIN:-0}" = 1 ]; then
+        echo 'the locked i686 toolchain is required for this smoke test' >&2
+        exit 2
+    fi
+fi
+
+
 if command -v gdb >/dev/null 2>&1; then
     gdb_output="$WORK/gdb.txt"
     if ! LC_ALL=C gdb -nx --batch -q "$ELF" \
