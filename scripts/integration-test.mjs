@@ -319,6 +319,13 @@ async function main() {
       throw new Error(`lab-result 签名不符：${passed[1]} != ${expectedPassed}`)
     }
   })
+  await step('VM 内置 python 解释器冒烟(教学工具)', async () => {
+    send('python -c "print(\'py\', hex(255+1), 0x2a*2)"')
+    await waitFor(/py 0x100 84/, 20000, 'python 进制与算术输出')
+    send('python -c "import struct,hashlib;print(struct.pack(\'<I\',0x2a).hex(), hashlib.sha256(b\'ht\').digest().hex()[:8])"')
+    await waitFor(/2a000000 712dd58e/, 20000, 'struct 小端打包与 sha256 输出')
+  })
+
   await step('第 2 关：隐藏文件', async () => {
     goToLevel(2)
     await waitFor(/"level-ready","level":2,"sig":"[0-9a-f]{64}"\}/)

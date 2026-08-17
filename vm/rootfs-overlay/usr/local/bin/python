@@ -1,6 +1,0 @@
-#!/bin/sh
-# python 占位：精简实验环境不包含该命令
-set -u
-. "${HASHTEAM_LIB_DIR:-/etc/hashteam}/colors.sh"
-ht_warning "本环境没有 python。这是精简实验环境，输入 help 查看可用命令。"
-exit 127

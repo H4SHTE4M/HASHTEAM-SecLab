@@ -1366,11 +1366,22 @@ expect_eq "未知 help 主题退出码为 2" "$RC" "2"
 expect_contains "$OUT" "未知 help 主题给出下一步" "输入 help 查看可查询的命令和主题"
 
 echo "—— 占位命令 ——"
-for cmd in man nano python; do
+for cmd in man nano; do
     OUT=$(PATH="$STUB:$PATH" "$BUSYBOX" sh "$OVERLAY/usr/local/bin/$cmd" 2>&1) && RC=0 || RC=$?
     expect_eq "$cmd 退出码为 127" "$RC" "127"
     expect_contains "$OUT" "$cmd 提示输入 help" "输入 help"
 done
+
+echo "—— 内置 python(MicroPython htlab)——"
+PYBIN="$ROOT/vm/binary-tools/prebuilt/python"
+[ -x "$PYBIN" ] || { echo "缺少 $PYBIN" >&2; exit 1; }
+OUT=$("$PYBIN" -c 'print("py", hex(255+1), 0x2a*2)')
+expect_eq "python 进制与算术输出" "$OUT" "py 0x100 84"
+OUT=$("$PYBIN" -c 'import struct,hashlib;print(struct.pack("<I",0x2a).hex(), hashlib.sha256(b"ht").digest().hex()[:8])')
+expect_eq "python struct 打包与 sha256 输出" "$OUT" "2a000000 712dd58e"
+[ "$(sha256sum "$PYBIN" | cut -d ' ' -f 1)" = "$(sha256sum "$ROOT/vm/binary-tools/staged/python" | cut -d ' ' -f 1)" ] \
+    && expect_eq "python prebuilt 与 staged 审计副本一致" "ok" "ok" \
+    || expect_eq "python prebuilt 与 staged 审计副本一致" "mismatch" "ok"
 
 echo
 echo "—— 结果：$PASS 通过，$FAIL 失败 ——"

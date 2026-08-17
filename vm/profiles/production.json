@@ -24,6 +24,7 @@
   "binaryTools": [
     "readelf",
     "nm",
-    "objdump"
+    "objdump",
+    "python"
   ]
 }
