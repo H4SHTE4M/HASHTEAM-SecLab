@@ -12,6 +12,7 @@ import { useLabPreferences } from './useLabPreferences'
 import { COURSE } from '../modules/pwnhub/course'
 import {
   applyProgressSnapshot,
+  applySyncedProgress,
   completeLevel,
   completeLab,
   consumeProgressResetNotice,
@@ -52,7 +53,9 @@ function syncExternalProgress(event: StorageEvent): void {
   const external = parseProgressSnapshot(latestRaw, TOTAL_LEVELS)
   if (external === null) return
   // storage 事件只更新内存单例；不持久化，避免标签页间回写循环。
-  applyProgressSnapshot(state, external)
+  // 完成记录等数据字段同步，选关保留本地：本标签的界面跟随本地终端环境，
+  // 不能被其他标签的导航拽走（否则界面与终端脱关、通关结果无法归属）。
+  applySyncedProgress(state, external, TOTAL_LEVELS)
 }
 
 if (typeof window !== 'undefined') {

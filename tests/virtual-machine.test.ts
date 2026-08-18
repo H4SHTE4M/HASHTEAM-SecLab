@@ -631,6 +631,145 @@ describe('评分协议防伪与解锁门控', () => {
     await vm.dispose()
   })
 
+  it('稳态切关等待 guest 签名确认后才提交选关', async () => {
+    const { vm, controllers } = createTrackedVm()
+    const progress = useLabProgress()
+
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+    // 越过启动恢复窗口（首个 shell 提示符）
+    controllers[0].emit('guest@hashteam:~ $ ')
+    progress.complete(1, { path: 'challenge', hintsUsed: 0 })
+    progress.complete(2, { path: 'challenge', hintsUsed: 0 })
+
+    vm.gotoLevel(3)
+    // 命令已下发且回放了完成集，但 guest 尚未确认：界面选关不动
+    expect(controllers[0].sent).toContain('hashteamctl mark-completed 2\n')
+    expect(controllers[0].sent).toContain('goto:3')
+    expect(progress.state.currentLevel).toBe(1)
+
+    // guest 回签名 level-ready 后才提交选关
+    controllers[0].emit(levelReadyLine(3))
+    await vm.waitForProtocolIdle()
+    expect(progress.state.currentLevel).toBe(3)
+    await vm.dispose()
+  })
+
+  it('启动恢复等首个 shell 提示符出现后才下发（tty 切换会吞掉先到字节）', async () => {
+    const { vm, controllers } = createTrackedVm()
+    const progress = useLabProgress()
+    progress.complete(1, { path: 'challenge', hintsUsed: 0 })
+    progress.setLevel(2)
+
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+    // ready 后立即检查：恢复命令尚未下发（此时 shell 还没开始读输入）
+    expect(controllers[0].sent).not.toContain('goto:2')
+    expect(controllers[0].sent).not.toContain('hashteamctl mark-completed 1\n')
+
+    // 首个 shell 提示符出现 → 回放完成集并恢复到进度选关
+    controllers[0].emit('guest@hashteam:~ $ ')
+    expect(controllers[0].sent).toContain('hashteamctl mark-completed 1\n')
+    expect(controllers[0].sent).toContain('goto:2')
+    await vm.dispose()
+  })
+
+  it('稳态切实验同样等待 guest 确认后才提交选关', async () => {
+    const { vm, controllers } = createTrackedVm()
+    const progress = useLabProgress()
+
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+    controllers[0].emit('guest@hashteam:~ $ ')
+
+    vm.temporarilyUnlockLab('memory-addresses-01')
+    vm.gotoLab('memory-addresses-01')
+    expect(controllers[0].sent).toContain('goto-lab:memory-addresses-01')
+    expect(progress.state.currentLabId).toBe('foundations-terminal-01')
+
+    controllers[0].emit(labReadyLine('memory-addresses-01'))
+    await vm.waitForProtocolIdle()
+    expect(progress.state.currentLabId).toBe('memory-addresses-01')
+    await vm.dispose()
+  })
+
+  it('切关命令未获 guest 确认时给出终端提示且界面停留原关', async () => {
+    const { vm, controllers } = createTrackedVm()
+    const progress = useLabProgress()
+    const display: string[] = []
+    vm.onDisplay((data) => display.push(data))
+
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+    controllers[0].emit('guest@hashteam:~ $ ')
+    progress.complete(1, { path: 'challenge', hintsUsed: 0 })
+    progress.complete(2, { path: 'challenge', hintsUsed: 0 })
+
+    // 确认计时与验签无关，假定时器只驱动切关超时
+    vi.useFakeTimers()
+    try {
+      vm.gotoLevel(3)
+      expect(progress.state.currentLevel).toBe(1)
+      await vi.advanceTimersByTimeAsync(8_100)
+      expect(progress.state.currentLevel).toBe(1)
+      expect(display.join('')).toContain('关卡切换未生效')
+    } finally {
+      vi.useRealTimers()
+    }
+    await vm.dispose()
+  })
+
+  it('验签通过但与界面选关不符的 level-result 给出终端提示且不计入', async () => {
+    const { vm, controllers } = createTrackedVm()
+    const progress = useLabProgress()
+    const display: string[] = []
+    vm.onDisplay((data) => display.push(data))
+
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+    progress.complete(1, { path: 'challenge', hintsUsed: 0 })
+    progress.complete(2, { path: 'challenge', hintsUsed: 0 })
+    progress.setLevel(3)
+
+    // 脱钩状态：界面在第 3 关，终端实际仍在第 2 关并重新通过 check
+    controllers[0].emit(passedLine(2))
+    await vm.waitForProtocolIdle()
+    expect(display.join('')).toContain('结果未计入')
+    expect(telemetryMocks.trackCheckResult).not.toHaveBeenCalled()
+    await vm.dispose()
+  })
+
+  it('验签通过但与界面选关不符的 lab-result 给出终端提示且不计入', async () => {
+    const { vm, controllers } = createTrackedVm()
+    const progress = useLabProgress()
+    const display: string[] = []
+    vm.onDisplay((data) => display.push(data))
+
+    await vm.boot()
+    controllers[0].emit(readyLine())
+    await vm.waitForProtocolIdle()
+
+    vm.temporarilyUnlockLab('memory-addresses-01')
+    vm.gotoLab('memory-addresses-01')
+    controllers[0].emit(labReadyLine('memory-addresses-01'))
+    await vm.waitForProtocolIdle()
+    expect(progress.state.currentLabId).toBe('memory-addresses-01')
+
+    // 界面被拽回数字关卡，终端仍停在原实验并通过 check
+    progress.setLevel(1)
+    controllers[0].emit(labPassedLine('memory-addresses-01'))
+    await vm.waitForProtocolIdle()
+    expect(progress.state.completedLabIds).not.toContain('memory-addresses-01')
+    expect(display.join('')).toContain('结果未计入')
+    expect(telemetryMocks.trackActivityCheck).not.toHaveBeenCalled()
+    await vm.dispose()
+  })
+
   it('dispose 之后可以重新 boot（bootPromise 不残留）', async () => {
     const { vm, controllers } = createTrackedVm()
 

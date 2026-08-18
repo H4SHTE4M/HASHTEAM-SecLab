@@ -70,6 +70,14 @@ export function detectVmCacheState(
 }
 
 const DEFAULT_READY_TIMEOUT_MS = 60_000
+/** 稳态切关等待 guest 签名确认（level-ready/lab-ready）的最长时间 */
+const NAVIGATION_CONFIRM_TIMEOUT_MS = 8_000
+/**
+ * guest 登录 shell 提示符（与 scripts/integration-test.mjs 的 GUEST_PROMPT 同源）。
+ * init 先签发 ready 再 setsid cttyhack 启动 shell，tty 切换会吞掉 ready 后先到
+ * 的串口字节；启动期的进度恢复命令必须等首个提示符出现（shell 开始读输入）。
+ */
+const SHELL_PROMPT_PATTERN = /guest@hashteam(?:\x1b\[[0-9;]*m)*:(?:\x1b\[[0-9;]*m)*/
 
 export interface VirtualMachineOptions {
   /** 控制器工厂可注入，便于验证失败重试、监听释放等生命周期行为。 */
@@ -145,6 +153,13 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
   /** 当前页面会话临时放行的实验；不进入进度存储，也不参与完成判定。 */
   const temporarilyUnlockedLabIds = new Set<string>()
   let bootStartedAt = 0
+  /** 已下发串口、仍在等待 guest 签名确认的稳态切关；确认前不提交进度选关。 */
+  let pendingNavigation: { kind: 'level' | 'lab'; target: number | string; timer: number } | null =
+    null
+  /** ready 已到但首个 shell 提示符未出现：进度恢复命令推迟到提示符后下发 */
+  let bootRestorePending = false
+  /** 提示符匹配的滚动尾缓冲（提示符可能横跨多个串口数据块） */
+  let promptTail = ''
 
   function isActiveOwner(owner: VirtualMachineOwner, seenOwnerGeneration?: number): boolean {
     return (
@@ -195,6 +210,35 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     return stage.value === 'ready'
   }
 
+  function cancelNavigationConfirmation(): void {
+    if (pendingNavigation === null) return
+    window.clearTimeout(pendingNavigation.timer)
+    pendingNavigation = null
+  }
+
+  /** guest 回了签名 level-ready/lab-ready：切关确认到达，撤销失败计时。 */
+  function confirmNavigation(kind: 'level' | 'lab', target: number | string): void {
+    if (pendingNavigation?.kind !== kind || pendingNavigation.target !== target) return
+    cancelNavigationConfirmation()
+  }
+
+  /**
+   * 稳态切关改为「确认后提交」：命令被前台交互程序（如 python REPL）吞掉或
+   * guest 执行失败时不会有确认消息；超时给出终端提示，界面选关保持原关，
+   * 避免界面与终端脱钩。
+   */
+  function armNavigationConfirmation(kind: 'level' | 'lab', target: number | string): void {
+    cancelNavigationConfirmation()
+    const timer = window.setTimeout(() => {
+      pendingNavigation = null
+      emitDisplay(
+        '\r\n\x1b[33m关卡切换未生效：终端环境正忙或没有响应。\x1b[0m\r\n' +
+          '\x1b[33m请退出终端里的前台程序（如 python、cat）后重新选择关卡。\x1b[0m\r\n',
+      )
+    }, NAVIGATION_CONFIRM_TIMEOUT_MS)
+    pendingNavigation = { kind, target, timer }
+  }
+
   /**
    * 释放当前会话。控制器先从当前代际摘除，再把 stop 串到释放屏障；
    * 后续 boot 必须等所有旧 stop 完成，避免连续 restart 遗留并行 v86。
@@ -202,6 +246,9 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
   async function releaseCurrentVm(): Promise<void> {
     generation += 1
     clearReadyTimer()
+    cancelNavigationConfirmation()
+    bootRestorePending = false
+    promptTail = ''
     sessionKey = null
     readySeen = false
 
@@ -318,17 +365,10 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
           )
         }
         stage.value = 'ready'
-        syncCompletionToVm(progress.state.completedLevels, progress.state.completedLabIds)
-        const currentLab = getCourseLab(progress.state.currentLabId)
-        if (currentLab?.legacyLevel !== undefined) {
-          syncTemporaryUnlockToVm(currentLab)
-          void controller?.restoreLevel(currentLab.legacyLevel)
-        } else if (currentLab !== undefined) {
-          syncTemporaryUnlockToVm(currentLab)
-          void controller?.restoreLab(currentLab.labId)
-        } else {
-          void controller?.restoreLevel(progress.state.currentLevel)
-        }
+        // 进度恢复推迟到首个 shell 提示符：init 先签 ready 再 setsid cttyhack
+        // 启动登录 shell，tty 切换会吞掉 ready 后立即下发的串口字节（实测
+        // mark-completed 丢失导致 guest 解锁检查拒绝 goto，界面与终端脱关）。
+        bootRestorePending = true
         break
       }
       case 'level-ready': {
@@ -349,12 +389,12 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
           log('protocol', `忽略未解锁关卡的 level-ready（第 ${message.level} 关）`, 'warn')
           break
         }
+        confirmNavigation('level', message.level)
         progress.setLevel(message.level)
         break
       }
       case 'level-result': {
-        // 只接受当前关卡的通过消息，避免迟到或异常协议改写其他关卡进度。
-        if (message.status !== 'passed' || message.level !== progress.state.currentLevel) break
+        if (message.status !== 'passed') break
         const resultVerified =
           sessionKey !== null &&
           message.sig !== undefined &&
@@ -366,6 +406,22 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
         if (messageGeneration !== generation) return
         if (!resultVerified) {
           log('protocol', `忽略未通过验签的 level-result（第 ${message.level} 关）`, 'warn')
+          break
+        }
+        // 验签通过但关卡与界面选关不符：终端环境已被拽离界面所在关（如 guest 内
+        // 手动 goto 或跨标签重置钳制）。结果真实却无法归属当前关，给出可见提示
+        // 而非静默丢弃——用户据此可知通关为何没有记录。
+        if (message.level !== progress.state.currentLevel) {
+          log(
+            'protocol',
+            `第 ${message.level} 关的通过结果与界面当前关（${progress.state.currentLevel}）不一致，未计入`,
+            'warn',
+          )
+          emitDisplay(
+            `\r\n\x1b[33m第 ${message.level} 关已在终端环境中通过，但界面当前停留在第 ` +
+              `${progress.state.currentLevel} 关，结果未计入。\x1b[0m\r\n` +
+              '\x1b[33m请在左侧选择终端实际所在的关卡（环境会重建），再运行一次 check。\x1b[0m\r\n',
+          )
           break
         }
         // 每次验证通过的 check 都计入正确率（与首次通关统计独立，不去重）
@@ -413,12 +469,13 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
           log('protocol', `忽略未解锁实验的 lab-ready（${message.labId}）`, 'warn')
           break
         }
+        confirmNavigation('lab', message.labId)
         progress.setLab(message.labId)
         debuggerState.value = 'idle'
         break
       }
       case 'lab-result': {
-        if (message.status !== 'passed' || message.labId !== progress.state.currentLabId) break
+        if (message.status !== 'passed') break
         const lab = getCourseLab(message.labId)
         if (lab === undefined || lab.legacyLevel !== undefined) break
         const resultVerified =
@@ -432,6 +489,19 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
         if (messageGeneration !== generation) return
         if (!resultVerified) {
           log('protocol', `忽略未通过验签的 lab-result（${message.labId}）`, 'warn')
+          break
+        }
+        // 与 level-result 同理：验签通过但实验与界面选关不符时给出可见提示。
+        if (message.labId !== progress.state.currentLabId) {
+          log(
+            'protocol',
+            `实验 ${message.labId} 的通过结果与界面当前实验（${progress.state.currentLabId}）不一致，未计入`,
+            'warn',
+          )
+          emitDisplay(
+            `\r\n\x1b[33m实验「${lab.title}」已在终端环境中通过，但界面当前停留在其他实验，结果未计入。\x1b[0m\r\n` +
+              '\x1b[33m请在左侧选择终端实际所在的实验（环境会重建），再运行一次 check。\x1b[0m\r\n',
+          )
           break
         }
         getTelemetry().trackActivityCheck(message.labId, true)
@@ -511,6 +581,8 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     clearBootLog()
     stage.value = 'loading-assets'
     debuggerState.value = 'idle'
+    bootRestorePending = false
+    promptTail = ''
     log('stage', '阶段：loading-assets')
     bootStartedAt = Date.now()
 
@@ -524,7 +596,17 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     if (terminalSize !== null) nextController.setTerminalSize?.(terminalSize.cols, terminalSize.rows)
     protocol = useSerialProtocol(nextController)
     protocol.onDisplay((data) => {
-      if (generation === currentGeneration) emitDisplay(data)
+      if (generation !== currentGeneration) return
+      emitDisplay(data)
+      // 启动恢复等待首个 shell 提示符（guest 开始读输入的标志）
+      if (bootRestorePending) {
+        promptTail = (promptTail + data).slice(-512)
+        if (SHELL_PROMPT_PATTERN.test(promptTail)) {
+          bootRestorePending = false
+          promptTail = ''
+          runBootRestore()
+        }
+      }
     })
     // 验签是异步的：消息按到达顺序入队串行处理，保持 ready → level-ready 的时序
     protocol.onMessage((message) => {
@@ -661,6 +743,29 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     sendSerial('\x15')
   }
 
+  /**
+   * 首个 shell 提示符出现后执行的启动恢复：回放完成集与临时解锁，再把环境
+   * 切到进度选关。读取执行时刻的最新进度——恢复等待期间用户的选关点击
+   * 会被采纳。同样武装确认计时：guest 拒绝恢复（如部署后实验已下架）时
+   * 给出终端提示而不是无声脱关。
+   */
+  function runBootRestore(): void {
+    syncCompletionToVm(progress.state.completedLevels, progress.state.completedLabIds)
+    const currentLab = getCourseLab(progress.state.currentLabId)
+    if (currentLab?.legacyLevel !== undefined) {
+      syncTemporaryUnlockToVm(currentLab)
+      armNavigationConfirmation('level', currentLab.legacyLevel)
+      void controller?.restoreLevel(currentLab.legacyLevel)
+    } else if (currentLab !== undefined) {
+      syncTemporaryUnlockToVm(currentLab)
+      armNavigationConfirmation('lab', currentLab.labId)
+      void controller?.restoreLab(currentLab.labId)
+    } else {
+      armNavigationConfirmation('level', progress.state.currentLevel)
+      void controller?.restoreLevel(progress.state.currentLevel)
+    }
+  }
+
   function interruptForeground(): void {
     sendSerial('\x03')
   }
@@ -670,8 +775,19 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     debuggerState.value = 'idle'
     const lab = getCourseLab(legacyLabId(level))
     if (lab !== undefined) syncTemporaryUnlockToVm(lab)
-    progress.setLevel(level)
-    void controller?.restoreLevel(level)
+    if (stage.value !== 'ready' || controller === null || bootRestorePending) {
+      // 启动中/未启动/错误态/启动恢复窗口（ready 已到、shell 提示符未出）：
+      // 直接提交选关——提示符出现时的启动恢复会按最新进度重建环境。
+      progress.setLevel(level)
+      void controller?.restoreLevel(level)
+      return
+    }
+    // 稳态切换确认后提交：guest 回签名 level-ready 才移动界面选关（见
+    // level-ready 分支）。先把最新完成集回放给 guest，避免跨标签刚完成的
+    // 关卡在 guest 侧尚未解锁导致 goto 被拒。
+    syncCompletionToVm(progress.state.completedLevels, progress.state.completedLabIds)
+    armNavigationConfirmation('level', level)
+    void controller.restoreLevel(level)
   }
 
   function gotoLab(labId: string): void {
@@ -683,8 +799,14 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
     }
     debuggerState.value = 'idle'
     syncTemporaryUnlockToVm(lab)
-    progress.setLab(labId)
-    void controller?.restoreLab(labId)
+    if (stage.value !== 'ready' || controller === null || bootRestorePending) {
+      progress.setLab(labId)
+      void controller?.restoreLab(labId)
+      return
+    }
+    syncCompletionToVm(progress.state.completedLevels, progress.state.completedLabIds)
+    armNavigationConfirmation('lab', labId)
+    void controller.restoreLab(labId)
   }
 
   function temporarilyUnlockLab(labId: string): void {
