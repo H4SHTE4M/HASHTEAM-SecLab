@@ -426,6 +426,69 @@ describe('lab-progress（基于 localStorage）', () => {
     setItem.mockRestore()
   })
 
+  it('storage 外部更新同步完成记录，但不拽走本地选关（界面跟随本地终端）', () => {
+    const singleton = useLabProgress()
+    singleton.resetAll()
+    singleton.complete(1, GUIDED_COMPLETION)
+    singleton.setLevel(2)
+
+    // 另一标签完成 2、3 并导航到第 4 关
+    const externalTab = loadProgress(window.localStorage, TOTAL)
+    completeLevel(window.localStorage, externalTab, 2, GUIDED_COMPLETION)
+    completeLevel(window.localStorage, externalTab, 3, GUIDED_COMPLETION)
+    setCurrentLevel(window.localStorage, externalTab, 4)
+
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: PROGRESS_STORAGE_KEY,
+        newValue: window.localStorage.getItem(PROGRESS_STORAGE_KEY),
+        storageArea: window.localStorage,
+      }),
+    )
+
+    // 完成记录同步进来，但选关保持本地——本标签的终端仍运行在第 2 关
+    expect(singleton.state.completedLevels).toEqual([1, 2, 3])
+    expect(singleton.state.currentLevel).toBe(2)
+  })
+
+  it('另一标签重置全部进度后，本地选关按收缩后的完成集钳制', () => {
+    const singleton = useLabProgress()
+    singleton.resetAll()
+    for (const level of [1, 2, 3]) singleton.complete(level, GUIDED_COMPLETION)
+    singleton.setLevel(4)
+
+    resetAllProgress(window.localStorage)
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: PROGRESS_STORAGE_KEY,
+        newValue: window.localStorage.getItem(PROGRESS_STORAGE_KEY),
+        storageArea: window.localStorage,
+      }),
+    )
+
+    expect(singleton.state.completedLevels).toEqual([])
+    expect(singleton.state.currentLevel).toBe(1)
+    expect(singleton.state.currentLabId).toBe('foundations-terminal-01')
+  })
+
+  it('本地写入采纳较新落盘快照的数据字段，选关仍保持本地', () => {
+    const singleton = useLabProgress()
+    singleton.resetAll()
+    singleton.complete(1, GUIDED_COMPLETION)
+    singleton.setLevel(2)
+
+    // 另一标签推进到第 4 关；storage 事件丢失，本地尚未同步
+    const externalTab = loadProgress(window.localStorage, TOTAL)
+    completeLevel(window.localStorage, externalTab, 2, GUIDED_COMPLETION)
+    completeLevel(window.localStorage, externalTab, 3, GUIDED_COMPLETION)
+    setCurrentLevel(window.localStorage, externalTab, 4)
+
+    // 本地任何一次进度写入都会先采纳较新快照
+    expect(singleton.useHint(2)).toBe(1)
+    expect(singleton.state.completedLevels).toEqual([1, 2, 3])
+    expect(singleton.state.currentLevel).toBe(2)
+  })
+
   it('损坏的存档不会导致异常，直接从头开始', () => {
     window.localStorage.setItem(PROGRESS_STORAGE_KEY, '{{{broken json')
     const p = loadProgress(window.localStorage, TOTAL)

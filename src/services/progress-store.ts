@@ -379,6 +379,38 @@ export function applyProgressSnapshot(target: LabProgress, source: LabProgress):
   target.updatedAt = source.updatedAt
 }
 
+/**
+ * 选关越界钳制：完成集收缩（如另一标签重置全部进度）后，本地选关可能超出
+ * 可解锁范围；钳回上限并保持 legacy 选关对（currentLevel/currentLabId）一致。
+ * 与 isValidProgress 的上限规则一致：currentLevel ≤ 已完成数 + 1。
+ */
+function clampSelectionToCompletion(progress: LabProgress, totalLevels: number): void {
+  const maxLevel = Math.min(progress.completedLevels.length + 1, totalLevels)
+  if (progress.currentLevel <= maxLevel) return
+  const previousLevel = progress.currentLevel
+  progress.currentLevel = maxLevel
+  if (progress.currentLabId === legacyLabId(previousLevel)) {
+    progress.currentLabId = legacyLabId(maxLevel)
+  }
+}
+
+/**
+ * 把外部快照（storage 事件、写前读到的较新落盘档）套用到内存单例：
+ * 完成记录等数据字段全部采纳，但选关保留本地——本标签的界面必须跟随本地
+ * 终端环境，不能被其他标签的导航拽走；仅当完成集收缩使本地选关越界时钳制。
+ */
+export function applySyncedProgress(
+  target: LabProgress,
+  source: LabProgress,
+  totalLevels: number,
+): void {
+  const { currentLevel, currentLabId } = target
+  applyProgressSnapshot(target, source)
+  target.currentLevel = currentLevel
+  target.currentLabId = currentLabId
+  clampSelectionToCompletion(target, totalLevels)
+}
+
 function cloneProgress(progress: LabProgress): LabProgress {
   const clone = createDefaultProgress(progress.startedAt)
   applyProgressSnapshot(clone, progress)
@@ -490,15 +522,18 @@ function mergeProgressSnapshots(
 }
 
 function syncBeforeMutation(storage: StorageLike, progress: LabProgress): void {
+  const totalLevels = storageTotalLevels.get(storage)
+  if (totalLevels === undefined) return
   const stored = readCurrentProgress(storage)
   if (stored === null) return
-  // 每个公开操作都会先同步、再只修改本次目标字段。较新的落盘快照必须整体优先，
-  // 否则旧标签的旧 attempt 字段会在操作其他实验时通过并集合并复活。
+  // 每个公开操作都会先同步、再只修改本次目标字段。较新的落盘快照的数据字段
+  // 必须整体优先，否则旧标签的旧 attempt 字段会在操作其他实验时通过并集合并
+  // 复活；选关除外——始终保留本地，其他标签不能把本标签界面拽离终端所在关。
   const next =
     stored.startedAt > progress.startedAt || stored.updatedAt > progress.updatedAt
       ? stored
       : mergeProgressSnapshots(progress, stored)
-  applyProgressSnapshot(progress, next)
+  applySyncedProgress(progress, next, totalLevels)
 }
 
 function persistProgress(
@@ -506,6 +541,7 @@ function persistProgress(
   progress: LabProgress,
   options: PersistProgressOptions = {},
 ): void {
+  const totalLevels = storageTotalLevels.get(storage)
   const stored = options.replace ? null : readCurrentProgress(storage)
   const next =
     stored === null
@@ -514,8 +550,14 @@ function persistProgress(
         ? cloneProgress(stored)
         : mergeProgressSnapshots(progress, stored, options)
   next.updatedAt = Math.max(Date.now(), next.updatedAt + 1, (stored?.updatedAt ?? 0) + 1)
-  applyProgressSnapshot(progress, next)
-  storage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progress))
+  // 落盘内容沿用既有规则（仅导航通过 keepLocalSelection 导出选关）；内存单例的
+  // 选关始终保留本地，防止其他标签的选关借回写把本标签界面拽离终端所在关。
+  if (totalLevels === undefined) {
+    applyProgressSnapshot(progress, next)
+  } else {
+    applySyncedProgress(progress, next, totalLevels)
+  }
+  storage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(next))
 }
 
 function mapLegacyRecord<T>(record: Record<number, T>): Record<string, T> {
