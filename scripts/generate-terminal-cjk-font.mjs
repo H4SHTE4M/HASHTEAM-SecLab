@@ -7,11 +7,12 @@
  * 塞进两格会被 xterm 用 letter-spacing 补差，每字多出约 17% 空隙，中文看起来是散开的。
  *
  * 这里不新增任何字体文件：直接复用已打包的 Noto Sans SC Variable 分片，另起一个
- * font-family 名字并加上 `size-adjust: 117.1875%`，让字形和 advance 一起放大到正好
- * 填满两格。size-adjust 只影响这个新 family，UI 用的 'Noto Sans SC Variable' 不受影响。
+ * font-family 名字并加上 size-adjust，让字形和 advance 一起放大到接近两格宽度。
+ * size-adjust 只影响这个新 family，UI 用的 'Noto Sans SC Variable' 不受影响。
+ * 具体比例见下面 SIZE_ADJUST 的说明。
  *
  * 只保留 East Asian Wide 区间：`·—…“”×÷°→` 这类 Ambiguous 宽度字符在 xterm 的
- * wcwidth 里算 1 列，若被放大 17% 会溢出格子，它们交给 CaskaydiaCove（已全部覆盖）。
+ * wcwidth 里算 1 列，跟着放大会溢出格子，它们交给 CaskaydiaCove（已全部覆盖）。
  *
  * 用法：node scripts/generate-terminal-cjk-font.mjs
  */
@@ -22,8 +23,25 @@ const SOURCE_CSS = 'src/assets/fonts/noto-sans-sc/index.css'
 const OUTPUT_CSS = 'src/styles/terminal-cjk-font.css'
 const FAMILY = 'Noto Sans SC Terminal'
 
-// CaskaydiaCove 两格宽度，用作放大比例
-const SIZE_ADJUST = ((2 * 1200) / 2048) * 100
+/**
+ * 中文放大比例。
+ *
+ * 上限是 117.1875%（= 2 × 1200/2048），此时字形正好填满两格、一点余量都没有——
+ * 实拍下来偏大且发挤，字与字几乎贴在一起。下限是 100%（原始大小），此时每字空出
+ * 17% 的格子，中文明显散开。
+ *
+ * 110% 是实拍比对后选的折中：字号收回来一些，每字留约 1px 的呼吸位（14px 字号下
+ * 字形 15.41px、格子 16.41px），既不挤也不散。要改的话只动这个数再重新生成即可，
+ * 对齐不受影响——差额由 xterm 的网格校正吸收。
+ *
+ * 注意不能超过 117.1875%，否则字形会溢出格子和相邻字重叠。
+ */
+const SIZE_ADJUST = 110
+
+const MAX_SIZE_ADJUST = ((2 * 1200) / 2048) * 100
+if (SIZE_ADJUST > MAX_SIZE_ADJUST) {
+  throw new Error(`SIZE_ADJUST ${SIZE_ADJUST}% 超过两格宽度 ${MAX_SIZE_ADJUST}%，字形会溢出单元格`)
+}
 
 // 明确全角（East Asian Wide / Fullwidth），不含 Ambiguous
 const WIDE_RANGES = [
@@ -108,9 +126,9 @@ for (const [, file, format, range] of blocks) {
 const header =
   `/* 本文件由 scripts/generate-terminal-cjk-font.mjs 生成，请勿手改。\n` +
   `   终端中文专用字体族：复用已打包的 Noto Sans SC Variable 分片（不新增任何字体文件），\n` +
-  `   通过 size-adjust: ${SIZE_ADJUST}% 把字形放大到正好填满 CaskaydiaCove 的两个单元格\n` +
-  `   （2 × 1200/2048 em）。不放大的话 1.0em 的汉字塞进 1.171875em 的两格里，会被 xterm\n` +
-  `   的网格校正拉开约 17% 字间距。\n` +
+  `   通过 size-adjust: ${SIZE_ADJUST}% 把字形放大，贴近 CaskaydiaCove 两个单元格的宽度\n` +
+  `   （上限 117.1875% = 2 × 1200/2048 em，那是正好填满、没有余量的极限）。不放大的话\n` +
+  `   1.0em 的汉字塞进 1.171875em 的两格里，会被 xterm 的网格校正拉开约 17% 字间距。\n` +
   `   只覆盖 East Asian Wide 区间；·—…“”×÷°→ 等 Ambiguous 宽度字符在 xterm 里算 1 列，\n` +
   `   交给 CaskaydiaCove 提供，不能跟着放大。 */\n\n`
 
