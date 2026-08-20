@@ -267,6 +267,43 @@ describe('responsive layout contract', () => {
     }
   })
 
+  it('keeps the global letter-spacing reset away from xterm so the cell grid stays aligned', () => {
+    const globalCss = source('src/styles/global.css')
+
+    // xterm 的 DOM renderer 靠给每个 span 写内联 letter-spacing 把字形宽度校正回单元格
+    // 网格；作者样式表里的 !important 优先级高于内联样式，一旦用 `*` 盖住终端内部，
+    // 校正就被丢弃，选区/光标会逐列偏移并盖住文字。
+    const letterSpacingRules = [
+      ...globalCss
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .matchAll(/([^{}]+)\{[^{}]*letter-spacing:[^;}]*!important[^;}]*[;}]/g),
+    ].map((match) => match[1].trim())
+
+    expect(letterSpacingRules.length).toBeGreaterThan(0)
+    for (const selector of letterSpacingRules) {
+      expect(selector, `选择器 ${selector} 会把 letter-spacing 强制盖到 xterm 上`).toContain(
+        ':not(.xterm, .xterm *)',
+      )
+    }
+  })
+
+  it('re-measures the terminal cell grid after the web fonts finish loading', () => {
+    // CharSizeService 只在 Terminal.open() 时量一次，之后没有任何字体加载监听。
+    // 组件在 onMounted 里建终端，此时 @font-face 还没下载完，量到的是系统兜底等宽字体
+    // （约 0.6em），而实际绘制用的是 Sarasa Term SC（0.5em）——网格和字形对不上。
+    const metrics = source('src/composables/useTerminalMetrics.ts')
+    expect(metrics).toContain('document.fonts.load')
+
+    for (const path of [
+      'src/components/LabTerminal.vue',
+      'src/components/PwnHubLabTerminal.vue',
+    ]) {
+      const terminal = source(path)
+      expect(terminal, path).toContain('loadTerminalFonts(terminalFontFamily, props.fontSize)')
+      expect(terminal, path).toContain('remeasureTerminal(terminal)')
+    }
+  })
+
   it('measures terminal rows inside the padded frame without clipping the last row', () => {
     const terminal = source('src/components/LabTerminal.vue')
 
