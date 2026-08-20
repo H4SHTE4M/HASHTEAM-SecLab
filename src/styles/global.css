@@ -191,9 +191,17 @@
 }
 
 * {
-  letter-spacing: 0 !important;
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+/* 全局禁用字间距，但必须放过 xterm 内部：DOM renderer 会给每个 span 写内联
+   letter-spacing，把字形实际宽度校正回单元格网格宽度（见 DomRendererRowFactory
+   的 `spacing = width * cellWidth - widthCache.get(...)`）。作者样式表里的
+   !important 优先级高于内联样式，一旦把 xterm 的 span 一起盖掉，这条校正就被
+   丢弃，字形与选区/光标网格逐列错开。 */
+*:not(.xterm, .xterm *) {
+  letter-spacing: 0 !important;
 }
 
 *,
