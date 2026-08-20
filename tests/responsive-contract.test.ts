@@ -267,6 +267,45 @@ describe('responsive layout contract', () => {
     }
   })
 
+  it('keeps every terminal character on exactly one grid cell', () => {
+    const globalCss = source('src/styles/global.css')
+    const terminalCjkCss = source('src/styles/terminal-cjk-font.css')
+
+    // 单元格宽度取决于字体栈里**第一个**有该字形的字体，也就是 CaskaydiaCove 的拉丁
+    // advance。终端 CJK 族靠 size-adjust 放大到正好填满两格，顺序换了前提就没了。
+    const stack = globalCss.match(/--font-terminal:\s*([^;]+);/)?.[1].replace(/\s+/g, ' ')
+    if (stack === undefined) throw new Error('Missing --font-terminal')
+    const caskaydiaAt = stack.indexOf('CaskaydiaCove Nerd Font Mono')
+    const cjkAt = stack.indexOf('Noto Sans SC Terminal')
+    expect(caskaydiaAt, '字体栈缺少 CaskaydiaCove').toBeGreaterThanOrEqual(0)
+    expect(cjkAt, '字体栈缺少 Noto Sans SC Terminal').toBeGreaterThanOrEqual(0)
+    expect(caskaydiaAt, 'CaskaydiaCove 必须排在 CJK 族之前').toBeLessThan(cjkAt)
+
+    // 放大比例必须正好是 CaskaydiaCove 的两格
+    const expected = `${((2 * 1200) / 2048) * 100}%`
+    expect(terminalCjkCss).toContain(`size-adjust: ${expected}`)
+    expect(terminalCjkCss).toContain('/files/noto-sans-sc-')
+    expect(source('src/main.ts')).toContain("import './styles/terminal-cjk-font.css'")
+
+    // Chrome 默认会压缩相邻 CJK 标点，既改渲染也污染 xterm 的宽度测量
+    expect(globalCss).toMatch(/\.xterm\s*\{[^}]*text-spacing-trim:\s*space-all/)
+  })
+
+  it('re-measures the terminal when a lazily-loaded CJK subset arrives', () => {
+    // 中文分片按需下载，WidthCache 会把分片到位前的兜底宽度永久缓存下来。
+    const metrics = source('src/composables/useTerminalMetrics.ts')
+    expect(metrics).toContain("addEventListener('loadingdone'")
+
+    for (const path of [
+      'src/components/LabTerminal.vue',
+      'src/components/PwnHubLabTerminal.vue',
+    ]) {
+      const terminal = source(path)
+      expect(terminal, path).toContain('watchFontLoads(')
+      expect(terminal, path).toContain('stopFontWatch?.()')
+    }
+  })
+
   it('keeps the global letter-spacing reset away from xterm so the cell grid stays aligned', () => {
     const globalCss = source('src/styles/global.css')
 
