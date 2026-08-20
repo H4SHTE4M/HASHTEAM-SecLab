@@ -281,9 +281,18 @@ describe('responsive layout contract', () => {
     expect(cjkAt, '字体栈缺少 Noto Sans SC Terminal').toBeGreaterThanOrEqual(0)
     expect(caskaydiaAt, 'CaskaydiaCove 必须排在 CJK 族之前').toBeLessThan(cjkAt)
 
-    // 放大比例必须正好是 CaskaydiaCove 的两格
-    const expected = `${((2 * 1200) / 2048) * 100}%`
-    expect(terminalCjkCss).toContain(`size-adjust: ${expected}`)
+    // 放大比例可以按观感调，但绝不能超过两格宽度——超了字形会溢出格子、和邻字重叠。
+    // 低于 100% 则比原始字形还小，没有意义。
+    const maxAdjust = ((2 * 1200) / 2048) * 100
+    const adjusts = [...terminalCjkCss.matchAll(/size-adjust:\s*([\d.]+)%/g)].map((m) =>
+      Number(m[1]),
+    )
+    expect(adjusts.length).toBeGreaterThan(0)
+    for (const value of adjusts) {
+      expect(value, `size-adjust ${value}% 超过两格宽度 ${maxAdjust}%`).toBeLessThanOrEqual(maxAdjust)
+      expect(value).toBeGreaterThanOrEqual(100)
+    }
+    expect(new Set(adjusts).size, '所有分片的 size-adjust 必须一致').toBe(1)
     expect(terminalCjkCss).toContain('/files/noto-sans-sc-')
     expect(source('src/main.ts')).toContain("import './styles/terminal-cjk-font.css'")
 
