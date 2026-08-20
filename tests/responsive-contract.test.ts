@@ -267,6 +267,91 @@ describe('responsive layout contract', () => {
     }
   })
 
+  it('keeps every terminal character on exactly one grid cell', () => {
+    const globalCss = source('src/styles/global.css')
+    const terminalCjkCss = source('src/styles/terminal-cjk-font.css')
+
+    // 单元格宽度取决于字体栈里**第一个**有该字形的字体，也就是 CaskaydiaCove 的拉丁
+    // advance。终端 CJK 族靠 size-adjust 放大到正好填满两格，顺序换了前提就没了。
+    const stack = globalCss.match(/--font-terminal:\s*([^;]+);/)?.[1].replace(/\s+/g, ' ')
+    if (stack === undefined) throw new Error('Missing --font-terminal')
+    const caskaydiaAt = stack.indexOf('CaskaydiaCove Nerd Font Mono')
+    const cjkAt = stack.indexOf('Noto Sans SC Terminal')
+    expect(caskaydiaAt, '字体栈缺少 CaskaydiaCove').toBeGreaterThanOrEqual(0)
+    expect(cjkAt, '字体栈缺少 Noto Sans SC Terminal').toBeGreaterThanOrEqual(0)
+    expect(caskaydiaAt, 'CaskaydiaCove 必须排在 CJK 族之前').toBeLessThan(cjkAt)
+
+    // 放大比例可以按观感调，但绝不能超过两格宽度——超了字形会溢出格子、和邻字重叠。
+    // 低于 100% 则比原始字形还小，没有意义。
+    const maxAdjust = ((2 * 1200) / 2048) * 100
+    const adjusts = [...terminalCjkCss.matchAll(/size-adjust:\s*([\d.]+)%/g)].map((m) =>
+      Number(m[1]),
+    )
+    expect(adjusts.length).toBeGreaterThan(0)
+    for (const value of adjusts) {
+      expect(value, `size-adjust ${value}% 超过两格宽度 ${maxAdjust}%`).toBeLessThanOrEqual(maxAdjust)
+      expect(value).toBeGreaterThanOrEqual(100)
+    }
+    expect(new Set(adjusts).size, '所有分片的 size-adjust 必须一致').toBe(1)
+    expect(terminalCjkCss).toContain('/files/noto-sans-sc-')
+    expect(source('src/main.ts')).toContain("import './styles/terminal-cjk-font.css'")
+
+    // Chrome 默认会压缩相邻 CJK 标点，既改渲染也污染 xterm 的宽度测量
+    expect(globalCss).toMatch(/\.xterm\s*\{[^}]*text-spacing-trim:\s*space-all/)
+  })
+
+  it('re-measures the terminal when a lazily-loaded CJK subset arrives', () => {
+    // 中文分片按需下载，WidthCache 会把分片到位前的兜底宽度永久缓存下来。
+    const metrics = source('src/composables/useTerminalMetrics.ts')
+    expect(metrics).toContain("addEventListener('loadingdone'")
+
+    for (const path of [
+      'src/components/LabTerminal.vue',
+      'src/components/PwnHubLabTerminal.vue',
+    ]) {
+      const terminal = source(path)
+      expect(terminal, path).toContain('watchFontLoads(')
+      expect(terminal, path).toContain('stopFontWatch?.()')
+    }
+  })
+
+  it('keeps the global letter-spacing reset away from xterm so the cell grid stays aligned', () => {
+    const globalCss = source('src/styles/global.css')
+
+    // xterm 的 DOM renderer 靠给每个 span 写内联 letter-spacing 把字形宽度校正回单元格
+    // 网格；作者样式表里的 !important 优先级高于内联样式，一旦用 `*` 盖住终端内部，
+    // 校正就被丢弃，选区/光标会逐列偏移并盖住文字。
+    const letterSpacingRules = [
+      ...globalCss
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .matchAll(/([^{}]+)\{[^{}]*letter-spacing:[^;}]*!important[^;}]*[;}]/g),
+    ].map((match) => match[1].trim())
+
+    expect(letterSpacingRules.length).toBeGreaterThan(0)
+    for (const selector of letterSpacingRules) {
+      expect(selector, `选择器 ${selector} 会把 letter-spacing 强制盖到 xterm 上`).toContain(
+        ':not(.xterm, .xterm *)',
+      )
+    }
+  })
+
+  it('re-measures the terminal cell grid after the web fonts finish loading', () => {
+    // CharSizeService 只在 Terminal.open() 时量一次，之后没有任何字体加载监听。
+    // 组件在 onMounted 里建终端，此时 @font-face 还没下载完，量到的是系统兜底等宽字体
+    // 而实际绘制用的是 CaskaydiaCove——两者 advance 不同，网格和字形对不上。
+    const metrics = source('src/composables/useTerminalMetrics.ts')
+    expect(metrics).toContain('document.fonts.load')
+
+    for (const path of [
+      'src/components/LabTerminal.vue',
+      'src/components/PwnHubLabTerminal.vue',
+    ]) {
+      const terminal = source(path)
+      expect(terminal, path).toContain('loadTerminalFonts(terminalFontFamily, props.fontSize)')
+      expect(terminal, path).toContain('remeasureTerminal(terminal)')
+    }
+  })
+
   it('measures terminal rows inside the padded frame without clipping the last row', () => {
     const terminal = source('src/components/LabTerminal.vue')
 
