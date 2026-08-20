@@ -4,6 +4,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { useTerminalShortcuts } from '../composables/useTerminalShortcuts'
+import { loadTerminalFonts, remeasureTerminal } from '../composables/useTerminalMetrics'
 
 const emit = defineEmits<{
   (e: 'input', data: string): void
@@ -155,7 +156,17 @@ onMounted(() => {
   resizeObserver.observe(container)
   window.addEventListener('resize', scheduleFit, { passive: true })
   window.visualViewport?.addEventListener('resize', scheduleFit, { passive: true })
-  document.fonts?.ready.then(scheduleFit).catch(() => undefined)
+  // 字体是异步加载的，而 xterm 只在 open() 时量一次单元格宽度、且没有任何字体加载监听。
+  // 必须等字体真正就绪后强制重量一次，否则网格会一直按系统兜底等宽字体的宽度排版，
+  // 而字形按 Sarasa 的宽度绘制，选区/光标就会逐列偏移并盖住文字。
+  void loadTerminalFonts(terminalFontFamily, props.fontSize)
+    .then(() => document.fonts?.ready)
+    .then(() => {
+      if (terminal === null) return
+      remeasureTerminal(terminal)
+      scheduleFit()
+    })
+    .catch(() => undefined)
 })
 
 onBeforeUnmount(() => {
