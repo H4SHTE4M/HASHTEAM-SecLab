@@ -49,6 +49,27 @@ export async function loadTerminalFonts(fontFamily: string, fontSize: number): P
  * `CharSizeService.measure()` 和 DomRenderer 的 `WidthCache.setFont()`（后者在字体串
  * 变化时会 clear()）。两次赋值在同一个任务里完成，中间不会绘制，不会闪烁。
  */
+/**
+ * 字体加载完成后重新测量。
+ *
+ * 终端中文来自 Noto Sans SC 的 88 个 unicode-range 分片，是**按需**下载的：某个字第一次
+ * 出现时才会去取它所在的分片。而 xterm 的 WidthCache 是按字符缓存宽度、且只有 setFont()
+ * 才会清——于是那一刻量到的是分片还没到位时的兜底宽度，并被永久缓存下来。结果是字形按
+ * 真实字体绘制、网格却按兜底宽度排，每个受影响的字都会偏。
+ *
+ * 单靠 `loadTerminalFonts()` 解决不了：它只能预加载探测字符所在的那几个分片。
+ * 所以这里监听 `document.fonts` 的 loadingdone，每有新分片到位就清缓存重量一次。
+ *
+ * 返回取消监听的函数。
+ */
+export function watchFontLoads(onFontsLoaded: () => void): () => void {
+  if (typeof document === 'undefined' || document.fonts === undefined) return () => undefined
+
+  const handler = (): void => onFontsLoaded()
+  document.fonts.addEventListener('loadingdone', handler)
+  return () => document.fonts.removeEventListener('loadingdone', handler)
+}
+
 export function remeasureTerminal(terminal: Terminal): void {
   const fontFamily = terminal.options.fontFamily
   if (fontFamily === undefined) return
