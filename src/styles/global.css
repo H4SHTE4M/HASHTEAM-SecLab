@@ -62,8 +62,11 @@
   --font-cjk: 'Noto Sans SC Variable', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-mono: 'JetBrains Mono Variable', 'SFMono-Regular', 'Cascadia Code',
     Consolas, 'Noto Sans Mono CJK SC', monospace;
-  --font-terminal: 'CaskaydiaCove Nerd Font Mono', 'JetBrains Mono Variable',
-    'Noto Sans SC Variable', monospace;
+  /* 'Noto Sans SC Terminal' 必须紧跟在 CaskaydiaCove 之后：单元格宽度由栈里第一个
+     有该字形的字体决定（CaskaydiaCove 的拉丁 advance），而这个 CJK 族被 size-adjust
+     放大到正好填满两格。顺序换了这个前提就不成立，中文会重新散开。 */
+  --font-terminal: 'CaskaydiaCove Nerd Font Mono', 'Noto Sans SC Terminal',
+    'JetBrains Mono Variable', 'Noto Sans SC Variable', monospace;
   --ease-standard: cubic-bezier(0.2, 0.75, 0.25, 1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --duration-fast: 140ms;
@@ -202,6 +205,15 @@
    丢弃，字形与选区/光标网格逐列错开。 */
 *:not(.xterm, .xterm *) {
   letter-spacing: 0 !important;
+}
+
+/* 终端是固定网格，每个字符必须老实占满自己的格子。Chrome 默认 text-spacing-trim: normal
+   会压缩相邻 CJK 标点之间的间距——正文排版这样是对的，终端不行。更要命的是它同时影响
+   xterm 的宽度测量：WidthCache 是用「该字符重复 32 次」来量单字宽度的，正好触发这个压缩，
+   于是 。、，等标点被缓存成约半宽（14px 字号下 8.44px 而非 16.41px），网格按半宽排、
+   字形按整宽画，标点后面的内容就整体偏出去。space-all 关掉压缩。 */
+.xterm {
+  text-spacing-trim: space-all;
 }
 
 *,

@@ -4,7 +4,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { useTerminalShortcuts } from '../composables/useTerminalShortcuts'
-import { loadTerminalFonts, remeasureTerminal } from '../composables/useTerminalMetrics'
+import { loadTerminalFonts, remeasureTerminal, watchFontLoads } from '../composables/useTerminalMetrics'
 
 const emit = defineEmits<{
   (e: 'input', data: string): void
@@ -25,6 +25,7 @@ let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
 let resizeObserver: ResizeObserver | null = null
 let resizeFrame: number | null = null
+let stopFontWatch: (() => void) | null = null
 
 const {
   isSearchOpen,
@@ -91,7 +92,7 @@ onMounted(() => {
 
   const terminalFontFamily =
     getComputedStyle(document.documentElement).getPropertyValue('--font-terminal').trim() ||
-    '"CaskaydiaCove Nerd Font Mono", "JetBrains Mono Variable", "Noto Sans SC Variable", monospace'
+    '"CaskaydiaCove Nerd Font Mono", "Noto Sans SC Terminal", "JetBrains Mono Variable", "Noto Sans SC Variable", monospace'
 
   terminal = new Terminal({
     fontFamily: terminalFontFamily,
@@ -158,6 +159,14 @@ onMounted(() => {
       scheduleFit()
     })
     .catch(() => undefined)
+
+  // 中文分片是按需下载的，每有新分片到位就得重量一次，否则 WidthCache 里会留下
+  // 分片到位前的兜底宽度，那些字会一直偏。
+  stopFontWatch = watchFontLoads(() => {
+    if (terminal === null) return
+    remeasureTerminal(terminal)
+    scheduleFit()
+  })
 })
 
 onBeforeUnmount(() => {
@@ -168,6 +177,8 @@ onBeforeUnmount(() => {
   resizeFrame = null
   resizeObserver?.disconnect()
   resizeObserver = null
+  stopFontWatch?.()
+  stopFontWatch = null
   terminal?.dispose()
   terminal = null
   fitAddon = null
