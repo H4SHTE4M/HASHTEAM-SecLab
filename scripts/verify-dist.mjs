@@ -16,6 +16,7 @@ const expectedAssets = {
 }
 const MAX_MAKERS_FILES = 20_000
 const MAX_MAKERS_FILE_SIZE = 25 * 1024 * 1024
+const STATIC_LLM_TALK_ROOT = 'talk/llm-2026'
 
 function fail(message) {
   throw new Error(message)
@@ -84,6 +85,67 @@ async function verifyDistTree(directory = dist) {
 }
 
 await verifyDistTree()
+
+// 静态 LLM 分享必须作为独立子站原样发布，且不能重新引入在线模型或生成页预览。
+for (const relativePath of [
+  'index.html',
+  'slides.css',
+  'slides.js',
+  'vendor/NOTICES.md',
+]) {
+  const packaged = await requireFile(`${STATIC_LLM_TALK_ROOT}/${relativePath}`)
+  const tracked = await requireProjectFile(`${STATIC_LLM_TALK_ROOT}/${relativePath}`)
+  if (!packaged.equals(tracked)) {
+    fail(`静态 LLM 分享产物与源码不一致：${relativePath}`)
+  }
+}
+
+const staticLlmTalkHtml = (
+  await requireFile(`${STATIC_LLM_TALK_ROOT}/index.html`)
+).toString('utf8')
+for (const expectedReference of [
+  '/talk/llm-2026/assets/fonts/noto-sans-sc/index.css',
+  '/talk/llm-2026/vendor/reveal/reveal.css',
+  '/talk/llm-2026/slides.css',
+  '/talk/llm-2026/vendor/reveal/reveal.js',
+  '/talk/llm-2026/vendor/reveal/notes.js',
+  '/talk/llm-2026/vendor/qrcode/qrcode.js',
+  '/talk/llm-2026/slides.js',
+]) {
+  if (!staticLlmTalkHtml.includes(expectedReference)) {
+    fail(`静态 LLM 分享缺少无尾斜杠安全资源引用：${expectedReference}`)
+  }
+  await requireFile(expectedReference.slice(1))
+}
+for (const forbiddenMarkup of [
+  'data-live=',
+  'data-preview=',
+  'class="fire"',
+  '<iframe',
+  '/api/chat',
+  '/api/health',
+]) {
+  if (staticLlmTalkHtml.includes(forbiddenMarkup)) {
+    fail(`静态 LLM 分享仍包含在线演示标记：${forbiddenMarkup}`)
+  }
+}
+
+const staticLlmTalkScript = (
+  await requireFile(`${STATIC_LLM_TALK_ROOT}/slides.js`)
+).toString('utf8')
+for (const forbiddenRuntime of [
+  'fetch(',
+  'XMLHttpRequest',
+  'EventSource',
+  'WebSocket',
+  'AbortController',
+  'srcdoc',
+  '/api/',
+]) {
+  if (staticLlmTalkScript.includes(forbiddenRuntime)) {
+    fail(`静态 LLM 分享仍包含联网或生成页运行时：${forbiddenRuntime}`)
+  }
+}
 
 const manifest = JSON.parse(await readFile(path.join(dist, 'vm-assets.json'), 'utf8'))
 if (manifest.version !== 1 || !/^[a-f0-9]{64}$/.test(manifest.hash)) {

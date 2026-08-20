@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="《一个会猜下一个词的机器》—— 面向准大一网安新生的 40 分钟线上分享：什么是大模型，以及它和你未来四年、和这个暑假的关系。">
+  <title>一个会猜下一个词的机器 · 新生线上分享</title>
+  <link rel="stylesheet" href="/talk/llm-2026/assets/fonts/noto-sans-sc/index.css">
+  <link rel="stylesheet" href="/talk/llm-2026/vendor/reveal/reveal.css">
+  <link rel="stylesheet" href="/talk/llm-2026/slides.css">
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ═══════════════ 00 · 标题页 ═══════════════ -->
+<section class="title-slide">
+  <div class="title-overline">2026 级网络安全专业新生线上分享</div>
+  <h1>一个会猜下一个词的机器</h1>
+  <div class="title-rule"></div>
+  <p class="title-sub">什么是大模型，以及它和你未来四年的关系</p>
+  <p class="title-meta">HASHTEAM CTF实验室</p>
+  <aside class="notes">
+    <p>【候场／开场】分享开始前停留在本页。主持人已经介绍讲者时，一句问候后直接进入三个问题；否则按口播版作约 25 秒自我介绍。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 01 · 开场三问（轻自测） ═══════════════ -->
+<section>
+  <span class="kicker">三个问题</span>
+  <h2>这些你现在会不会？</h2>
+  <div class="open-qs">
+    <div class="oq fragment fade-up"><span class="no">01</span>动手做一个网页</div>
+    <div class="oq fragment fade-up"><span class="no">02</span>写个程序，把一万个文件按日期归档</div>
+    <div class="oq fragment fade-up"><span class="no">03</span>网站突然打不开了，查明原因</div>
+  </div>
+  <p class="sub fragment fade-up" style="margin-top:1.6em;">现在「不会」完全正常。四十分钟后，这三件事你都会知道自己能迈出第一步。</p>
+  <aside class="notes">
+    <p>【0:00–2:00】三题逐条揭示，每题稍停即可，不点名、不收集答案。「不会」越多，越能立住后面的冲击。</p>
+    <p>全场结构心里有数：开场 0–8；原理 8–15.5；翻车+现场验真 15.5–21.5；网安 21.5–27.5；手和眼睛 27.5–30；大学四年 30–34；SecLab 与收尾 34–40。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 02 · 静态演示复盘 ═══════════════ -->
+<section>
+  <span class="demo-tag">演示复盘 · 静态对话</span>
+  <div class="dialogue-wrap">
+    <div class="chat">
+      <div class="msg fragment fade-up">
+        <span class="who user">我</span>
+        <div class="bubble">帮我做一个网页：屏幕中间一个按钮，每点一次数字加一，做得好看一点。</div>
+      </div>
+      <div class="msg fragment fade-up">
+        <span class="who ai">AI</span>
+        <div class="bubble"><code>&lt;button onclick="n++"&gt;</code> …… <span class="dim">（生成整段代码，可直接运行）</span></div>
+      </div>
+      <div class="msg fragment fade-up">
+        <span class="who user">我</span>
+        <div class="bubble">我完全没学过编程，解释一下这段代码分别在干什么。</div>
+      </div>
+      <div class="msg fragment fade-up">
+        <span class="who ai">AI</span>
+        <div class="bubble">三句话：页面先画出一个数字和一个按钮；点按钮时，事件里的代码让数字加一并刷新显示；样式表负责居中和配色。<span class="dim">（针对刚生成的那份代码）</span></div>
+      </div>
+      <div class="msg fragment fade-up">
+        <span class="who user">我</span>
+        <div class="bubble">把按钮改成蓝色，再加一个清零按钮。</div>
+      </div>
+      <div class="msg fragment fade-up">
+        <span class="who ai">AI</span>
+        <div class="bubble">已更新：按钮换成蓝色主题，旁边多了一个清零按钮。<span class="dim">（要求可以继续迭代）</span></div>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">
+    <p>【2:00–7:00】逐条揭示这段预先准备的对话。重点不在代码，在每追加一句要求，结果就跟着变化。</p>
+    <p>本页为静态演示复盘，不连接模型、不执行生成代码。口头提醒：真实使用时仍要检查代码和结果。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 03 · 第一锤 ═══════════════ -->
+<section>
+  <div class="q-slide">
+    <span class="kicker">刚才发生了什么</span>
+    <div class="big-q">过去要先学几个月才敢动手的事，<br>今天用<span class="em">一句话</span>就起了步。</div>
+    <p class="sub" style="margin-top:2em;">AI 降低了做出第一版的门槛；但要把它做对、做稳，仍然需要知识、判断和验证。</p>
+  </div>
+  <aside class="notes">
+    <p>【7:00–8:00】收住演示的情绪，一句话点题即可。别在这里展开原理。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 04 · 心里填空 ═══════════════ -->
+<section>
+  <span class="kicker">三个熟悉的续写</span>
+  <h2>其实你们已经会一点「大模型」了</h2>
+  <div class="cloze">
+    <div>山东大学位于山东<span class="blank"><span class="fragment fade-in">济南</span></span></div>
+    <div class="fragment fade-up">床前明月光，疑是地上<span class="blank"><span class="fragment fade-in">霜</span></span></div>
+    <div class="fragment fade-up">Linux 里想看看当前目录有什么，输入 <span class="blank mono"><span class="fragment fade-in">ls</span></span></div>
+  </div>
+  <p class="small fragment fade-up" style="margin-top:1.2em;">这三道填空，就是语言模型干的头一件事：<b>看着前面的内容，猜下一个词最可能是什么。</b></p>
+  <aside class="notes">
+    <p>【8:00–10:00】每题停一秒再按 → 揭晓，不点名、不收集答案。第三题顺带说明：想到 dir 也没错，那是 Windows 的习惯，原理一样。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 05 · 输入法动画 ═══════════════ -->
+<section>
+  <span class="kicker">一个熟悉的例子</span>
+  <h2>输入法天天在做这件事</h2>
+  <div class="phone" data-ime>
+    <div class="screen"><span class="typed">今天天气</span><span class="cursor"></span></div>
+    <div class="imebar">
+      <div class="cand">很好</div>
+      <div class="cand">不错</div>
+      <div class="cand">怎么样</div>
+    </div>
+  </div>
+  <p class="small" style="margin-top:0.9em;">按上文，猜下文。输入法和大模型有一个共同点：都在根据上下文预测接下来更可能出现什么。大模型读过的语料和计算规模大得多，也会<span class="em">自己选一个接上，再继续预测</span>，于是可以从续写一个词走到生成整段内容。</p>
+  <aside class="notes">
+    <p>【10:00–12:00】讲者直接播放屏幕上的输入法动画，让大家回想自己见过的候选栏即可，不要求拿手机现场操作。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 06 · 为什么猜词能变聪明 ═══════════════ -->
+<section>
+  <span class="kicker">关键一问</span>
+  <h2>可你见过输入法会做数学题吗？</h2>
+  <div class="cards three">
+    <div class="card fragment fade-up">
+      <div class="q">小明有 10 块钱，买水花了 3 块，还剩 ____。</div>
+      <div class="need">想猜对，得会一点算术</div>
+    </div>
+    <div class="card fragment fade-up">
+      <div class="q mono">if (password == input)<br>这段代码的问题在 ____。</div>
+      <div class="need">想猜对，得懂程序</div>
+    </div>
+    <div class="card fragment fade-up">
+      <div class="q">曹操率军南下，孙权和刘备决定 ____。</div>
+      <div class="need">想猜对，得读历史</div>
+    </div>
+  </div>
+  <p class="statement fragment fade-up" style="margin-top:1em; font-size:0.95em;">把这个小游戏做到极处，语言背后的规律就被压进了一堆数字里。<span class="em">它不是互联网的完整副本，也可能记住部分训练内容。</span></p>
+  <aside class="notes">
+    <p>【12:00–13:30】压缩讲法：标题的问题抛出来停两秒，三张卡片快节奏过，每张只说半句。输入法猜了那么多年词还是那么笨——读得少、猜完就停。大模型为了猜得准，算术、代码、历史全都得沾。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 07 · 唯一的技术图 + token 动画 ═══════════════ -->
+<section>
+  <span class="kicker">今天唯一一张「技术图」</span>
+  <h2>Transformer 怎样猜出下一个 token？</h2>
+  <div class="transformer-demo" data-transformer role="group" aria-label="Transformer 简化动画：神经网络不能直接处理文字，只能计算数字，所以原始文本先经过 Tokenizer，映射成词表中的 token 编号；这些编号再变成带位置信息的向量，经过自注意力和前馈网络，得到下一个 token 的概率，最后把选中的 token 接回上下文。">
+    <div class="tf-sequence">
+      <span class="tf-seq-label"><b>01</b> 原始文本</span>
+      <strong class="tf-raw-text">山东大学位于</strong>
+      <span class="tf-mini-arrow">→</span>
+      <span class="tf-tokenizer-chip">Tokenizer</span>
+      <span class="tf-mini-arrow">→</span>
+      <div class="tf-seq-tokens"></div>
+      <span class="tf-cycle">接回去，再算一轮</span>
+      <div class="tf-tokenizer-why"><b>为什么需要它？</b>模型不会直接“读字”，只会计算数字；Tokenizer 先把文字映射成词表编号。</div>
+    </div>
+
+    <div class="tf-grid">
+      <div class="tf-stage tf-embed-stage">
+        <div class="tf-stage-head"><span>02</span><b>Token + 位置</b></div>
+        <div class="tf-vector-list"></div>
+        <div class="tf-stage-note">每个 token 编成一组数字<br>再加入位置信息</div>
+      </div>
+
+      <div class="tf-arrow"><i></i><b>→</b></div>
+
+      <div class="tf-stage tf-core-stage">
+        <div class="tf-stage-head"><span>03</span><b>多层 Transformer</b></div>
+        <div class="tf-layer tf-attention-layer">
+          <div class="tf-layer-name"><span>Self-Attention <small>此刻该看哪里</small></span><span class="tf-context-chip">加权汇总上下文</span></div>
+          <div class="tf-attn-list"></div>
+        </div>
+        <div class="tf-layer tf-ffn-layer">
+          <div class="tf-layer-name">Feed-Forward <small>逐位置加工</small></div>
+          <div class="tf-neurons"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+      </div>
+
+      <div class="tf-arrow"><i></i><b>→</b></div>
+
+      <div class="tf-stage tf-prob-stage">
+        <div class="tf-stage-head"><span>04</span><b>下一个 token</b></div>
+        <div class="tf-prob-caption">词表概率（示意）</div>
+        <div class="tf-prob-list"></div>
+        <div class="tf-picked">选中 <strong>—</strong></div>
+      </div>
+    </div>
+
+    <div class="tf-output" aria-live="polite">
+      <span>生成结果</span>
+      <strong>山东大学位于</strong>
+      <i class="tf-caret"></i>
+      <div class="tf-controls" aria-label="Transformer 动画控制">
+        <span class="tf-step-label">等待手动演示</span>
+        <button class="tf-reset" type="button">重新开始</button>
+        <button class="tf-next" type="button">开始演示</button>
+      </div>
+    </div>
+  </div>
+  <p class="tiny" style="margin-top:0.55em; text-align:center;">这里是高度简化的演示：真实模型会并行使用多个注意力头，并把这样的模块重复堆叠很多层。</p>
+  <aside class="notes">
+    <p>【13:30–14:30】先解释为什么需要 Tokenizer：神经网络不会直接“读字”，只能对数字做运算，所以要先把文本切成词表里的 token，并映射成编号；编号再查表变成向量。Tokenizer 不是“理解文字”，不同模型也可能把同一句话切成不同的 token。之后点击「开始演示／下一步」手动推进：加入位置信息；Self-Attention 对上下文做加权汇总；前馈网络继续加工；最后得到整个词表上的概率，选中一个 token 接回原句，再重复。可停在任一阶段讲解；概率和注意力强弱仅作示意，不是某个真实模型的测量结果。</p>
+    <p>口播只抓住一句：它不是一次写完整段答案，而是每次只生成一个 token，再把新 token 接回上下文重新计算。</p>
+    <p>[Sources] Vaswani et al., “Attention Is All You Need”, NeurIPS 2017, https://arxiv.org/abs/1706.03762；Kudo &amp; Richardson, “SentencePiece: A simple and language independent subword tokenizer and detokenizer for Neural Text Processing”, EMNLP 2018, https://aclanthology.org/D18-2012/。本页为面向零基础听众的教学简化。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 08 · 两个纠偏 ═══════════════ -->
+<section>
+  <span class="kicker">纠偏</span>
+  <h2>两个容易带错的直觉</h2>
+  <div class="cards">
+    <div class="card fragment fade-up">
+      <b>大模型 ≠ 搜索引擎</b>
+      <p style="margin:0.5em 0 0;">搜索引擎主要返回网页和来源；大模型主要根据上下文生成答案。现在许多 AI 产品会接入搜索工具，关键仍是回答有没有可核验的来源。<b>无论来自哪种界面，都要验证。</b></p>
+    </div>
+    <div class="card fragment fade-up">
+      <b>「大」指什么</b>
+      <p style="margin:0.5em 0 0;"><b>数据 × 模型 × 算力</b>，一起往上堆。参数是模型训练过程中不断调整的一组数字，其中编码了从数据中学到的统计规律。数字多大不重要，趋势才重要。</p>
+    </div>
+  </div>
+  <aside class="notes">
+    <p>【14:30–15:30】两张卡片各 30 秒。第一张末尾一句要点出来，直接为下一节埋伏笔。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 09 · 过渡：问的对象在变 ═══════════════ -->
+<section>
+  <div class="q-slide">
+    <span class="kicker amber">转折</span>
+    <div class="big-q" style="font-size:1.1em;">问老师　→　问搜索引擎　→　问 AI</div>
+    <p class="sub" style="margin-top:2em;">任何答案都需要验证。<br><span class="em-amber"><b>AI 的特殊风险，是生成看似完整、却未必有可靠来源的回答。</b></span></p>
+  </div>
+  <aside class="notes">
+    <p>【15:30–16:00】过渡页，十秒。「看似完整」与「可靠来源」之间稍作停顿，再进入现场验真。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 10 · 现场翻车 + 现场验真 ═══════════════ -->
+<section>
+  <span class="demo-tag">案例复盘 · 静态对话</span>
+  <div class="chat chat-fixed">
+    <div class="msg fragment fade-up">
+      <span class="who user">我</span>
+      <div class="bubble">介绍一下 2023 年发表在《网络安全学报》上那篇《基于注意力机制的校园网异常流量检测》论文。</div>
+    </div>
+    <div class="msg fragment fade-up">
+      <span class="who ai">AI</span>
+      <div class="bubble">该文由张某某、李某某发表于 2023 年第 4 期，DOI：<span class="bad">10.xxxx/xxxxx</span>，提出了一种结合注意力机制的…… <span class="dim">（有作者、有年份、有出处，一应俱全）</span></div>
+    </div>
+  </div>
+  <div class="open-qs" style="margin-top:0.6em;">
+    <div class="oq fragment fade-up"><span class="no">看</span>它说得很自信，细节也齐全——<b>但这篇论文根本不存在。</b></div>
+    <div class="oq fragment fade-up"><span class="no">验</span><b>查标题、作者或 DOI</b>：任意一处对不上，就不能把答案当成事实。</div>
+  </div>
+  <aside class="notes">
+    <p>【16:00–21:00】提前彩排锁定必翻车的 prompt（小模型几乎必编）。由讲者现场查标题、作者或 DOI，快速演示一次验证过程，不安排听众同步动手。</p>
+    <p>收口时指着答案：「模型可以编出完整细节，但完整不等于真实——我们刚刚看到了一次幻觉。」把验证动作讲清楚即可。</p>
+    <p>归因一句：模型的训练目标主要是生成合理续写，并不直接等同于事实核验。题目越冷门，可核实线索越少，越容易生成看似完整的错误细节。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 11 · 人设卡 + 主线句 ═══════════════ -->
+<section>
+  <span class="kicker">给它画个像</span>
+  <div class="persona">
+    一个<b>知识面很广、写得很快、通常很有耐心</b>的助手；<br>
+    但它<span class="warn">可能生成貌似可信的错误内容</span>，也<span class="warn">不会替你承担结果</span>。
+  </div>
+  <div class="mainline fragment fade-up">AI 交到你手上的，应先当作<span class="em">候选答案</span>。<br>验货的人，是你。</div>
+  <p class="small fragment fade-up" style="margin-top:1em;">输入法的候选栏，排在第一不等于正确。选错一个词无伤大雅；信错一段言之凿凿的答案，可能就埋下一个漏洞。</p>
+  <aside class="notes">
+    <p>【21:00–21:30】主线句放慢。验证方法跟上：「别听它说得多漂亮，只看结果——代码跑一遍，说法查一处，数字算一次。过程可以口若悬河，结果不会陪它演戏。」这句下半场还要用一次。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 12 · 桥接网安 ═══════════════ -->
+<section>
+  <span class="kicker">和网安专业的关系</span>
+  <h2>老规矩半句，新规矩半句</h2>
+  <div class="cards">
+    <div class="card fragment fade-up">
+      <b>传统安全</b>
+      <p style="margin:0.5em 0 0; font-size:1.25em;"><b>不要相信输入。</b></p>
+      <p style="margin:0.4em 0 0;">用户提交的数据可能是恶意的，边界条件可能被人利用。</p>
+    </div>
+    <div class="card fragment fade-up">
+      <b>AI 时代</b>
+      <p style="margin:0.5em 0 0; font-size:1.25em;"><b>别轻信输出。</b></p>
+      <p style="margin:0.4em 0 0;">模型写的代码可能有洞，给的解释可能讲错，替你执行的操作可能偏离本意。</p>
+    </div>
+  </div>
+  <aside class="notes">
+    <p>【21:30–23:30】两句并排立住。怀疑、验证、找反例——AI 越普及，这套思维越值钱。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 13 · 贯穿例子：攻击登录程序 ═══════════════ -->
+<section>
+  <span class="demo-tag">案例复盘 · 静态对话</span>
+  <div class="chat chat-fixed">
+    <div class="msg fragment fade-up">
+      <span class="who user">我</span>
+      <div class="bubble">写一个简单的用户登录程序。</div>
+    </div>
+    <div class="msg fragment fade-up">
+      <span class="who ai">AI</span>
+      <div class="bubble"><code>if (user == "admin" &amp;&amp; pass == "123456")</code> …… <span class="dim">（工工整整，看起来很对）</span></div>
+    </div>
+    <div class="msg fragment fade-up">
+      <span class="who user">我</span>
+      <div class="bubble">假如你是一名安全工程师，攻击这个程序，找出它的问题。</div>
+    </div>
+    <div class="msg fragment fade-up">
+      <span class="who ai">AI</span>
+      <div class="bubble">口令明文硬编码、缺少失败锁定、无验证码…… <span class="hl">（逐条列出，并给出修改版）</span></div>
+    </div>
+  </div>
+  <p class="statement fragment fade-up" style="margin-top:0.7em; font-size:0.95em;">改完就安全了吗？——做安全，就是反复追问<span class="em">「还有没有我没想到的情况」</span>。</p>
+  <div class="boundary fragment fade-up">边界：这套「攻击」的思路，只用于自己的系统和明确授权的实验环境。真实网站上一个公开可访问的路径，不代表你有权继续探测。</div>
+  <aside class="notes">
+    <p>【23:30–26:00】全场核心页，放慢。从开场的网页 demo 一路走到这里：同一个工具，既能搭东西，也能拆东西。「改完就安全了吗」在屏幕上停一秒，随后继续，不要求聊天区回答。</p>
+    <p>授权边界口头再念一遍，屏幕上的字别省。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 14 · AI 的三重身份 ═══════════════ -->
+<section>
+  <span class="kicker">对网安来说，AI 是什么</span>
+  <h2>同一个东西，三个身份</h2>
+  <div class="cards three">
+    <div class="card fragment fade-up">
+      <b>攻击者的工具</b>
+      <p style="margin:0.4em 0 0;">过去诈骗短信错字连篇；如今照着你的学校、专业、社交动态，写出以假乱真的定向钓鱼。作恶的成本骤降。</p>
+    </div>
+    <div class="card fragment fade-up">
+      <b>防御者的工具</b>
+      <p style="margin:0.4em 0 0;">几千行代码丢进去找隐患，成堆日志交给它读，检测规则让它帮着起草。</p>
+    </div>
+    <div class="card fragment fade-up">
+      <b>被保护的对象</b>
+      <p style="margin:0.4em 0 0;">它会被诱导、被套话、被投毒。护住模型本身，已是新的安全课题。</p>
+    </div>
+  </div>
+  <p class="small fragment fade-up" style="margin-top:1em;">要用它，要防它，也要护着它。</p>
+  <aside class="notes">
+    <p>【26:00–27:30】三张卡片快节奏过。收尾一句可以轻松一点。末尾埋钩子：「『被保护的对象』这一条，两分钟后会变得更具体。」</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 15 · 给它装上手和眼睛 ═══════════════ -->
+<section>
+  <span class="kicker">它不止会说</span>
+  <h2>它只有一张嘴，人们给了它手和眼睛</h2>
+  <div class="ladders">
+    <div class="rung fragment fade-up">
+      <span class="lv">①</span>
+      <span class="ask"><b>不知道今天的新闻</b>　<i>递一个「搜索」工具——训练时没见过的，现在查得到</i></span>
+    </div>
+    <div class="rung fragment fade-up">
+      <span class="lv">②</span>
+      <span class="ask"><b>算术会错，说「能跑」也未必能跑</b>　<i>那就让它真的跑一遍——说的不算，跑出来的才算</i></span>
+    </div>
+    <div class="rung fragment fade-up">
+      <span class="lv">③</span>
+      <span class="ask"><b>要操作五花八门的真实软件</b>　<i>一个统一插口，加一个循环：读文件 → 跑命令 → 看报错 → 再改</i></span>
+    </div>
+  </div>
+  <p class="statement fragment fade-up" style="margin-top:0.7em; font-size:0.92em;">装上了这些，它就不只会说，还会做了——这就是大家说的 <span class="em">Agent</span>。</p>
+  <div class="boundary fragment fade-up">手能碰到真实系统，就可能被人动手脚——喂给工具的网页和文档里藏着恶意指令，会反过来指挥 AI。</div>
+  <p class="tiny fragment fade-up">①就是一次 tool call；③里的统一插口是 MCP 想干的事，让循环跑起来的那套架子叫 harness——今天都见过它们长什么样了。</p>
+  <aside class="notes">
+    <p>【27:30–30:00】先立画面：「上半场我们已经知道，模型自己只会读文字、吐文字——它只有一张嘴，没有手，没有眼睛。」然后三样工具逐条揭示。</p>
+    <p>第二件要回收上半场那句：「还记得吗——结果不会陪它演戏。工具做的事，就是让验货这个动作它自己也能完成。」</p>
+    <p>琥珀色框念慢一点，这正是刚才「被保护的对象」的具体化。名词路标一句带过即可，绝不停留解释。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 16 · 对照表（主题页） ═══════════════ -->
+<section>
+  <span class="kicker">和你们未来四年的关系</span>
+  <table class="vs">
+    <thead>
+      <tr><th>高中练的是</th><th>大学和 AI 时代拉开差距的是</th></tr>
+    </thead>
+    <tbody>
+      <tr class="fragment fade-up"><td>找标准答案</td><td>定义问题</td></tr>
+      <tr class="fragment fade-up"><td>记住知识</td><td>找到并验证知识</td></tr>
+      <tr class="fragment fade-up"><td>独立完成</td><td>人和机器协作</td></tr>
+      <tr class="fragment fade-up"><td>不犯错误</td><td>快速试错</td></tr>
+      <tr class="fragment fade-up"><td>解一道明确的题</td><td>面对一个模糊的真实问题</td></tr>
+    </tbody>
+  </table>
+  <p class="small fragment fade-up" style="margin-top:0.9em;">高中的功夫没白费——数学、英语、逻辑全都算数。变的是精力花在哪：少花在拿答案上，多花在提问题、辨真假、验结果上。</p>
+  <aside class="notes">
+    <p>【30:00–31:30】全场主题页，逐行揭示。最后一句平衡很重要，防止他们误以为基础课没用。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 17 · 还要学编程吗（单类比版） ═══════════════ -->
+<section>
+  <span class="kicker">替你们问出口</span>
+  <h2>「那我还用学编程吗？」</h2>
+  <p class="statement fragment fade-up" style="font-size:0.95em;">更要学，只是理由换了：<span class="em">不仅要会写，还要能看懂、改动并验证 AI 生成的代码。</span></p>
+  <div class="cards">
+    <div class="card fragment fade-up">
+      <b>电钻</b>
+      <p style="margin:0.4em 0 0;">新手拿上能打孔，老师傅拿上，一天的活一小时干完。工具放大的是你本来就有的东西。</p>
+    </div>
+  </div>
+  <p class="small fragment fade-up" style="margin-top:0.9em;">端口为何不通？握手为何失败？权限漏洞藏在哪？它会循环、会报错、会跑偏，看得懂它每一步在干什么的人，才握得住方向盘。<b>你理解得越深，AI 越好用。</b></p>
+  <aside class="notes">
+    <p>【31:30–33:00】这个问题一定有人憋着想，直接替他问出来。只留电钻一个类比，顺势和上一页的手和眼睛接起来。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 18 · 三层提示法 ═══════════════ -->
+<section>
+  <span class="kicker">一套马上能用的问法</span>
+  <h2>三层提示法</h2>
+  <div class="ladders">
+    <div class="rung fragment fade-up">
+      <span class="lv">1</span>
+      <span class="ask"><b>要方向</b>　<i>「日志里想统计每个 IP 出现的次数，从哪入手？先别写代码。」</i></span>
+    </div>
+    <div class="rung fragment fade-up">
+      <span class="lv">2</span>
+      <span class="ask"><b>要工具</b>　<i>「我决定用命令行做。有哪几件工具干得了这个？各自管什么？」</i></span>
+    </div>
+    <div class="rung fragment fade-up">
+      <span class="lv">3</span>
+      <span class="ask"><b>要结构</b>　<i>「我用 grep 加 sort 写了一半，思路断在哪一步？」</i></span>
+    </div>
+  </div>
+  <p class="small fragment fade-up" style="margin-top:0.9em;">别开口就要成品：答案拿走了，能力留在原地。</p>
+  <aside class="notes">
+    <p>【33:00–34:00】三层各念一遍例句。补一句：这压根不算 AI 玄学，把问题描述清楚本来就是工程师的基本功。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 19 · SecLab 介绍 ═══════════════ -->
+<section>
+  <span class="kicker">练拳的地方已经搭好了</span>
+  <h2>SecLab · 安全新手村</h2>
+  <div class="cards">
+    <div class="card fragment fade-up">
+      <b>是什么</b>
+      <p style="margin:0.4em 0 0;">CTF实验室为大家准备的练习场。浏览器打开，就是一台真实运行的 Linux——终端、文件、权限、日志、进程，一共十关，从零起步。</p>
+    </div>
+    <div class="card fragment fade-up">
+      <b>怎么练</b>
+      <p style="margin:0.4em 0 0;">引导模式一步一步带路，挑战模式只给目标放手折腾，随时切换。卡住了有三层提示：方向、工具、结构——绝不直接喂答案。</p>
+    </div>
+    <div class="card fragment fade-up">
+      <b>练完去哪</b>
+      <p style="margin:0.4em 0 0;">通关只是热身。漏洞挖掘、渗透攻防、安全开发、校园安全运维——那才是这条路的去处。</p>
+    </div>
+  </div>
+  <p class="small fragment fade-up" style="margin-top:0.8em;">这套「三层提示法」，平台已经替你们内置好了。</p>
+  <aside class="notes">
+    <p>【34:00–37:00】先讲那段克制的结论（高中→这个暑假→以前做不了的事现在能先动手试试），再进 SecLab。共享屏幕现场打开第 1 关看 30 秒——浏览器里真实的终端最有说服力；网络不行就放截图。</p>
+    <p>被问「能不能用 AI 抄答案」：正面回答——答案你拿走了，能力留下了。关卡随时能重置，你的大一只有一遍。</p>
+  </aside>
+</section>
+
+<!-- ═══════════════ 20 · 带走三句话 + 收尾 ═══════════════ -->
+<section>
+  <span class="kicker">最后留三句话</span>
+  <h2>把今天的内容带走</h2>
+  <div class="todos3">
+    <div class="td fragment fade-up"><span class="n">01</span><span><b>先把 AI 当作候选答案</b>　<small>它能帮你起步，但结果要自己验证</small></span></div>
+    <div class="td fragment fade-up"><span class="n">02</span><span><b>编程基础仍然重要</b>　<small>看懂、改动、验证，才是真正的掌控</small></span></div>
+    <div class="td fragment fade-up"><span class="n">03</span><span><b>遇到不会的事，先问下一步</b>　<small>方向、工具、结构，比直接拿成品更有用</small></span></div>
+  </div>
+  <div class="qr-row" style="margin-top:1.4em;">
+    <div class="qr-card"><div class="qr"></div></div>
+    <div>
+      <div class="url-line js-lab-url">lab.lwzheng.tech</div>
+      <div class="url-note">想了解时再扫码 · 平台长期有效 · 群里随时答疑</div>
+    </div>
+  </div>
+  <p class="closing-line" style="margin-top:1.2em;">大学四年最有用的技能（之一）：遇到一个从没见过的问题，知道下一步往哪走。<br><b>多问一句</b>——问电脑，问 AI，也问问自己：它说的对吗？</p>
+  <aside class="notes">
+    <p>【37:00–40:00】三句话逐条揭示，二维码始终可见，说明这是一个可随时了解的入口，不布置任务。收尾两句放慢，说完停一秒再答疑。</p>
+    <p>答疑时哪一步说不清，直接共享屏幕演示，比口头解释有效。</p>
+  </aside>
+</section>
+
+</div>
+</div>
+
+<script src="/talk/llm-2026/vendor/reveal/reveal.js"></script>
+<script src="/talk/llm-2026/vendor/reveal/notes.js"></script>
+<script src="/talk/llm-2026/vendor/qrcode/qrcode.js"></script>
+<script src="/talk/llm-2026/slides.js"></script>
+</body>
+</html>
