@@ -290,7 +290,7 @@ describe('responsive layout contract', () => {
   it('re-measures the terminal cell grid after the web fonts finish loading', () => {
     // CharSizeService 只在 Terminal.open() 时量一次，之后没有任何字体加载监听。
     // 组件在 onMounted 里建终端，此时 @font-face 还没下载完，量到的是系统兜底等宽字体
-    // （约 0.6em），而实际绘制用的是 Sarasa Term SC（0.5em）——网格和字形对不上。
+    // 而实际绘制用的是 CaskaydiaCove——两者 advance 不同，网格和字形对不上。
     const metrics = source('src/composables/useTerminalMetrics.ts')
     expect(metrics).toContain('document.fonts.load')
 

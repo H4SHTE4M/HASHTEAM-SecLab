@@ -6,9 +6,9 @@ import type { Terminal } from '@xterm/xterm'
  * 否则永不重量；它内部也没有任何 `document.fonts` 监听。
  *
  * 终端组件在 `onMounted()` 里建 Terminal，此时 @font-face 通常还没下载完，于是量到的是
- * 系统兜底等宽字体（约 0.6em），而真正绘制时用的是 Sarasa Term SC（0.5em）。网格按
- * 0.6em 排、字形按 0.5em 画，选区/光标是直接用 `col * cellWidth` 画的矩形，于是逐列
- * 越错越多——这就是"选区盖到文字"的根因。
+ * 系统兜底等宽字体，而真正绘制时用的是 CaskaydiaCove。两者的 advance 不一样，网格按
+ * 一个宽度排、字形按另一个宽度画，选区/光标又是直接用 `col * cellWidth` 画的矩形，
+ * 于是逐列越错越多——这就是"选区盖到文字"的根因。
  *
  * WidthCache 同理：首屏渲染时缓存下的 ASCII 宽度也是兜底字体的，且只有 setFont() 才会清。
  *
