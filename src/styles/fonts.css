@@ -31,3 +31,22 @@
   src: url('../assets/fonts/caskaydia-cove-nerd/CaskaydiaCoveNerdFontMono-SemiBold.woff2')
     format('woff2');
 }
+
+/* Sarasa Term SC：拉丁 + GB2312 常用字裁剪版，作为终端主字体。拉丁半角字形与 CJK 全角字形
+   同源同比例（严格 1:2 advance width），终端选区/光标网格与字形天然对齐，无需额外校准。
+   Nerd Font 图标（PUA 区）不在这个字体里，由 CaskaydiaCove Nerd Font Mono 兜底提供。 */
+@font-face {
+  font-family: 'Sarasa Term SC';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('../assets/fonts/sarasa-term-sc/SarasaTermSC-Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Sarasa Term SC';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url('../assets/fonts/sarasa-term-sc/SarasaTermSC-SemiBold.woff2') format('woff2');
+}
