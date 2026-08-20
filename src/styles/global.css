@@ -62,8 +62,8 @@
   --font-cjk: 'Noto Sans SC Variable', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-mono: 'JetBrains Mono Variable', 'SFMono-Regular', 'Cascadia Code',
     Consolas, 'Noto Sans Mono CJK SC', monospace;
-  --font-terminal: 'CaskaydiaCove Nerd Font Mono', 'JetBrains Mono Variable',
-    'Noto Sans Mono CJK SC', monospace;
+  --font-terminal: 'Sarasa Term SC', 'CaskaydiaCove Nerd Font Mono',
+    'JetBrains Mono Variable', 'Noto Sans SC Variable', monospace;
   --ease-standard: cubic-bezier(0.2, 0.75, 0.25, 1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --duration-fast: 140ms;

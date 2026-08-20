@@ -90,7 +90,7 @@ onMounted(() => {
 
   const terminalFontFamily =
     getComputedStyle(document.documentElement).getPropertyValue('--font-terminal').trim() ||
-    '"CaskaydiaCove Nerd Font Mono", "JetBrains Mono", "Noto Sans Mono CJK SC", monospace'
+    '"Sarasa Term SC", "CaskaydiaCove Nerd Font Mono", "JetBrains Mono", "Noto Sans SC Variable", monospace'
 
   terminal = new Terminal({
     fontFamily: terminalFontFamily,
