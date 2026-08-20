@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import { router } from './router'
 import './assets/fonts/noto-sans-sc/index.css'
+import './styles/terminal-cjk-font.css'
 import './styles/fonts.css'
 import './styles/global.css'
 
