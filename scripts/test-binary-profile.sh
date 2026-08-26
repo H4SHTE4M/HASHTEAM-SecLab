@@ -264,6 +264,16 @@ HOME="$WORK/home" bash "$MEMORY_LAB/check.sh" \
     "$MEMORY_ADDRESS" "$MEMORY_VALUE" "$MEMORY_POINTER" "$MEMORY_SIGNED" \
     > "$WORK/memory-check.txt"
 grep -qx 'memory-addresses replay passed' "$WORK/memory-check.txt"
+HOME="$WORK/home" bash "$MEMORY_LAB/check.sh" \
+    0x804b140 0xdec0de42 0x804b140 -042 \
+    > "$WORK/memory-check-short-hex.txt"
+grep -qx 'memory-addresses replay passed' "$WORK/memory-check-short-hex.txt"
+if HOME="$WORK/home" bash "$MEMORY_LAB/check.sh" \
+    804b140 0xdec0de42 0x804b140 -42 \
+    > "$WORK/memory-check-missing-prefix.txt" 2>&1; then
+    echo 'memory address without 0x unexpectedly passed' >&2
+    exit 1
+fi
 if HOME="$WORK/home" bash "$MEMORY_LAB/check.sh" \
     "$MEMORY_ADDRESS" "$MEMORY_VALUE" "$MEMORY_POINTER" 42 \
     > "$WORK/memory-wrong.txt" 2>&1; then
@@ -329,6 +339,16 @@ HOME="$WORK/home" bash "$MEMORY_REGISTER_STACK_LAB/check.sh" \
     "$TRANSFER_STACK_ADDRESS" "$TRANSFER_FIRST_REMOVED" "$TRANSFER_NEXT_TOP" "$TRANSFER_SECOND_REMOVED" \
     > "$WORK/memory-register-stack-check.txt"
 grep -qx 'memory-register-stack replay passed' "$WORK/memory-register-stack-check.txt"
+HOME="$WORK/home" bash "$MEMORY_REGISTER_STACK_LAB/check.sh" \
+    0x804c158 0x22222222 0x11111111 0x11111111 \
+    > "$WORK/memory-register-stack-short-hex.txt"
+grep -qx 'memory-register-stack replay passed' "$WORK/memory-register-stack-short-hex.txt"
+if HOME="$WORK/home" bash "$MEMORY_REGISTER_STACK_LAB/check.sh" \
+    804c158 0x22222222 0x11111111 0x11111111 \
+    > "$WORK/memory-register-stack-missing-prefix.txt" 2>&1; then
+    echo 'stack value without 0x unexpectedly passed' >&2
+    exit 1
+fi
 if HOME="$WORK/home" bash "$MEMORY_REGISTER_STACK_LAB/check.sh" \
     0x0804c15c "$TRANSFER_FIRST_REMOVED" "$TRANSFER_NEXT_TOP" "$TRANSFER_SECOND_REMOVED" \
     > "$WORK/memory-register-stack-wrong.txt" 2>&1; then
@@ -368,6 +388,16 @@ HOME="$WORK/home" bash "$ASM_LAB/check.sh" \
     "$ASM_MOV_AFTER" "$ASM_LEA_AFTER" "$ASM_STACK_REGISTER" \
     > "$WORK/asm-check.txt"
 grep -qx 'asm-registers replay passed' "$WORK/asm-check.txt"
+HOME="$WORK/home" bash "$ASM_LAB/check.sh" \
+    0X11223344 0X100c "$ASM_STACK_REGISTER" \
+    > "$WORK/asm-short-hex.txt"
+grep -qx 'asm-registers replay passed' "$WORK/asm-short-hex.txt"
+if HOME="$WORK/home" bash "$ASM_LAB/check.sh" \
+    11223344 0x100c "$ASM_STACK_REGISTER" \
+    > "$WORK/asm-missing-prefix.txt" 2>&1; then
+    echo 'register value without 0x unexpectedly passed' >&2
+    exit 1
+fi
 if HOME="$WORK/home" bash "$ASM_LAB/check.sh" \
     "$ASM_MOV_AFTER" 0x00001008 "$ASM_STACK_REGISTER" \
     > "$WORK/asm-wrong.txt" 2>&1; then
@@ -412,6 +442,14 @@ HOME="$WORK/home" bash "$ARITHMETIC_LAB/check.sh" \
     "$ARITHMETIC_REMAINDER" "$ARITHMETIC_XOR" \
     > "$WORK/arithmetic-check.txt"
 grep -qx 'asm-arithmetic replay passed' "$WORK/arithmetic-check.txt"
+HOME="$WORK/home" bash "$ARITHMETIC_LAB/check.sh" 0xd 0x2a 0x8 0x3 0x22 \
+    > "$WORK/arithmetic-short-hex.txt"
+grep -qx 'asm-arithmetic replay passed' "$WORK/arithmetic-short-hex.txt"
+if HOME="$WORK/home" bash "$ARITHMETIC_LAB/check.sh" d 0x2a 0x8 0x3 0x22 \
+    > "$WORK/arithmetic-missing-prefix.txt" 2>&1; then
+    echo 'arithmetic value without 0x unexpectedly passed' >&2
+    exit 1
+fi
 if HOME="$WORK/home" bash "$ARITHMETIC_LAB/check.sh" \
     "$ARITHMETIC_SUB" "$ARITHMETIC_MUL" "$ARITHMETIC_QUOTIENT" \
     0x00000004 "$ARITHMETIC_XOR" \
@@ -454,6 +492,16 @@ HOME="$WORK/home" bash "$STACK_OPS_LAB/check.sh" \
     "$FIRST_PUSH_ESP" "$SECOND_PUSH_ESP" "$FIRST_POP_VALUE" "$SECOND_POP_VALUE" \
     > "$WORK/stack-ops-check.txt"
 grep -qx 'asm-stack-ops replay passed' "$WORK/stack-ops-check.txt"
+HOME="$WORK/home" bash "$STACK_OPS_LAB/check.sh" \
+    0x804c0dc 0x804c0d8 0x22222222 0x11111111 \
+    > "$WORK/stack-ops-short-hex.txt"
+grep -qx 'asm-stack-ops replay passed' "$WORK/stack-ops-short-hex.txt"
+if HOME="$WORK/home" bash "$STACK_OPS_LAB/check.sh" \
+    804c0dc 0x804c0d8 0x22222222 0x11111111 \
+    > "$WORK/stack-ops-missing-prefix.txt" 2>&1; then
+    echo 'stack operation value without 0x unexpectedly passed' >&2
+    exit 1
+fi
 if HOME="$WORK/home" bash "$STACK_OPS_LAB/check.sh" \
     "$FIRST_PUSH_ESP" "$SECOND_PUSH_ESP" "$SECOND_POP_VALUE" "$FIRST_POP_VALUE" \
     > "$WORK/stack-ops-wrong.txt" 2>&1; then
@@ -483,6 +531,10 @@ HOME="$WORK/home" bash "$BRANCHES_LAB/check.sh" \
     1 1 1 ZF SF=OF \
     > "$WORK/branches-check.txt"
 grep -qx 'asm-branches replay passed' "$WORK/branches-check.txt"
+HOME="$WORK/home" bash "$BRANCHES_LAB/check.sh" \
+    1 1 1 ZF OF=SF \
+    > "$WORK/branches-reversed-relation.txt"
+grep -qx 'asm-branches replay passed' "$WORK/branches-reversed-relation.txt"
 if HOME="$WORK/home" bash "$BRANCHES_LAB/check.sh" \
     1 1 0 ZF SF=OF \
     > "$WORK/branches-wrong.txt" 2>&1; then
@@ -513,6 +565,16 @@ HOME="$WORK/home" bash "$CALL_STACK_LAB/check.sh" \
     "$RETURN_ADDRESS" "$ARGUMENT_VALUE" "$LOCAL_VALUE" 4 "$RETURN_VALUE" \
     > "$WORK/call-stack-check.txt"
 grep -qx 'asm-call-stack replay passed' "$WORK/call-stack-check.txt"
+HOME="$WORK/home" bash "$CALL_STACK_LAB/check.sh" \
+    0x8049081 0x15 0x2b 0b100 0x2b \
+    > "$WORK/call-stack-short-values.txt"
+grep -qx 'asm-call-stack replay passed' "$WORK/call-stack-short-values.txt"
+if HOME="$WORK/home" bash "$CALL_STACK_LAB/check.sh" \
+    8049081 0x15 0x2b 4 0x2b \
+    > "$WORK/call-stack-missing-prefix.txt" 2>&1; then
+    echo 'call stack value without 0x unexpectedly passed' >&2
+    exit 1
+fi
 if HOME="$WORK/home" bash "$CALL_STACK_LAB/check.sh" \
     "$RETURN_ADDRESS" "$ARGUMENT_VALUE" 0x0000002a 4 "$RETURN_VALUE" \
     > "$WORK/call-stack-wrong.txt" 2>&1; then
@@ -554,6 +616,7 @@ HOME="$WORK/home" bash "$ELF_BYTES_LAB/inspect.sh" > "$WORK/elf-bytes-inspect.tx
 grep -Eq 'ELF 32-bit LSB executable, Intel (80386|i386)' "$WORK/elf-bytes-inspect.txt"
 grep -Eq '^00000000  7f 45 4c 46 01 01 01 00  00 00 00 00 00 00 00 00' "$WORK/elf-bytes-inspect.txt"
 grep -Eq '魔数[[:space:]]*\| 0x00 \| 7f 45 4c 46' "$WORK/elf-bytes-inspect.txt"
+grep -Fxq 'PwnHub_ELF_marker: ORBIT-386' "$WORK/elf-bytes-inspect.txt"
 HOME="$WORK/home" bash "$ELF_BYTES_LAB/check.sh" \
     "$ELF_MAGIC" "$ELF_CLASS" "$ELF_ENDIAN" "$ELF_MARKER" \
     > "$WORK/elf-bytes-check.txt"
@@ -590,11 +653,27 @@ HOME="$WORK/home" PWNHUB_READELF="$READELF_TOOL" bash "$ELF_SECTIONS_LAB/inspect
 grep -Fq 'Entry point address:' "$WORK/elf-sections-inspect.txt"
 grep -Eq '] \.bss[[:space:]]+NOBITS' "$WORK/elf-sections-inspect.txt"
 HOME="$WORK/home" PWNHUB_READELF="$READELF_TOOL" bash "$ELF_SECTIONS_LAB/check.sh" \
-    "$ELF_ENTRY" "$ELF_TEXT_ADDRESS" "$ELF_BSS_TYPE" "$ELF_DATA_FLAGS" \
+    "$ELF_ENTRY" "0x$ELF_TEXT_ADDRESS" "$ELF_BSS_TYPE" "$ELF_DATA_FLAGS" \
     > "$WORK/elf-sections-check.txt"
 grep -qx 'elf-sections replay passed' "$WORK/elf-sections-check.txt"
+HOME="$WORK/home" PWNHUB_READELF="$READELF_TOOL" bash "$ELF_SECTIONS_LAB/check.sh" \
+    0x8049033 0x8049000 "$ELF_BSS_TYPE" "$ELF_DATA_FLAGS" \
+    > "$WORK/elf-sections-short-hex.txt"
+grep -qx 'elf-sections replay passed' "$WORK/elf-sections-short-hex.txt"
 if HOME="$WORK/home" PWNHUB_READELF="$READELF_TOOL" bash "$ELF_SECTIONS_LAB/check.sh" \
-    "$ELF_ENTRY" "$ELF_TEXT_ADDRESS" PROGBITS "$ELF_DATA_FLAGS" \
+    8049033 0x8049000 "$ELF_BSS_TYPE" "$ELF_DATA_FLAGS" \
+    > "$WORK/elf-sections-missing-prefix.txt" 2>&1; then
+    echo 'ELF section address without 0x unexpectedly passed' >&2
+    exit 1
+fi
+if HOME="$WORK/home" PWNHUB_READELF="$READELF_TOOL" bash "$ELF_SECTIONS_LAB/check.sh" \
+    0x8049033 8049000 "$ELF_BSS_TYPE" "$ELF_DATA_FLAGS" \
+    > "$WORK/elf-sections-text-missing-prefix.txt" 2>&1; then
+    echo 'ELF .text address without 0x unexpectedly passed' >&2
+    exit 1
+fi
+if HOME="$WORK/home" PWNHUB_READELF="$READELF_TOOL" bash "$ELF_SECTIONS_LAB/check.sh" \
+    "$ELF_ENTRY" "0x$ELF_TEXT_ADDRESS" PROGBITS "$ELF_DATA_FLAGS" \
     > "$WORK/elf-sections-wrong.txt" 2>&1; then
     echo 'wrong ELF section type unexpectedly passed' >&2
     exit 1
@@ -624,11 +703,21 @@ HOME="$WORK/home" PWNHUB_NM="$NM_TOOL" bash "$ELF_SYMBOLS_LAB/inspect.sh" \
 grep -Eq '08049031[[:space:]]+T[[:space:]]+compute_total' "$WORK/elf-symbols-inspect.txt"
 grep -Eq '08049020[[:space:]]+t[[:space:]]+mix_value' "$WORK/elf-symbols-inspect.txt"
 HOME="$WORK/home" PWNHUB_NM="$NM_TOOL" bash "$ELF_SYMBOLS_LAB/check.sh" \
-    "$ELF_COMPUTE_ADDRESS" "$ELF_COMPUTE_TYPE" "$ELF_MIX_TYPE" "$ELF_PENDING_TYPE" \
+    "0x$ELF_COMPUTE_ADDRESS" "$ELF_COMPUTE_TYPE" "$ELF_MIX_TYPE" "$ELF_PENDING_TYPE" \
     > "$WORK/elf-symbols-check.txt"
 grep -qx 'elf-symbols replay passed' "$WORK/elf-symbols-check.txt"
+HOME="$WORK/home" PWNHUB_NM="$NM_TOOL" bash "$ELF_SYMBOLS_LAB/check.sh" \
+    0x8049031 "$ELF_COMPUTE_TYPE" "$ELF_MIX_TYPE" "$ELF_PENDING_TYPE" \
+    > "$WORK/elf-symbols-short-hex.txt"
+grep -qx 'elf-symbols replay passed' "$WORK/elf-symbols-short-hex.txt"
 if HOME="$WORK/home" PWNHUB_NM="$NM_TOOL" bash "$ELF_SYMBOLS_LAB/check.sh" \
-    "$ELF_COMPUTE_ADDRESS" t "$ELF_MIX_TYPE" "$ELF_PENDING_TYPE" \
+    8049031 "$ELF_COMPUTE_TYPE" "$ELF_MIX_TYPE" "$ELF_PENDING_TYPE" \
+    > "$WORK/elf-symbols-missing-prefix.txt" 2>&1; then
+    echo 'ELF symbol address without 0x unexpectedly passed' >&2
+    exit 1
+fi
+if HOME="$WORK/home" PWNHUB_NM="$NM_TOOL" bash "$ELF_SYMBOLS_LAB/check.sh" \
+    "0x$ELF_COMPUTE_ADDRESS" t "$ELF_MIX_TYPE" "$ELF_PENDING_TYPE" \
     > "$WORK/elf-symbols-wrong.txt" 2>&1; then
     echo 'wrong ELF symbol visibility unexpectedly passed' >&2
     exit 1
@@ -659,11 +748,27 @@ HOME="$WORK/home" PWNHUB_OBJDUMP="$OBJDUMP_TOOL" bash "$ELF_DISASSEMBLY_LAB/insp
 grep -Eq '08049020 <choose_path>:' "$WORK/elf-disassembly-inspect.txt"
 grep -Eq 'call[[:space:]]+.*<choose_path>' "$WORK/elf-disassembly-inspect.txt"
 HOME="$WORK/home" PWNHUB_OBJDUMP="$OBJDUMP_TOOL" bash "$ELF_DISASSEMBLY_LAB/check.sh" \
-    "$DISASSEMBLY_ADDRESS" "$DISASSEMBLY_CALL" "$DISASSEMBLY_JUMP" "$DISASSEMBLY_COMPARE" \
+    "0x$DISASSEMBLY_ADDRESS" "$DISASSEMBLY_CALL" "$DISASSEMBLY_JUMP" "0x$DISASSEMBLY_COMPARE" \
     > "$WORK/elf-disassembly-check.txt"
 grep -qx 'elf-disassembly replay passed' "$WORK/elf-disassembly-check.txt"
+HOME="$WORK/home" PWNHUB_OBJDUMP="$OBJDUMP_TOOL" bash "$ELF_DISASSEMBLY_LAB/check.sh" \
+    0x8049020 "$DISASSEMBLY_CALL" "$DISASSEMBLY_JUMP" 0x07 \
+    > "$WORK/elf-disassembly-short-hex.txt"
+grep -qx 'elf-disassembly replay passed' "$WORK/elf-disassembly-short-hex.txt"
 if HOME="$WORK/home" PWNHUB_OBJDUMP="$OBJDUMP_TOOL" bash "$ELF_DISASSEMBLY_LAB/check.sh" \
-    "$DISASSEMBLY_ADDRESS" call "$DISASSEMBLY_JUMP" "$DISASSEMBLY_COMPARE" \
+    8049020 "$DISASSEMBLY_CALL" "$DISASSEMBLY_JUMP" 0x7 \
+    > "$WORK/elf-disassembly-missing-prefix.txt" 2>&1; then
+    echo 'ELF disassembly address without 0x unexpectedly passed' >&2
+    exit 1
+fi
+if HOME="$WORK/home" PWNHUB_OBJDUMP="$OBJDUMP_TOOL" bash "$ELF_DISASSEMBLY_LAB/check.sh" \
+    0x8049020 "$DISASSEMBLY_CALL" "$DISASSEMBLY_JUMP" 7 \
+    > "$WORK/elf-disassembly-immediate-missing-prefix.txt" 2>&1; then
+    echo 'ELF compare immediate without 0x unexpectedly passed' >&2
+    exit 1
+fi
+if HOME="$WORK/home" PWNHUB_OBJDUMP="$OBJDUMP_TOOL" bash "$ELF_DISASSEMBLY_LAB/check.sh" \
+    "0x$DISASSEMBLY_ADDRESS" call "$DISASSEMBLY_JUMP" "0x$DISASSEMBLY_COMPARE" \
     > "$WORK/elf-disassembly-wrong.txt" 2>&1; then
     echo 'wrong ELF disassembly call target unexpectedly passed' >&2
     exit 1
@@ -690,6 +795,14 @@ printf '%s\n' "$BASES_OUTPUT" | grep -Fq '挑战二：这个字节的十六进�
 ! printf '%s\n' "$BASES_OUTPUT" | grep -Fq '0xd9'
 ! printf '%s\n' "$BASES_OUTPUT" | grep -Fq '十进制 95'
 ! printf '%s\n' "$BASES_OUTPUT" | grep -Fqw '95'
+HOME="$WORK/home" bash "$NUM_BASES_LAB/check.sh" 0xd9 095 \
+    > "$WORK/num-bases-prefixed-format.txt"
+grep -qx 'num-bases replay passed' "$WORK/num-bases-prefixed-format.txt"
+if HOME="$WORK/home" bash "$NUM_BASES_LAB/check.sh" d9 95 \
+    > "$WORK/num-bases-missing-prefix.txt" 2>&1; then
+    echo 'base conversion value without 0x unexpectedly passed' >&2
+    exit 1
+fi
 
 NUM_WRAP_LAB="$ROOT/vm/labs/pwnhub/num-wrap-01"
 COUNTER_ELF="$NUM_WRAP_LAB/counter"
@@ -704,6 +817,9 @@ printf '%s\n' "$COUNTER_OUTPUT" | grep -Fq '挑战二：0xca + 0x80 的 8 位结
 "$COUNTER_ELF" 255 1 | grep -Fq '8 位结果: 0'
 "$COUNTER_ELF" 173 100 | grep -Fq '8 位结果: 17'
 "$COUNTER_ELF" 202 128 | grep -Fq '8 位结果: 74'
+HOME="$WORK/home" bash "$NUM_WRAP_LAB/check.sh" 0x11 0b1001010 \
+    > "$WORK/num-wrap-flexible-radix.txt"
+grep -qx 'num-wrap replay passed' "$WORK/num-wrap-flexible-radix.txt"
 echo '  ✓ 两个进制样本哈希与功能重放'
 
 echo '==> 第一批漏洞样本宿主重放'
@@ -742,6 +858,9 @@ grep -Fq 'PwnHub_integer_wrap: 乘积回绕为 0，余额检查失效' <<EOF
 $INTEGER_OVERFLOW_OUTPUT
 EOF
 printf '1\n' | timeout 2 "$INTEGER_OVERFLOW_ELF" | grep -Fq '余额不足'
+HOME="$WORK/home" bash "$INTEGER_OVERFLOW_LAB/check.sh" 0x100 0b0 \
+    > "$WORK/integer-overflow-flexible-radix.txt"
+grep -qx 'vuln-integer-overflow replay passed' "$WORK/integer-overflow-flexible-radix.txt"
 
 OVERWRITE_LAB="$ROOT/vm/labs/pwnhub/vuln-overwrite-variable-01"
 OVERWRITE_ELF="$OVERWRITE_LAB/door"
@@ -778,6 +897,14 @@ FORMAT_STRING_ELEVENTH="$(printf '%s' '%x%x%x%x%x%x%x%x%x%x%x' \
     | timeout 2 "$FORMAT_STRING_ELF" \
     | awk '/你好，/ { sub(/^.*你好，[[:space:]]*/, ""); gsub(/[^ 0-9a-f]/, ""); n = split($0, words, /[[:space:]]+/); print words[11] }')"
 [ "$FORMAT_STRING_ELEVENTH" = 0badf00d ]
+HOME="$WORK/home" bash "$FORMAT_STRING_LAB/check.sh" 0xbadf00d \
+    > "$WORK/format-string-prefixed-hex.txt"
+grep -qx 'vuln-format-string replay passed' "$WORK/format-string-prefixed-hex.txt"
+if HOME="$WORK/home" bash "$FORMAT_STRING_LAB/check.sh" badf00d \
+    > "$WORK/format-string-missing-prefix.txt" 2>&1; then
+    echo 'format string secret without 0x unexpectedly passed' >&2
+    exit 1
+fi
 
 RACE_CONDITION_LAB="$ROOT/vm/labs/pwnhub/vuln-race-condition-01"
 RACE_CONDITION_ELF="$RACE_CONDITION_LAB/bank"

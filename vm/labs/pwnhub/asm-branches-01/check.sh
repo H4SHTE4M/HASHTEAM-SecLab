@@ -29,8 +29,14 @@ printf '%s\n' "$je_flag" | grep -Eq '^(ZF|CF|SF|OF)$' || {
     echo 'je 依据请使用一个界面中的 flag 缩写。' >&2
     exit 1
 }
-printf '%s\n' "$jg_relation" | grep -Eq '^(ZF|CF|SF|OF)=(ZF|CF|SF|OF)$' || {
-    echo 'jg 的符号条件请写成 FLAG=FLAG。' >&2
+normalize_jg_relation() {
+    case "$1" in
+        SF=OF|OF=SF) printf 'SF=OF' ;;
+        *) return 1 ;;
+    esac
+}
+jg_relation="$(normalize_jg_relation "$jg_relation")" || {
+    echo 'jg 的符号条件请写成终端中两个 flag 的相等关系。' >&2
     exit 1
 }
 

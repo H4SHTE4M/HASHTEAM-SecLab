@@ -117,7 +117,7 @@
     "type": "debugger-state",
     "debuggerCheckpoint": "stack_ops_checkpoint",
     "usage": "check <第一次PUSH后ESP> <第二次PUSH后ESP> <第一次POP值> <第二次POP值>",
-    "instruction": "依次填入两条 push 行的 ESP，以及 pop eax、pop ebx 行的取出值。",
+    "instruction": "依次填入两条 push 行的 ESP，以及 pop eax、pop ebx 行的取出值；四项均以 0x 开头。",
     "placeholders": [
       { "token": "<第一次PUSH后ESP>", "meaning": "push 0x11111111 行的 ESP" },
       { "token": "<第二次PUSH后ESP>", "meaning": "push 0x22222222 行的 ESP" },

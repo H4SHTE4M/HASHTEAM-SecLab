@@ -11,13 +11,35 @@ if [ "$#" -ne 2 ]; then
     exit 2
 fi
 
-case "$1" in
-    *[!0-9]* | '') echo '第一个观察值应是非负十进制整数。' >&2; exit 2 ;;
-esac
-case "$2" in
-    *[!0-9]* | '') echo '第二个观察值应是非负十进制整数。' >&2; exit 2 ;;
-esac
-[ "${#1}" -le 3 ] && [ "${#2}" -le 3 ] || {
+normalize_uint32() {
+    raw="$1"
+    case "$raw" in
+        0x*|0X*) base=16; digits="${raw#0x}"; [ "$digits" != "$raw" ] || digits="${raw#0X}" ;;
+        0b*|0B*) base=2; digits="${raw#0b}"; [ "$digits" != "$raw" ] || digits="${raw#0B}" ;;
+        0o*|0O*) base=8; digits="${raw#0o}"; [ "$digits" != "$raw" ] || digits="${raw#0O}" ;;
+        *) base=10; digits="$raw" ;;
+    esac
+    digits="$(printf '%s' "$digits" | tr 'A-F' 'a-f')"
+    case "$digits" in
+        ''|*[!0-9a-f]*) return 1 ;;
+    esac
+    awk -v digits="$digits" -v base="$base" '
+        BEGIN {
+            value = 0
+            for (i = 1; i <= length(digits); i++) {
+                digit = index("0123456789abcdef", substr(digits, i, 1)) - 1
+                if (digit < 0 || digit >= base) exit 1
+                value = value * base + digit
+                if (value > 4294967295) exit 1
+            }
+            printf "%.0f\n", value
+        }
+    '
+}
+
+first_submitted="$(normalize_uint32 "$1")" || { echo '第一个观察值应是 0 到 255 的非负整数。' >&2; exit 2; }
+second_submitted="$(normalize_uint32 "$2")" || { echo '第二个观察值应是 0 到 255 的非负整数。' >&2; exit 2; }
+[ "$first_submitted" -le 255 ] && [ "$second_submitted" -le 255 ] || {
     echo '8 位结果只会落在 0 到 255 之间。' >&2
     exit 2
 }
@@ -76,7 +98,7 @@ actual_digest="$(printf 'hashteam-lab answer v1 num-wrap-01:%s' "$calc_line" | s
     exit 2
 }
 
-submitted="$1,$2"
+submitted="$first_submitted,$second_submitted"
 submitted_digest="$(printf 'hashteam-lab answer v1 num-wrap-01:%s' "$submitted" | sha256sum | cut -d ' ' -f 1)"
 [ "$submitted_digest" = "$expected_digest" ] || {
     cat >&2 <<'TEXT'

@@ -11,16 +11,26 @@ if [ "$#" -ne 3 ]; then
     exit 1
 fi
 
-mov_after="$(printf '%s' "$1" | tr 'A-F' 'a-f')"
-lea_after="$(printf '%s' "$2" | tr 'A-F' 'a-f')"
 stack_register="$(printf '%s' "$3" | tr 'a-z' 'A-Z')"
 
-for item in "$mov_after" "$lea_after"; do
-    printf '%s\n' "$item" | grep -Eq '^0x[0-9a-f]{8}$' || {
-        echo '寄存器值必须是 0x 加八位十六进制。' >&2
-        exit 1
-    }
-done
+normalize_hex32() {
+    value="$(printf '%s' "$1" | tr 'A-F' 'a-f')"
+    case "$value" in
+        0x*) value="${value#0x}" ;;
+        0X*) value="${value#0X}" ;;
+        *) return 1 ;;
+    esac
+    case "$value" in
+        ''|*[!0-9a-f]*) return 1 ;;
+    esac
+    value="$(printf '%s' "$value" | sed 's/^0*//')"
+    [ -n "$value" ] || value=0
+    [ "${#value}" -le 8 ] || return 1
+    printf '0x%08s' "$value" | tr ' ' '0'
+}
+
+mov_after="$(normalize_hex32 "$1")" || { echo 'MOV 后的值应以 0x 开头。' >&2; exit 1; }
+lea_after="$(normalize_hex32 "$2")" || { echo 'LEA 后的值应以 0x 开头。' >&2; exit 1; }
 printf '%s\n' "$stack_register" | grep -Eq '^E[A-Z]{2}$' || {
     echo '寄存器请使用输出中的三个大写字母。' >&2
     exit 1

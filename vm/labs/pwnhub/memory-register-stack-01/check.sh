@@ -11,21 +11,26 @@ if [ "$#" -ne 4 ]; then
     exit 1
 fi
 
-normalize_hex() {
-    printf '%s' "$1" | tr 'A-F' 'a-f'
+normalize_hex32() {
+    value="$(printf '%s' "$1" | tr 'A-F' 'a-f')"
+    case "$value" in
+        0x*) value="${value#0x}" ;;
+        0X*) value="${value#0X}" ;;
+        *) return 1 ;;
+    esac
+    case "$value" in
+        ''|*[!0-9a-f]*) return 1 ;;
+    esac
+    value="$(printf '%s' "$value" | sed 's/^0*//')"
+    [ -n "$value" ] || value=0
+    [ "${#value}" -le 8 ] || return 1
+    printf '0x%08s' "$value" | tr ' ' '0'
 }
 
-second_top_address="$(normalize_hex "$1")"
-first_removed_value="$(normalize_hex "$2")"
-after_first_top_value="$(normalize_hex "$3")"
-second_removed_value="$(normalize_hex "$4")"
-
-for item in "$second_top_address" "$first_removed_value" "$after_first_top_value" "$second_removed_value"; do
-    printf '%s\n' "$item" | grep -Eq '^0x[0-9a-f]{8}$' || {
-        echo '四项观察值都必须是 0x 加八位十六进制。' >&2
-        exit 1
-    }
-done
+second_top_address="$(normalize_hex32 "$1")" || { echo '栈顶地址应是以 0x 开头的十六进制值。' >&2; exit 1; }
+first_removed_value="$(normalize_hex32 "$2")" || { echo '第一次取出值应是以 0x 开头的十六进制值。' >&2; exit 1; }
+after_first_top_value="$(normalize_hex32 "$3")" || { echo '随后栈顶值应是以 0x 开头的十六进制值。' >&2; exit 1; }
+second_removed_value="$(normalize_hex32 "$4")" || { echo '第二次取出值应是以 0x 开头的十六进制值。' >&2; exit 1; }
 
 [ -f "$PROGRAM" ] && [ ! -L "$PROGRAM" ] || { echo '栈行为样本缺失。' >&2; exit 1; }
 [ "$(sha256sum "$PROGRAM" | cut -d ' ' -f 1)" = "$EXPECTED_SHA256" ] || {

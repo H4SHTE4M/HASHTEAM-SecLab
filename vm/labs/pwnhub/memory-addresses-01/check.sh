@@ -11,29 +11,40 @@ if [ "$#" -ne 4 ]; then
     exit 1
 fi
 
-normalize_hex() {
-    printf '%s' "$1" | tr 'A-F' 'a-f'
+normalize_hex32() {
+    value="$(printf '%s' "$1" | tr 'A-F' 'a-f')"
+    case "$value" in
+        0x*) value="${value#0x}" ;;
+        0X*) value="${value#0X}" ;;
+        *) return 1 ;;
+    esac
+    case "$value" in
+        ''|*[!0-9a-f]*) return 1 ;;
+    esac
+    value="$(printf '%s' "$value" | sed 's/^0*//')"
+    [ -n "$value" ] || value=0
+    [ "${#value}" -le 8 ] || return 1
+    printf '0x%08s' "$value" | tr ' ' '0'
 }
 
-address="$(normalize_hex "$1")"
-value="$(normalize_hex "$2")"
-pointer="$(normalize_hex "$3")"
-signed="$4"
-
-for item in "$address" "$value" "$pointer"; do
-    case "$item" in
-        0x????????) ;;
-        *) echo '地址、内存值和指针值必须是 0x 加八位十六进制。' >&2; exit 1 ;;
+normalize_signed_decimal() {
+    sign=''
+    digits="$1"
+    case "$digits" in
+        -*) sign='-'; digits="${digits#-}" ;;
     esac
-    printf '%s\n' "$item" | grep -Eq '^0x[0-9a-f]{8}$' || {
-        echo '地址、内存值和指针值必须是 0x 加八位十六进制。' >&2
-        exit 1
-    }
-done
-case "$signed" in
-    -[0-9]*|[0-9]*) ;;
-    *) echo '有符号值必须是十进制整数。' >&2; exit 1 ;;
-esac
+    case "$digits" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    digits="$(printf '%s' "$digits" | sed 's/^0*//')"
+    [ -n "$digits" ] || { printf '0'; return; }
+    printf '%s%s' "$sign" "$digits"
+}
+
+address="$(normalize_hex32 "$1")" || { echo '地址应是以 0x 开头的十六进制值。' >&2; exit 1; }
+value="$(normalize_hex32 "$2")" || { echo '内存值应是以 0x 开头的十六进制值。' >&2; exit 1; }
+pointer="$(normalize_hex32 "$3")" || { echo '指针值应是以 0x 开头的十六进制值。' >&2; exit 1; }
+signed="$(normalize_signed_decimal "$4")" || { echo '有符号值应是十进制整数。' >&2; exit 1; }
 
 [ -f "$PROGRAM" ] && [ ! -L "$PROGRAM" ] || { echo '观测样本缺失。' >&2; exit 1; }
 [ "$(sha256sum "$PROGRAM" | cut -d ' ' -f 1)" = "$EXPECTED_SHA256" ] || {
@@ -65,10 +76,10 @@ digest="$(printf 'hashteam-lab answer v1 memory-addresses-01:%s' "$canonical" | 
     echo '观察值与样本事实不一致。' >&2
     exit 1
 }
-[ "$address" = "$(normalize_hex "$observed_address")" ] || { echo '地址观察值不一致。' >&2; exit 1; }
-[ "$value" = "$(normalize_hex "$observed_value")" ] || { echo '内存值观察值不一致。' >&2; exit 1; }
-[ "$pointer" = "$(normalize_hex "$observed_pointer")" ] || { echo '指针观察值不一致。' >&2; exit 1; }
+[ "$address" = "$(normalize_hex32 "$observed_address")" ] || { echo '地址观察值不一致。' >&2; exit 1; }
+[ "$value" = "$(normalize_hex32 "$observed_value")" ] || { echo '内存值观察值不一致。' >&2; exit 1; }
+[ "$pointer" = "$(normalize_hex32 "$observed_pointer")" ] || { echo '指针观察值不一致。' >&2; exit 1; }
 [ "$signed" = "$observed_signed" ] || { echo '有符号值观察值不一致。' >&2; exit 1; }
-[ "$value" = "$(normalize_hex "$observed_target")" ] || { echo '指针解引用观察值不一致。' >&2; exit 1; }
+[ "$value" = "$(normalize_hex32 "$observed_target")" ] || { echo '指针解引用观察值不一致。' >&2; exit 1; }
 
 echo 'memory-addresses replay passed'

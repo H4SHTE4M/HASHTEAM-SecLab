@@ -13,21 +13,33 @@ if [ "$#" -ne 4 ]; then
     exit 1
 fi
 
-entry="$(printf '%s' "$1" | tr 'A-F' 'a-f')"
-text_address="$(printf '%s' "$2" | tr 'A-F' 'a-f')"
 bss_type="$(printf '%s' "$3" | tr 'a-z' 'A-Z')"
 data_flags="$(printf '%s' "$4" | tr 'a-z' 'A-Z')"
-entry="${entry#0x}"
-text_address="${text_address#0x}"
 
-printf '%s\n' "$entry" | grep -Eq '^[0-9a-f]{7,8}$' || {
-    echo '入口点应写成七到八位十六进制地址，可带 0x 前缀。' >&2
-    exit 1
+normalize_hex32_raw() {
+    value="$(printf '%s' "$1" | tr 'A-F' 'a-f')"
+    case "$value" in
+        0x*) value="${value#0x}" ;;
+        0X*) value="${value#0X}" ;;
+    esac
+    case "$value" in
+        ''|*[!0-9a-f]*) return 1 ;;
+    esac
+    value="$(printf '%s' "$value" | sed 's/^0*//')"
+    [ -n "$value" ] || value=0
+    [ "${#value}" -le 8 ] || return 1
+    printf '%s' "$value"
 }
-printf '%s\n' "$text_address" | grep -Eq '^[0-9a-f]{8}$' || {
-    echo '.text 地址应写成八位十六进制地址，可带 0x 前缀。' >&2
-    exit 1
+
+normalize_hex32_padded() {
+    value="$(normalize_hex32_raw "$1")" || return 1
+    printf '%08s' "$value" | tr ' ' '0'
 }
+
+case "$1" in 0x*|0X*) ;; *) echo '入口点应是以 0x 开头的十六进制地址。' >&2; exit 1 ;; esac
+case "$2" in 0x*|0X*) ;; *) echo '.text 地址应是以 0x 开头的十六进制地址。' >&2; exit 1 ;; esac
+entry="$(normalize_hex32_raw "$1")" || { echo '入口点应是以 0x 开头的十六进制地址。' >&2; exit 1; }
+text_address="$(normalize_hex32_padded "$2")" || { echo '.text 地址应是以 0x 开头的十六进制地址。' >&2; exit 1; }
 printf '%s\n' "$bss_type" | grep -Eq '^[A-Z]{3,12}$' || {
     echo '.bss 类型格式不正确，请填写节表 Type 列。' >&2
     exit 1
@@ -58,6 +70,8 @@ actual_data_flags="$(printf '%s\n' "$sections" | awk '$0 ~ /] \.data[[:space:]]/
     echo '无法从真实 ELF 提取入口点或节表事实。' >&2
     exit 1
 }
+actual_entry="$(normalize_hex32_raw "$actual_entry")"
+actual_text="$(normalize_hex32_padded "$actual_text")"
 
 actual="$actual_entry,$actual_text,$actual_bss_type,$actual_data_flags"
 actual_digest="$(printf 'hashteam-lab answer v1 elf-sections-01:%s' "$actual" | sha256sum | cut -d ' ' -f 1)"

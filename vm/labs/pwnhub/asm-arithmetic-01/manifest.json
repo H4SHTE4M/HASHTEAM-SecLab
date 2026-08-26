@@ -174,7 +174,7 @@
     "type": "debugger-state",
     "debuggerCheckpoint": "arithmetic_checkpoint",
     "usage": "check <加减结果> <乘积> <商> <余数> <位运算结果>",
-    "instruction": "依次填入 sub、imul、除法商、除法余数和 xor 行的后值。",
+    "instruction": "依次填入 sub、imul、除法商、除法余数和 xor 行的后值；五项均以 0x 开头。",
     "placeholders": [
       { "token": "<加减结果>", "meaning": "sub eax, 4 行的后值" },
       { "token": "<乘积>", "meaning": "imul eax, ebx 行的后值" },

@@ -184,16 +184,16 @@
     {
       "level": 3,
       "kind": "structure",
-      "text": "最终结构是 check <入口点> <.text地址> <.bss类型> <.data标志>；地址可带 0x，后两项填写对应英文列值。"
+      "text": "最终结构是 check <入口点> <.text地址> <.bss类型> <.data标志>；地址以 0x 开头，后两项填写对应英文列值。"
     }
   ],
   "verification": {
     "type": "answer",
     "usage": "check <入口点> <.text地址> <.bss类型> <.data标志>",
-    "instruction": "按 ELF 头和节表输出依次填写四项真实观察值。",
+    "instruction": "按 ELF 头和节表输出依次填写四项真实观察值；入口点和 .text 地址以 0x 开头。",
     "placeholders": [
       { "token": "<入口点>", "meaning": "readelf -h 输出中的 Entry point address" },
-      { "token": "<.text地址>", "meaning": ".text 行 Addr 列的八位十六进制地址" },
+      { "token": "<.text地址>", "meaning": ".text 行 Addr 列的十六进制地址" },
       { "token": "<.bss类型>", "meaning": ".bss 行 Type 列的英文类型" },
       { "token": "<.data标志>", "meaning": ".data 行 Flg 列的字母组合" }
     ],

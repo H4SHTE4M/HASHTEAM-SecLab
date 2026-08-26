@@ -181,10 +181,10 @@
     "type": "debugger-state",
     "debuggerCheckpoint": "registers_checkpoint",
     "usage": "check <MOV后EAX> <LEA后ECX> <栈顶寄存器>",
-    "instruction": "依次填入两条操作行的后值，以及职责表中指向栈顶的寄存器。",
+    "instruction": "依次填入两条操作行的后值，以及职责表中指向栈顶的寄存器；两个数值均以 0x 开头。",
     "placeholders": [
-      { "token": "<MOV后EAX>", "meaning": "mov 操作行最后一列的八位十六进制值" },
-      { "token": "<LEA后ECX>", "meaning": "lea 操作行最后一列的八位十六进制值" },
+      { "token": "<MOV后EAX>", "meaning": "mov 操作行最后一列的十六进制值" },
+      { "token": "<LEA后ECX>", "meaning": "lea 操作行最后一列的十六进制值" },
       { "token": "<栈顶寄存器>", "meaning": "职责表中指向当前栈顶的寄存器缩写" }
     ],
     "feedback": {

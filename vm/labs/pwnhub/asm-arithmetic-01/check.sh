@@ -11,11 +11,26 @@ if [ "$#" -ne 5 ]; then
     exit 1
 fi
 
+normalize_hex32() {
+    value="$(printf '%s' "$1" | tr 'A-F' 'a-f')"
+    case "$value" in
+        0x*) value="${value#0x}" ;;
+        0X*) value="${value#0X}" ;;
+        *) return 1 ;;
+    esac
+    case "$value" in
+        ''|*[!0-9a-f]*) return 1 ;;
+    esac
+    value="$(printf '%s' "$value" | sed 's/^0*//')"
+    [ -n "$value" ] || value=0
+    [ "${#value}" -le 8 ] || return 1
+    printf '0x%08s' "$value" | tr ' ' '0'
+}
+
 values=''
 for argument in "$@"; do
-    value="$(printf '%s' "$argument" | tr 'A-F' 'a-f')"
-    printf '%s\n' "$value" | grep -Eq '^0x[0-9a-f]{8}$' || {
-        echo '所有结果都必须是 0x 加八位十六进制。' >&2
+    value="$(normalize_hex32 "$argument")" || {
+        echo '结果应是以 0x 开头的十六进制值。' >&2
         exit 1
     }
     [ -z "$values" ] || values="$values,"

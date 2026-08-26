@@ -11,15 +11,34 @@ if [ "$#" -ne 2 ]; then
     exit 2
 fi
 
-hex_value="$(printf '%s' "$1" | tr 'A-F' 'a-f')"
-case "$hex_value" in
-    0x[0-9a-f][0-9a-f]) ;;
-    *) echo '十六进制写法应是 0x 加两位十六进制数字（例如 0xca）。' >&2; exit 2 ;;
-esac
-case "$2" in
-    *[!0-9]* | '') echo '十进制值应是非负十进制整数。' >&2; exit 2 ;;
-esac
-[ "${#2}" -le 3 ] || { echo '一个字节的十进制值最多三位。' >&2; exit 2; }
+normalize_hex_byte() {
+    value="$(printf '%s' "$1" | tr 'A-F' 'a-f')"
+    case "$value" in
+        0x*) value="${value#0x}" ;;
+        0X*) value="${value#0X}" ;;
+        *) return 1 ;;
+    esac
+    case "$value" in
+        ''|*[!0-9a-f]*) return 1 ;;
+    esac
+    value="$(printf '%s' "$value" | sed 's/^0*//')"
+    [ -n "$value" ] || value=0
+    [ "${#value}" -le 2 ] || return 1
+    printf '0x%02s' "$value" | tr ' ' '0'
+}
+
+normalize_decimal_byte() {
+    case "$1" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    value="$(printf '%s' "$1" | sed 's/^0*//')"
+    [ -n "$value" ] || value=0
+    [ "${#value}" -le 3 ] && [ "$value" -le 255 ] || return 1
+    printf '%s' "$value"
+}
+
+hex_value="$(normalize_hex_byte "$1")" || { echo '第一项应是以 0x 开头的一字节十六进制值。' >&2; exit 2; }
+decimal_value="$(normalize_decimal_byte "$2")" || { echo '第二项应是 0 到 255 的十进制值。' >&2; exit 2; }
 
 [ -f "$PROGRAM" ] && [ ! -L "$PROGRAM" ] || { echo '进制样本缺失或不是普通文件。' >&2; exit 2; }
 [ "$(sha256sum "$PROGRAM" | cut -d ' ' -f 1)" = "$EXPECTED_SHA256" ] || {
@@ -59,7 +78,7 @@ actual_digest="$(printf 'hashteam-lab answer v1 num-bases-01:%s' "$calc_line" | 
     exit 2
 }
 
-submitted="$hex_value,$2"
+submitted="$hex_value,$decimal_value"
 submitted_digest="$(printf 'hashteam-lab answer v1 num-bases-01:%s' "$submitted" | sha256sum | cut -d ' ' -f 1)"
 [ "$submitted_digest" = "$expected_digest" ] || {
     cat >&2 <<'TEXT'

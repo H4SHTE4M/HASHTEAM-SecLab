@@ -8,16 +8,26 @@ EXPECTED_SHA256='6d844f137c037eaa56736e7640048c04b21e69805abc645abb4ecf2d801da71
 LAB_ID='vuln-format-string-01'
 
 if [ "$#" -ne 1 ]; then
-    echo '需要提交一个 8 位十六进制秘密值。' >&2
+    echo '需要提交一个十六进制秘密值。' >&2
     exit 1
 fi
 
 secret="$(printf '%s' "$1" | tr 'A-F' 'a-f')"
-secret="${secret#0x}"
-printf '%s\n' "$secret" | grep -Eq '^[0-9a-f]{8}$' || {
-    echo '秘密值应写成 8 位小写十六进制（例如 0badf00d）。' >&2
+case "$secret" in
+    0x*) secret="${secret#0x}" ;;
+    0X*) secret="${secret#0X}" ;;
+    *) echo '秘密值应使用以 0x 开头的十六进制表示。' >&2; exit 1 ;;
+esac
+case "$secret" in
+    ''|*[!0-9a-f]*) echo '秘密值应使用以 0x 开头的十六进制表示。' >&2; exit 1 ;;
+esac
+secret="$(printf '%s' "$secret" | sed 's/^0*//')"
+[ -n "$secret" ] || secret=0
+[ "${#secret}" -le 8 ] || {
+    echo '秘密值超出 32 位范围。' >&2
     exit 1
 }
+secret="$(printf '%08s' "$secret" | tr ' ' '0')"
 
 [ -f "$PROGRAM" ] && [ ! -L "$PROGRAM" ] || { echo '样本缺失。' >&2; exit 2; }
 [ "$(sha256sum "$PROGRAM" | cut -d ' ' -f 1)" = "$EXPECTED_SHA256" ] || {

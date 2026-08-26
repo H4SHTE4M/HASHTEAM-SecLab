@@ -113,9 +113,9 @@
     "type": "debugger-state",
     "debuggerCheckpoint": "memory_addresses_checkpoint",
     "usage": "check <地址> <内存值> <指针值> <有符号值>",
-    "instruction": "把样本输出中的四个事实按顺序填入；地址、内存值和指针值保留 0x 前缀。",
+    "instruction": "把样本输出中的四个事实按顺序填入；前三项使用以 0x 开头的十六进制。",
     "placeholders": [
-      { "token": "<地址>", "meaning": "cell 行第一列的八位十六进制地址" },
+      { "token": "<地址>", "meaning": "cell 行第一列的十六进制地址" },
       { "token": "<内存值>", "meaning": "cell 行第三列的四字节位模式" },
       { "token": "<指针值>", "meaning": "cell_pointer 行第三列保存的地址" },
       { "token": "<有符号值>", "meaning": "signed_cell 行第三列的十进制值" }
