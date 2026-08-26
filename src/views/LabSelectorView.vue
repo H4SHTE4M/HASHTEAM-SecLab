@@ -1,18 +1,30 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import { useLabPreferences } from '../composables/useLabPreferences'
 import { useLabProgress } from '../composables/useLabProgress'
+import { loadCryptoLabProgress } from '../services/crypto-lab-progress'
 import { createSafeStorage } from '../services/progress-store'
-import { MODULES, type ModuleId, type ModuleSummary } from '../modules/catalog'
+import {
+  MODULES,
+  resolveDocumentEntryHref,
+  type ModuleId,
+  type ModuleSummary,
+} from '../modules/catalog'
 import { PUBLISHED_PWNHUB_LAB_IDS } from '../modules/pwnhub/published-labs'
+
+const props = defineProps<{
+  assignDocument?: (href: string) => void
+}>()
 
 const router = useRouter()
 const progress = useLabProgress()
 const appearanceStorage = createSafeStorage()
 const preferences = useLabPreferences()
 const publishedPwnHubIds = new Set<string>(PUBLISHED_PWNHUB_LAB_IDS)
+const cryptoLabCompleted = ref(loadCryptoLabProgress(appearanceStorage).completedCount)
+
 function applyAppearance(): void {
   document.documentElement.dataset.theme =
     appearanceStorage.getItem('hashteam-theme-v1') === 'dark' ? 'dark' : 'light'
@@ -29,24 +41,71 @@ function applyAppearance(): void {
 
 applyAppearance()
 
-const completedByModule = computed<Record<ModuleId, number>>(() => ({
-  seclab: Math.min(progress.state.completedLevels.length, 10),
-  pwnhub: progress.state.completedLabIds.filter((labId) => publishedPwnHubIds.has(labId)).length,
-}))
+function refreshCryptoLabProgress(): void {
+  cryptoLabCompleted.value = loadCryptoLabProgress(appearanceStorage).completedCount
+}
 
-const pwnHubReadiness = computed(() => {
-  const completed = completedByModule.value.seclab
-  if (completed === 0) return 'PwnHub 假设你已熟悉基本 Shell；仍可直接进入。'
-  if (completed < 10) return `已完成 ${completed}/10 个基础实验；建议继续完成 SecLab，也可直接进入。`
-  return '基础训练已完成，推荐进入 PwnHub。'
-})
+onMounted(() => window.addEventListener('pageshow', refreshCryptoLabProgress))
+onUnmounted(() => window.removeEventListener('pageshow', refreshCryptoLabProgress))
+
+const completionSources: Record<ModuleId, () => number> = {
+  seclab: () => Math.min(progress.state.completedLevels.length, 10),
+  pwnhub: () =>
+    progress.state.completedLabIds.filter((labId) => publishedPwnHubIds.has(labId)).length,
+  cryptolab: () => cryptoLabCompleted.value,
+}
+
+const completedByModule = computed<Record<ModuleId, number>>(
+  () =>
+    Object.fromEntries(
+      MODULES.map((module) => [module.moduleId, completionSources[module.moduleId]()] as const),
+    ) as Record<ModuleId, number>,
+)
+
+interface DisplayNotice {
+  kind: 'readiness' | 'wip'
+  icon: 'info' | 'layers'
+  text: string
+}
+
+function noticesFor(module: ModuleSummary): readonly DisplayNotice[] {
+  const notices: DisplayNotice[] = []
+  if (module.readiness) {
+    const completed = completedByModule.value[module.readiness.moduleId]
+    const prerequisite = MODULES.find(
+      (candidate) => candidate.moduleId === module.readiness?.moduleId,
+    )
+    const total = prerequisite?.publishedCount ?? 0
+    const text =
+      completed === 0
+        ? module.readiness.empty
+        : completed < total
+          ? module.readiness.partial
+              .replace('{completed}', String(completed))
+              .replace('{total}', String(total))
+          : module.readiness.complete
+    notices.push({ kind: 'readiness', icon: 'info', text })
+  }
+  notices.push(...(module.notices ?? []))
+  return notices
+}
 
 function progressLabel(module: ModuleSummary): string {
   return `${completedByModule.value[module.moduleId]} / ${module.publishedCount}`
 }
 
 function enterModule(module: ModuleSummary): void {
-  void router.push(module.route)
+  if (module.entry.kind === 'router') {
+    void router.push(module.entry.route)
+    return
+  }
+
+  const href = resolveDocumentEntryHref(module.entry, window.location.href)
+  if (props.assignDocument) {
+    props.assignDocument(href)
+    return
+  }
+  window.location.assign(href)
 }
 </script>
 
@@ -66,17 +125,18 @@ function enterModule(module: ModuleSummary): void {
         v-for="module in MODULES"
         :key="module.moduleId"
         class="module-card"
-        :class="`module-${module.moduleId}`"
+        :class="`module-accent-${module.accent}`"
+        :data-module-id="module.moduleId"
       >
         <div class="card-heading">
           <span class="module-icon" aria-hidden="true">
-            <AppIcon :name="module.moduleId === 'seclab' ? 'terminal' : 'server'" :size="22" />
+            <AppIcon :name="module.icon" :size="22" />
           </span>
           <div>
-            <p class="module-kicker">{{ module.moduleId === 'seclab' ? 'SecLab' : 'PwnHub' }}</p>
+            <p class="module-kicker">{{ module.shortTitle }}</p>
             <h2>{{ module.title }}</h2>
           </div>
-          <span v-if="module.moduleId === 'pwnhub'" class="wip-badge">建设中</span>
+          <span v-if="module.badge" class="module-badge">{{ module.badge }}</span>
         </div>
 
         <p class="module-description">{{ module.description }}</p>
@@ -103,19 +163,22 @@ function enterModule(module: ModuleSummary): void {
           </p>
         </div>
 
-        <p v-if="module.moduleId === 'pwnhub'" class="readiness-note">
-          <AppIcon name="info" :size="15" />
-          <span>{{ pwnHubReadiness }}</span>
-        </p>
-
-        <p v-if="module.moduleId === 'pwnhub'" class="wip-note">
-          <AppIcon name="layers" :size="15" />
-          <span>模块仍在建设中：后续会持续改进新手引导并开放更多关卡，已有进度会保留。</span>
+        <p
+          v-for="notice in noticesFor(module)"
+          :key="notice.kind"
+          class="module-note"
+          :class="`${notice.kind}-note`"
+        >
+          <AppIcon :name="notice.icon" :size="15" />
+          <span>{{ notice.text }}</span>
         </p>
 
         <button type="button" class="enter-button" @click="enterModule(module)">
           <span>{{ completedByModule[module.moduleId] > 0 ? '继续学习' : '进入实验' }}</span>
-          <AppIcon name="chevron-right" :size="17" />
+          <AppIcon
+            :name="module.entry.kind === 'document' ? 'external-link' : 'chevron-right'"
+            :size="17"
+          />
         </button>
       </article>
     </section>
@@ -145,9 +208,13 @@ function enterModule(module: ModuleSummary): void {
   display: grid;
   flex: 0 0 auto;
   place-items: center;
+  border: 1px solid;
+}
+
+.brand-mark {
   color: var(--accent-cyan);
   background: var(--accent-cyan-soft);
-  border: 1px solid var(--accent-cyan-border);
+  border-color: var(--accent-cyan-border);
 }
 
 .brand-mark {
@@ -159,12 +226,19 @@ function enterModule(module: ModuleSummary): void {
 .eyebrow,
 .module-kicker {
   margin: 0;
-  color: var(--accent-cyan);
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+
+.eyebrow {
+  color: var(--accent-cyan);
+}
+
+.module-kicker {
+  color: var(--module-accent);
 }
 
 h1,
@@ -195,11 +269,15 @@ h1 {
 
 .module-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 22px;
 }
 
 .module-card {
+  --module-accent: var(--accent-cyan);
+  --module-accent-soft: var(--accent-cyan-soft);
+  --module-accent-border: var(--accent-cyan-border);
+
   display: flex;
   min-height: 410px;
   flex-direction: column;
@@ -210,8 +288,21 @@ h1 {
   box-shadow: var(--shadow-panel);
 }
 
-.module-pwnhub {
-  border-color: color-mix(in srgb, var(--accent-violet) 32%, var(--border-subtle));
+.module-accent-violet {
+  --module-accent: var(--accent-violet);
+  --module-accent-soft: var(--accent-violet-soft);
+  --module-accent-border: var(--accent-violet-border);
+}
+
+.module-accent-amber {
+  --module-accent: var(--accent-amber);
+  --module-accent-soft: var(--accent-amber-soft);
+  --module-accent-border: var(--accent-amber-border);
+}
+
+.module-accent-violet,
+.module-accent-amber {
+  border-color: color-mix(in srgb, var(--module-accent) 32%, var(--border-subtle));
 }
 
 .card-heading {
@@ -224,6 +315,9 @@ h1 {
 .module-icon {
   width: 46px;
   height: 46px;
+  color: var(--module-accent);
+  background: var(--module-accent-soft);
+  border-color: var(--module-accent-border);
   border-radius: 14px;
 }
 
@@ -271,7 +365,7 @@ h2 {
 .progress-track span {
   display: block;
   height: 100%;
-  background: var(--accent-cyan);
+  background: var(--module-accent);
   border-radius: inherit;
   transition: width var(--duration-normal) var(--ease-out);
 }
@@ -282,14 +376,17 @@ h2 {
   line-height: 1.5;
 }
 
-.readiness-note {
+.module-note {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  margin: 18px 0 0;
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.55;
+}
+
+.readiness-note {
+  margin: 18px 0 0;
 }
 
 .readiness-note svg {
@@ -298,33 +395,30 @@ h2 {
   color: var(--accent-amber);
 }
 
-.wip-badge {
+.module-badge {
   flex: 0 0 auto;
   margin-left: auto;
   padding: 3px 9px;
-  color: var(--accent-violet);
+  color: var(--module-accent);
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.08em;
-  background: color-mix(in srgb, var(--accent-violet) 12%, transparent);
-  border: var(--hairline) solid color-mix(in srgb, var(--accent-violet) 40%, transparent);
+  background: var(--module-accent-soft);
+  border: var(--hairline) solid var(--module-accent-border);
   border-radius: 999px;
 }
 
 .wip-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
   margin: 10px 0 0;
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.55;
+}
+
+.module-note svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
 }
 
 .wip-note svg {
-  flex: 0 0 auto;
-  margin-top: 2px;
-  color: var(--accent-violet);
+  color: var(--module-accent);
 }
 
 .enter-button {
@@ -353,6 +447,12 @@ h2 {
 .enter-button:focus-visible {
   outline: 3px solid var(--accent-cyan-border);
   outline-offset: 3px;
+}
+
+@media (max-width: 980px) {
+  .module-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {

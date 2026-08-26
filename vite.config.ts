@@ -1,7 +1,7 @@
 /// <reference types="vitest/config" />
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { readdirSync, readFileSync } from 'node:fs'
+import { lstatSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig, type Plugin } from 'vite'
@@ -18,24 +18,53 @@ const VM_ASSETS = {
 const LEGAL_FILES = ['SOURCE_CODE.md', 'THIRD_PARTY_NOTICES.md'] as const
 const EDGEONE_CONFIG_FILE = 'edgeone.json'
 const TALK_ROOT = 'talk'
+const CRYPTO_LAB_ROOT = 'crypto-lab'
 const EDGE_FUNCTIONS_ROOT = 'edge-functions'
 
 /**
- * 递归收集 talk/ 下待发布的相对路径（POSIX 风格，排序确定）。
- * 跳过 . 开头的目录与文件，避免 .claude、.DS_Store 等工具残留进入生产包。
+ * 递归收集免构建静态目录下的相对路径（POSIX 风格，排序确定）。
+ * 隐藏项与符号链接会直接中止构建，避免工具残留或仓库外内容进入生产包。
  */
-function collectTalkFiles(directory: string, base: string): string[] {
+function collectStaticFiles(
+  directory: string,
+  base: string,
+  label: string,
+): string[] {
+  const directoryInfo = lstatSync(directory)
+  if (directoryInfo.isSymbolicLink() || !directoryInfo.isDirectory()) {
+    throw new Error(`${label} 静态源目录必须是真实目录：${directory}`)
+  }
   const results: string[] = []
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    if (entry.name.startsWith('.')) continue
+  const entries = readdirSync(directory, { withFileTypes: true }).sort(
+    (left, right) =>
+      left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
+  )
+  for (const entry of entries) {
+    if (entry.name.startsWith('.')) {
+      throw new Error(`${label} 静态源不允许隐藏项：${path.join(directory, entry.name)}`)
+    }
     const absolute = path.join(directory, entry.name)
-    if (entry.isDirectory()) {
-      results.push(...collectTalkFiles(absolute, base))
+    if (entry.isSymbolicLink()) {
+      throw new Error(`${label} 静态源不允许符号链接：${absolute}`)
+    } else if (entry.isDirectory()) {
+      results.push(...collectStaticFiles(absolute, base, label))
     } else if (entry.isFile()) {
       results.push(path.relative(base, absolute).split(path.sep).join('/'))
+    } else {
+      throw new Error(`${label} 静态源包含不支持的文件类型：${absolute}`)
     }
   }
   return results.sort()
+}
+
+function isCryptoLabRuntimeFile(relativePath: string): boolean {
+  return (
+    relativePath === 'index.html' ||
+    relativePath === 'app.js' ||
+    relativePath === 'styles.css' ||
+    (/^(?:crypto|levels)\/[A-Za-z0-9._/-]+\.js$/.test(relativePath) &&
+      !relativePath.split('/').includes('..'))
+  )
 }
 const NODE_MAJOR_VERSION = Number.parseInt(process.versions.node, 10)
 const TEST_WORKER_EXEC_ARGV =
@@ -234,7 +263,7 @@ function vmAssetsPlugin(
       // talk/ 是免构建的 reveal.js 幻灯片，原样输出到 dist/talk/，使
       // nginx 与 EdgeOne 两条发布通道从同一份 release 自动携带。
       const talkRoot = path.resolve(process.cwd(), TALK_ROOT)
-      const talkFiles = collectTalkFiles(talkRoot, talkRoot)
+      const talkFiles = collectStaticFiles(talkRoot, talkRoot, TALK_ROOT)
       if (!talkFiles.includes('index.html')) {
         throw new Error('talk/ 缺少 index.html，无法发布幻灯片')
       }
@@ -245,10 +274,32 @@ function vmAssetsPlugin(
           source: readFileSync(path.join(talkRoot, relativePath)),
         })
       }
+      // Crypto Lab 保持为免构建子站，仅发布浏览器运行时白名单。
+      // tests/、package.json 与来源说明等开发材料不进入 dist/。
+      const cryptoLabRoot = path.resolve(process.cwd(), CRYPTO_LAB_ROOT)
+      const cryptoLabFiles = collectStaticFiles(
+        cryptoLabRoot,
+        cryptoLabRoot,
+        CRYPTO_LAB_ROOT,
+      ).filter(isCryptoLabRuntimeFile)
+      if (!cryptoLabFiles.includes('index.html')) {
+        throw new Error('crypto-lab/ 缺少 index.html，无法发布密码学实验室')
+      }
+      for (const relativePath of cryptoLabFiles) {
+        this.emitFile({
+          type: 'asset',
+          fileName: `crypto-lab/${relativePath}`,
+          source: readFileSync(path.join(cryptoLabRoot, relativePath)),
+        })
+      }
       // edge-functions/ 是 EdgeOne Makers Edge Function 源码，原样输出到
       // dist/edge-functions/，Direct Upload 部署时自动注册路由。
       const efRoot = path.resolve(process.cwd(), EDGE_FUNCTIONS_ROOT)
-      for (const relativePath of collectTalkFiles(efRoot, efRoot)) {
+      for (const relativePath of collectStaticFiles(
+        efRoot,
+        efRoot,
+        EDGE_FUNCTIONS_ROOT,
+      )) {
         this.emitFile({
           type: 'asset',
           fileName: `edge-functions/${relativePath}`,

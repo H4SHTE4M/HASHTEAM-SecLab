@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Crypto Lab · 交互式密码学实验室</title>
+  <meta name="description" content="面向零基础新生的交互式密码学实验室：Caesar、栅栏、Vigenere、XOR、AES-CTR、RSA 与量子威胁。"/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar__main">
+      <a class="home-link" href="../#/" title="返回 HASHTEAM 模块选择页" aria-label="返回 HASHTEAM 模块选择页">← <span>HASHTEAM</span></a>
+      <button class="nav-toggle" id="nav-toggle" title="展开 / 收起关卡导航" aria-label="展开 / 收起关卡导航">☰</button>
+      <a class="brand" href="#">Crypto Lab</a>
+      <button class="theme-toggle" id="theme-toggle" title="切换浅色/深色模式">🌙</button>
+    </div>
+  </header>
+  <nav class="level-map" id="level-map" aria-label="关卡导航"></nav>
+
+  <main class="page">
+    <section class="intro-card" id="intro">
+      <h1>发送者想把消息安全地发给接收者</h1>
+      <p>公共信道（如互联网）被攻击者监听。你需要帮助发送者加密、帮助接收者解密，再切换到攻击者的视角寻找漏洞。</p>
+      <div class="intro-roles">
+        <div class="role-card role-card--sender">
+          <span class="role-card__avatar">📤</span>
+          <strong>发送者</strong>
+          <span>生成消息与密钥，加密后发出</span>
+        </div>
+        <div class="role-card role-card--receiver">
+          <span class="role-card__avatar">📥</span>
+          <strong>接收者</strong>
+          <span>拿到密钥，解密消息</span>
+        </div>
+        <div class="role-card role-card--attacker">
+          <span class="role-card__avatar">🕵️</span>
+          <strong>攻击者</strong>
+          <span>监听公共信道，尝试破解密文</span>
+        </div>
+      </div>
+      <button class="btn btn--primary" id="btn-start">开始第 0 关</button>
+    </section>
+
+    <section class="level-container" id="level-container" hidden></section>
+  </main>
+
+  <footer class="footer">
+    <p>⚠️ 本页面仅用于教学演示，不提供真实生产级密码学实现。</p>
+  </footer>
+
+  <!-- Crypto -->
+  <script src="crypto/english-ngrams.js"></script>
+  <script src="crypto/core.js"></script>
+  <script src="crypto/aes.js"></script>
+  <script src="crypto/rsa.js"></script>
+  <!-- Levels -->
+  <script src="levels/level00.js"></script>
+  <script src="levels/level01.js"></script>
+  <script src="levels/level02.js"></script>
+  <script src="levels/level03.js"></script>
+  <script src="levels/level04.js"></script>
+  <script src="levels/level04b.js"></script>
+  <script src="levels/level05.js"></script>
+  <script src="levels/level07.js"></script>
+  <script src="levels/sideA.js"></script>
+  <script src="levels/sideB.js"></script>
+  <script src="levels/sideC.js"></script>
+  <!-- App -->
+  <script src="app.js"></script>
+</body>
+</html>

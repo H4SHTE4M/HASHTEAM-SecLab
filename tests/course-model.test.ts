@@ -391,7 +391,7 @@ describe('course manifest v3 compatibility layer', () => {
     }
   })
 
-  it('EdgeOne 禁止缓存 companion 并永久提供内容寻址 artifact', () => {
+  it('EdgeOne 保持安全头，为 Crypto Lab 禁止缓存并永久提供 artifact', () => {
     const edgeOne = JSON.parse(readFileSync('edgeone.json', 'utf8')) as {
       headers: Array<{
         source: string
@@ -405,7 +405,25 @@ describe('course manifest v3 compatibility layer', () => {
       ]),
     )
 
+    const securityHeaders = Object.fromEntries(
+      edgeOne.headers
+        .find((rule) => rule.source === '/*')!
+        .headers.map(({ key, value }) => [key, value]),
+    )
+    expect(securityHeaders).toEqual({
+      'Strict-Transport-Security': 'max-age=31536000',
+      'Content-Security-Policy':
+        "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'no-referrer',
+      'Permissions-Policy':
+        'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+      'X-Frame-Options': 'DENY',
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Resource-Policy': 'same-origin',
+    })
     expect(cacheControlBySource['/companion.html']).toBe('no-store')
+    expect(cacheControlBySource['/crypto-lab/*']).toBe('no-store')
     expect(cacheControlBySource['/artifacts/*']).toBe(
       'public, max-age=31536000, immutable',
     )

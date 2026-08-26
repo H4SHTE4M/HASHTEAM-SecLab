@@ -23,6 +23,7 @@ Release source and build instructions:
 | v86 | 0.5.424 | BSD-2-Clause | Project source/archive and <https://github.com/copy/v86> |
 | Vue | 3.5.40 | MIT | <https://github.com/vuejs/core> |
 | xterm.js / addon-fit | 5.5.0 / 0.10.0 | MIT | <https://github.com/xtermjs/xterm.js> |
+| English trigram and quadgram frequency data | First 2,000 / 3,000 rows of the `ngrams` dataset | LGPL-3.0-only | <https://people.sc.fsu.edu/~jburkardt/datasets/ngrams/ngrams.html>, its [license text](https://people.sc.fsu.edu/~jburkardt/txt/gnu_lgpl.txt), and the embedded data in `crypto-lab/crypto/english-ngrams.js` |
 
 The exact source URLs, SHA-256 values, source retrieval procedure, license
 locations, and build-specific materials are documented in
@@ -111,3 +112,10 @@ THE SOFTWARE.
 Copyright (c) 2019, The xterm.js authors (https://github.com/xtermjs/xterm.js)
 
 The MIT permission and warranty terms immediately above apply to addon-fit.
+
+## English n-gram frequency data — GNU LGPL v3
+
+The `ngrams` dataset page states that its code and data files are distributed
+under the GNU Lesser General Public License version 3. The embedded Crypto Lab
+data is an exact leading subset of its English trigram and quadgram tables. The
+license text is available from the source linked in the component table above.

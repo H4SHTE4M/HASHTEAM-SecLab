@@ -83,6 +83,15 @@
       ]
     },
     {
+      "source": "/crypto-lab/*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
       "source": "/assets/*",
       "headers": [
         {
