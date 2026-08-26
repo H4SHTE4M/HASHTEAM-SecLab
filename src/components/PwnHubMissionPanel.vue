@@ -533,11 +533,11 @@ function showNextRevealedStep(): void {
           v-if="level.verificationType === 'debugger-state'"
           :state="debuggerState ?? 'idle'"
           :checkpoint="level.verification.debuggerCheckpoint"
+          :verification="level.verification"
           @launch="emit('debugger-launch')"
           @command="emit('debugger-command', $event)"
         />
         <EvidenceForm
-          v-else
           :verification="level.verification"
           :available="verificationAvailable"
           :total-steps="level.steps.length"
@@ -1246,34 +1246,6 @@ input[type='text'],
   margin: 0 0 8px;
   font-size: 14px;
   line-height: 1.6;
-}
-
-.verification > code {
-  display: block;
-  overflow-x: auto;
-  color: var(--accent-green);
-  font-size: 14px;
-  white-space: nowrap;
-}
-
-.verification dl {
-  margin: 9px 0;
-}
-
-.verification dl div {
-  margin-top: 6px;
-}
-
-.verification dt {
-  color: var(--accent-amber);
-  font-family: var(--font-mono);
-  font-size: 13px;
-}
-
-.verification dd {
-  margin: 2px 0 0;
-  color: var(--text-muted);
-  font-size: 13px;
 }
 
 .verification-form {

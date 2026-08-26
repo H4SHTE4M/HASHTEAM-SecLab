@@ -68,7 +68,7 @@ function recordLabel(record?: LevelCompletionRecord): string {
     <div class="completion-inner">
       <p class="congrats-badge"><AppIcon name="trophy" :size="16" /> 全部实验完成</p>
       <h1 class="title">
-        {{ course === undefined ? '欢迎加入 HASHTEAM 的世界' : 'PwnHub 首批课程已完成' }}
+        {{ course === undefined ? '欢迎加入 HASHTEAM 的世界' : 'PwnHub 课程已完成' }}
       </h1>
       <p v-if="course === undefined" class="intro">
         你已经在真实的 Linux 终端里完成了身份确认、文件整理、隐藏信息探索、
@@ -78,7 +78,6 @@ function recordLabel(record?: LevelCompletionRecord): string {
       <p v-else class="intro">
         你已从数字与进制出发，经过逻辑漏洞、内存模型与内存漏洞，走到汇编读写
         与 ELF 静态分析，完成了全部 20 个真实 i386 实验的验证。
-        后续章节会按发布计划逐步开放。
       </p>
 
       <section class="completion-records">

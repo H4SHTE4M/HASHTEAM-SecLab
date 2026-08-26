@@ -110,9 +110,10 @@ describe('course manifest v3 compatibility layer', () => {
     expect(getCourseLab('asm-registers-01')?.id).toBe(12)
   })
 
-  it('保留后续章节路线图但不把未发布实验装入课程', () => {
+  it('删除第 7 章及以后章节，并保持未发布实验不进入课程', () => {
     expect(COURSE.chapters.filter((chapter) => chapter.status === 'planned').map((chapter) => chapter.chapterId))
-      .toEqual(['gdb-pwndbg', 'ida-companion', 'pwn-ret2win', 'rop-basics'])
+      .toEqual([])
+    expect(COURSE.chapters).toHaveLength(6)
     expect(getCourseLab('gdb-breakpoints-01')).toBeUndefined()
     expect(getCourseLab('pwn-ret2win-01')).toBeUndefined()
     expect(getCourseLab('rop-call-chain-01')).toBeUndefined()
