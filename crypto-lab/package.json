@@ -1,0 +1,9 @@
+{
+  "name": "@hashteam/crypto-lab",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "node tests/classical-test.js && node tests/aes-ctr-test.js && node tests/rsa-test.js && node tests/smoke-test.js"
+  }
+}

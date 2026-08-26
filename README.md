@@ -2,11 +2,12 @@
 
 一个**完全运行在浏览器里**的交互式安全实验平台。根路径提供 Lab 选择器：
 SecLab「安全新手村」包含 10 个 Linux 安全入门关卡；PwnHub 首批开放
-数字与进制、逻辑漏洞、内存模型、内存漏洞、汇编与 ELF 六章共 20 个二进制安全实验。
-两者共用真实的 32 位 Linux 虚拟机、引导/挑战模式和本地进度存档。
+数字与进制、逻辑漏洞、内存模型、内存漏洞、汇编与 ELF 六章共 20 个二进制安全实验；
+Crypto Lab 包含从古典密码到 AES、RSA 的 11 个浏览器内密码学实验。
+SecLab 与 PwnHub 共用真实的 32 位 Linux 虚拟机和引导/挑战模式；三条路径均在本地保存进度。
 
-整个环境基于 WebAssembly 在本地虚拟化运行，**不依赖任何后端容器**；
-刷新页面或点击「重新开始」即可恢复原样。
+SecLab 与 PwnHub 基于 WebAssembly 在本地虚拟化运行，Crypto Lab 是不联网、
+不启动虚拟机的静态子站。整个平台**不依赖任何后端容器**。
 
 ---
 
@@ -16,12 +17,14 @@ SecLab「安全新手村」包含 10 个 Linux 安全入门关卡；PwnHub 首�
 - 使用 xterm.js 作为终端，v86（WebAssembly x86 虚拟机）作为运行时。
 - SecLab：10 个零基础关卡，覆盖终端、文件、权限、日志、编码、进程、本地 Web 与配置修复。
 - PwnHub：六章 20 个实验按严格串行链解锁——数字与进制 2 个（三种写法、8 位计数器回绕）→ 逻辑漏洞 3 个（弱随机、整数回绕、条件竞争）→ 内存模型 3 个 → 内存漏洞 3 个（越界覆盖、栈溢出、格式化字符串）→ 汇编读写 5 个 → ELF 静态分析 4 个；GDB 动态调试、外部静态逆向与 ret2win / 基础 ROP 等后续章节尚未进入生产课程包。
+- Crypto Lab：11 个依赖原生浏览器 API 的离线实验，覆盖古典密码、频率分析、
+  AES-CTR、RSA 和组合挑战；算法、判题与进度存档都在页面内完成。
 - 首次进入可明确选择**引导模式**或**挑战模式**：引导模式逐步讲解并要求留下
   教学证据；挑战模式只展示目标、按需提示和最终验证，允许在真实终端自由探索。
   两种模式共用同一套环境与最终状态判题，并可随时无损切换。
 - 虚拟机内的检查脚本通过串口协议（`@@HASHTEAM:{...}`）与前端通信，
   前端据此更新任务面板、提示系统和进度存档（LocalStorage）。
-- 两个 Lab 都具备模块隔离的阻断异常检测：进度证据损坏、评分密钥缺失或
+- 两个虚拟机 Lab 都具备模块隔离的阻断异常检测：进度证据损坏、评分密钥缺失或
   WebCrypto 不可用时，当前工作台提供重置/重启、挑战模式出口和 v2 现场日志下载。
 - 传达的理念：**CTF 是入门手段，不是终点**——结束页展示实验室在
   漏洞挖掘、渗透攻防、安全开发、校园安全运维四个方向的真实工作。
@@ -30,6 +33,8 @@ SecLab「安全新手村」包含 10 个 Linux 安全入门关卡；PwnHub 首�
 
 ```text
 ┌────────────────────────────── 浏览器（纯静态页面）──────────────────────────────┐
+│  Crypto Lab 静态子站（HTML / CSS / JS；本地算法、判题与进度；不启动 VM）       │
+│                                                                               │
 │  Vue 3 应用                                                                    │
 │  ├─ TopBar / MissionPanel / CompletionPage   （任务文案来自每关 challenge.json）│
 │  ├─ LabTerminal (xterm.js) ◄── 显示文本                                       │
@@ -116,6 +121,7 @@ pnpm dev            # 启动开发服务器（默认 http://localhost:5173）
 
 ```bash
 pnpm test               # 前端单元测试（协议解析、进度持久化）
+pnpm test:crypto        # Crypto Lab 算法与交互测试
 pnpm test:watch         # Vitest 监听模式，适合本地迭代
 pnpm validate:challenges # 校验关卡 manifest、连续编号与必要脚本
 pnpm validate:binary-profile # 校验 PwnHub ELF、工具链锁与生产 profile
@@ -131,8 +137,13 @@ pnpm verify:dist        # 校验 VM、companion、发布实验下载物与法律
 `pnpm test:vm` 需要一个 busybox 静态二进制：运行过 `vm/build.sh` 后会自动
 使用 `vm/.cache/busybox`；也可以通过 `BUSYBOX=/path/to/busybox` 指定。
 
-仓库内的 `.github/workflows/ci.yml` 会在 push 与 pull request 时运行单元/
-组件测试、Linux 检查脚本、真实 VM 集成测试和生产构建。
+仓库内的 `.github/workflows/ci.yml` 会在 push 与 pull request 时运行前端与
+Crypto Lab 测试、Linux 检查脚本、真实 VM 集成测试和生产构建。
+运行完整 release gate 前还需安装独立的遥测后端依赖：
+
+```bash
+pnpm --dir backend install --frozen-lockfile
+```
 
 ## 7. Linux 镜像构建方法
 
@@ -353,6 +364,7 @@ hashteam-web-lab/
 ├── public/
 │   ├── v86/            # libv86.js / v86.wasm / v86-fallback.wasm / bios/
 │   └── vm/             # bzImage / rootfs.cpio.gz（预构建产物）
+├── crypto-lab/         # 独立离线密码学实验子站、算法实现与测试
 ├── src/
 │   ├── main.ts / App.vue
 │   ├── components/     # TopBar / LabTerminal / MissionPanel / DebuggerControls /

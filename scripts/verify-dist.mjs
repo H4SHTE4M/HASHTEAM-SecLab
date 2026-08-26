@@ -17,6 +17,7 @@ const expectedAssets = {
 const MAX_MAKERS_FILES = 20_000
 const MAX_MAKERS_FILE_SIZE = 25 * 1024 * 1024
 const STATIC_LLM_TALK_ROOT = 'talk/llm-2026'
+const CRYPTO_LAB_ROOT = 'crypto-lab'
 
 function fail(message) {
   throw new Error(message)
@@ -38,6 +39,49 @@ async function requireProjectFile(relativePath) {
     fail(`仓库缺少对应源码或构建材料：${relativePath}`)
   }
   return readFile(absolutePath)
+}
+
+async function collectStaticFiles(directory, base, label) {
+  const directoryInfo = await lstat(directory).catch(() => null)
+  if (
+    directoryInfo === null ||
+    directoryInfo.isSymbolicLink() ||
+    !directoryInfo.isDirectory()
+  ) {
+    fail(`${label} 静态源目录必须是真实目录：${directory}`)
+  }
+  const results = []
+  const entries = (await readdir(directory, { withFileTypes: true })).sort(
+    (left, right) =>
+      left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
+  )
+  for (const entry of entries) {
+    const absolutePath = path.join(directory, entry.name)
+    if (entry.name.startsWith('.')) {
+      fail(`${label} 不允许隐藏项：${absolutePath}`)
+    }
+    if (entry.isSymbolicLink()) {
+      fail(`${label} 不允许符号链接：${absolutePath}`)
+    }
+    if (entry.isDirectory()) {
+      results.push(...(await collectStaticFiles(absolutePath, base, label)))
+    } else if (entry.isFile()) {
+      results.push(path.relative(base, absolutePath).split(path.sep).join('/'))
+    } else {
+      fail(`${label} 包含不支持的文件类型：${absolutePath}`)
+    }
+  }
+  return results.sort()
+}
+
+function isCryptoLabRuntimeFile(relativePath) {
+  return (
+    relativePath === 'index.html' ||
+    relativePath === 'app.js' ||
+    relativePath === 'styles.css' ||
+    (/^(?:crypto|levels)\/[A-Za-z0-9._/-]+\.js$/.test(relativePath) &&
+      !relativePath.split('/').includes('..'))
+  )
 }
 
 function artifactRelativePath(artifact, source) {
@@ -85,6 +129,138 @@ async function verifyDistTree(directory = dist) {
 }
 
 await verifyDistTree()
+
+// Crypto Lab 是免构建子站：运行时文件必须逐字节与源码一致，
+// 开发测试、包元数据和来源说明不得进入生产包。
+const cryptoLabSourceRoot = path.join(root, CRYPTO_LAB_ROOT)
+const cryptoLabSourceFiles = (
+  await collectStaticFiles(
+    cryptoLabSourceRoot,
+    cryptoLabSourceRoot,
+    `${CRYPTO_LAB_ROOT}/`,
+  )
+).filter(isCryptoLabRuntimeFile)
+if (!cryptoLabSourceFiles.includes('index.html')) {
+  fail('crypto-lab/ 缺少 index.html')
+}
+
+const packagedCryptoLabRoot = path.join(dist, CRYPTO_LAB_ROOT)
+const packagedCryptoLabFiles = await collectStaticFiles(
+  packagedCryptoLabRoot,
+  packagedCryptoLabRoot,
+  `dist/${CRYPTO_LAB_ROOT}/`,
+)
+const leakedCryptoLabMaterial = packagedCryptoLabFiles.find((relativePath) => {
+  const lowerPath = relativePath.toLowerCase()
+  const pathSegments = lowerPath.split('/')
+  return (
+    pathSegments.includes('package.json') ||
+    pathSegments.includes('pnpm-lock.yaml') ||
+    pathSegments.includes('tests') ||
+    pathSegments.some((segment) => /^readme(?:\.|$)/.test(segment)) ||
+    pathSegments.some((segment) => /^upstream(?:\.|$)/.test(segment))
+  )
+})
+if (leakedCryptoLabMaterial !== undefined) {
+  fail(`Crypto Lab 生产包泄露开发材料：${leakedCryptoLabMaterial}`)
+}
+if (
+  JSON.stringify(packagedCryptoLabFiles) !==
+  JSON.stringify(cryptoLabSourceFiles)
+) {
+  fail('dist/crypto-lab/ 包含缺失或未审核的运行时文件')
+}
+for (const relativePath of cryptoLabSourceFiles) {
+  const packaged = await requireFile(`${CRYPTO_LAB_ROOT}/${relativePath}`)
+  const tracked = await requireProjectFile(`${CRYPTO_LAB_ROOT}/${relativePath}`)
+  if (!packaged.equals(tracked)) {
+    fail(`Crypto Lab 生产产物与源码不一致：${relativePath}`)
+  }
+}
+
+const cryptoLabHtml = (
+  await requireFile(`${CRYPTO_LAB_ROOT}/index.html`)
+).toString('utf8')
+if (/<iframe\b/i.test(cryptoLabHtml) || /\bsrcdoc\s*=/i.test(cryptoLabHtml)) {
+  fail('Crypto Lab HTML 不允许 iframe 或 srcdoc')
+}
+const cryptoLabReferences = [
+  ...cryptoLabHtml.matchAll(
+    /\b(src|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi,
+  ),
+].map((match) => ({
+  attribute: match[1].toLowerCase(),
+  value: (match[2] ?? match[3] ?? match[4]).trim(),
+}))
+if (cryptoLabReferences.length === 0) {
+  fail('Crypto Lab HTML 缺少静态资源引用')
+}
+for (const { attribute, value: reference } of cryptoLabReferences) {
+  if (reference === '' || reference.startsWith('#')) continue
+  if (/^(?:[a-z][a-z0-9+.-]*:|\/\/|\/)/i.test(reference)) {
+    fail(`Crypto Lab HTML 包含非相对引用：${reference}`)
+  }
+  const encodedPath = reference.split(/[?#]/, 1)[0]
+  if (encodedPath === '') continue
+  let decodedPath
+  try {
+    decodedPath = decodeURIComponent(encodedPath)
+  } catch {
+    fail(`Crypto Lab HTML 包含无效 URL 编码：${reference}`)
+  }
+  if (decodedPath.includes('\\') || decodedPath.includes('\0')) {
+    fail(`Crypto Lab HTML 包含不安全的相对引用：${reference}`)
+  }
+  const referencedPath = path.resolve(packagedCryptoLabRoot, decodedPath)
+  const relativeToDist = path.relative(dist, referencedPath)
+  if (
+    relativeToDist === '..' ||
+    relativeToDist.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relativeToDist)
+  ) {
+    fail(`Crypto Lab HTML 引用逃离生产包：${reference}`)
+  }
+  const referencedInfo = await stat(referencedPath).catch(() => null)
+  if (
+    referencedInfo === null ||
+    (attribute === 'src' && !referencedInfo.isFile())
+  ) {
+    fail(`Crypto Lab HTML 引用不存在：${reference}`)
+  }
+}
+
+const forbiddenCryptoLabRuntimes = [
+  ['fetch', /\bfetch\s*\(/i],
+  ['XMLHttpRequest', /\bXMLHttpRequest\b/i],
+  ['EventSource', /\bEventSource\b/i],
+  ['WebSocket', /\bWebSocket\b/i],
+  ['WebTransport', /\bWebTransport\b/i],
+  ['sendBeacon', /\bsendBeacon\s*\(/i],
+  ['importScripts', /\bimportScripts\s*\(/i],
+  ['remote URL', /\bhttps?:\/\//i],
+  ['iframe', /\biframe\b/i],
+  ['srcdoc', /\bsrcdoc\b/i],
+]
+const inlineCryptoLabScripts = [
+  ...cryptoLabHtml.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi),
+].map((match) => match[1])
+for (const [label, pattern] of forbiddenCryptoLabRuntimes) {
+  if (inlineCryptoLabScripts.some((script) => pattern.test(script))) {
+    fail(`Crypto Lab 内联脚本包含联网或 iframe 运行时：${label}`)
+  }
+}
+for (const relativePath of cryptoLabSourceFiles.filter((file) =>
+  file.endsWith('.js'),
+)) {
+  const script = (
+    await requireFile(`${CRYPTO_LAB_ROOT}/${relativePath}`)
+  ).toString('utf8')
+  for (const [label, pattern] of forbiddenCryptoLabRuntimes) {
+    if (pattern.test(script)) {
+      fail(`Crypto Lab 脚本包含联网或 iframe 运行时 ${label}：${relativePath}`)
+    }
+  }
+}
 
 // 静态 LLM 分享必须作为独立子站原样发布，且不能重新引入在线模型或生成页预览。
 for (const relativePath of [
@@ -672,7 +848,14 @@ for (const [key, value] of [
     fail(`edgeone.json 缺少全站安全头：${key}`)
   }
 }
-for (const source of ['/', '/index.html', '/companion.html', '/vm-assets.json', '/legal/*']) {
+for (const source of [
+  '/',
+  '/index.html',
+  '/companion.html',
+  '/vm-assets.json',
+  '/legal/*',
+  '/crypto-lab/*',
+]) {
   if (!configuredHeader(source, 'Cache-Control', 'no-store')) {
     fail(`edgeone.json 缺少禁止缓存规则：${source}`)
   }
@@ -696,19 +879,11 @@ for (const legacyPath of ['vm/rootfs.cpio.gz', 'vm/bzImage', 'v86/v86.wasm']) {
 
 // 验证 EdgeOne Makers Edge Functions 已输出到 dist/ 且与受版本控制源码一致
 const edgeFunctionsRoot = path.join(root, 'edge-functions')
-const trackedEdgeFunctions = []
-async function collectEdgeFunctions(dir, base) {
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
-    if (entry.name.startsWith('.')) continue
-    const absolute = path.join(dir, entry.name)
-    if (entry.isDirectory()) {
-      await collectEdgeFunctions(absolute, base)
-    } else if (entry.isFile()) {
-      trackedEdgeFunctions.push(path.relative(base, absolute).split(path.sep).join('/'))
-    }
-  }
-}
-await collectEdgeFunctions(edgeFunctionsRoot, edgeFunctionsRoot)
+const trackedEdgeFunctions = await collectStaticFiles(
+  edgeFunctionsRoot,
+  edgeFunctionsRoot,
+  'edge-functions/',
+)
 if (trackedEdgeFunctions.length === 0) {
   fail('edge-functions/ 目录为空，缺少 Edge Function 源码')
 }

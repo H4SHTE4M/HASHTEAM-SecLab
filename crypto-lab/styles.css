@@ -1,0 +1,1163 @@
+:root {
+  --bg: #f8f9fa;
+  --surface: #ffffff;
+  --surface-2: #f1f3f5;
+  --text: #212529;
+  --text-muted: #6c757d;
+  --border: #dee2e6;
+  --primary: #0d6efd;
+  --primary-2: #0b5ed7;
+  --success: #198754;
+  --danger: #dc3545;
+  --warning: #ffc107;
+  --warning-text: #664d03;
+  --info: #0dcaf0;
+  --accent-orange: #fd7e14;
+  --accent-purple: #6f42c1;
+  --accent-green: #20c997;
+  --accent: var(--accent-purple);
+  --nibble-high: #2563eb;
+  --nibble-low: #0891b2;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --radius: 10px;
+  --radius-sm: 6px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, "Noto Sans SC", monospace;
+  --max-width: 1100px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121212;
+    --surface: #1e1e1e;
+    --surface-2: #2a2a2a;
+    --text: #e9ecef;
+    --text-muted: #adb5bd;
+    --border: #495057;
+    --primary: #6ea8fe;
+    --primary-2: #9ec5fe;
+    --success: #75b798;
+    --danger: #ea868f;
+    --warning: #ffda6a;
+    --warning-text: #664d03;
+    --info: #6edff6;
+    --accent-orange: #ffb366;
+    --accent-purple: #c29ffa;
+    --accent-green: #6edfb8;
+    --accent: var(--accent-purple);
+    --nibble-high: #5b8cff;
+    --nibble-low: #26b7d9;
+    --shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+a { color: var(--primary); text-decoration: none; }
+
+code, .mono {
+  font-family: var(--mono);
+  font-size: 0.95em;
+  background: var(--surface-2);
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius-sm);
+}
+
+/* Topbar */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.kerckhoffs-banner {
+  background: var(--warning);
+  color: var(--warning-text);
+  padding: 0.5rem 1rem;
+  font-size: 0.92rem;
+  text-align: center;
+}
+
+.topbar__main {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.home-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.home-link:hover { color: var(--primary); }
+
+@media (max-width: 520px) {
+  .topbar__main { gap: 0.5rem; padding-inline: 0.75rem; }
+  .home-link span { display: none; }
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* 关卡导航：可展开 / 收起的侧边栏，默认收起 */
+.level-map {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 240px;
+  padding: 1rem;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  overflow-y: auto;
+  transform: translateX(-105%);
+  transition: transform 0.2s ease;
+  z-index: 150;
+}
+
+.level-map.is-open { transform: translateX(0); }
+
+.level-map__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+/* 「重置所有进度」固定在侧边栏底部 */
+.level-map__reset { margin-top: auto; }
+
+.level-map__btn {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.level-map__btn:hover { background: var(--border); }
+.level-map__btn.is-active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.level-map__btn.is-side {
+  border-style: dashed;
+}
+
+/* Page */
+.page {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 1.5rem 1rem 4rem;
+}
+
+/* Intro */
+.intro-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 2rem;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.intro-card h1 { margin-top: 0; }
+
+.intro-roles {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 1.5rem 0;
+}
+
+.role-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  min-width: 18rem;
+}
+
+.role-card__avatar { font-size: 2rem; }
+
+.role-card--sender { border-top: 4px solid var(--primary); }
+.role-card--receiver { border-top: 4px solid var(--success); }
+.role-card--attacker { border-top: 4px solid var(--danger); }
+
+/* Level */
+.level-container {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.5rem;
+}
+
+.level-header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.level-header h2 { margin: 0 0 0.25rem; }
+
+/* 标题与「重玩本关」同行，标题在左、按钮靠右 */
+.level-header__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.level-header__row h2 { margin: 0; }
+
+.level-header__subtitle {
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Info bands */
+.info-bands {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.info-band {
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  border-left: 4px solid;
+  background: var(--surface-2);
+}
+
+.info-band--public { border-color: var(--primary); }
+.info-band--secret { border-color: var(--success); }
+.info-band--teach { border-color: var(--accent-purple); }
+
+.info-band__label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--text-muted);
+}
+
+.info-band--public .info-band__label { color: var(--primary); }
+.info-band--secret .info-band__label { color: var(--success); }
+.info-band--teach .info-band__label { color: var(--accent-purple); }
+
+/* Cards */
+.card {
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.card h3 { margin-top: 0; }
+
+.two-col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+/* Controls */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.9rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn:hover { background: var(--border); }
+.btn--primary {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.btn--primary:hover { background: var(--primary-2); }
+.btn--danger {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}
+.btn--danger:hover { filter: brightness(1.1); }
+
+.input, .textarea, select {
+  font-family: var(--font);
+  font-size: 1rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  width: 100%;
+}
+
+.textarea { min-height: 80px; resize: vertical; }
+
+.field { margin-bottom: 0.75rem; }
+.field label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+/* Caesar wheel */
+.wheel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: center;
+  margin: 1rem 0;
+}
+
+.wheel__letter {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-family: var(--mono);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.wheel__letter.is-active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+/* Alphabet strip / key tape */
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  margin: 0.75rem 0;
+}
+
+.strip__cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 1.6rem;
+  padding: 0.2rem 0.25rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-family: var(--mono);
+}
+
+.strip__cell.is-highlight {
+  background: var(--warning);
+  color: var(--warning-text);
+  border-color: var(--warning);
+}
+
+/* 第 1 关：紧凑字母编号条——格子与数字都更小，500px 宽度下 26 个字母只占两行 */
+.strip--compact { justify-content: center; }
+
+.strip--compact .strip__cell {
+  min-width: 1.1rem;
+  padding: 0.15rem;
+  font-size: 0.85rem;
+}
+
+.strip--compact .strip__cell .muted { font-size: 0.65rem; }
+
+/* 字母表整体居中（第 0 关谜题字母表等普通 strip 复用） */
+.strip--center { justify-content: center; }
+
+/* 第 3 关：明文/密钥/密文三行条带逐格对齐——固定格宽 + 更小的数字字号，
+   保证 500px 窄屏下三行的换行位置一致 */
+.strip--l3 .strip__cell { width: 1.9rem; }
+.strip--l3 .strip__cell .muted { font-size: 0.65rem; }
+
+/* 第 3 关：分列卡片网格——以 500px 为参考宽度，一行恰好三个框；
+   框内密文按字符折行，窄屏不溢出 */
+.l3-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.l3-cols > .card { min-width: 0; margin-bottom: 0; padding: 0.75rem; }
+.l3-cols .mono { word-break: break-all; }
+
+/* 第 3 关：密钥行按重复单元分组配色（15 色循环，保持 1px 边框以免错位） */
+.strip__cell.key-group-0 { border-color: hsl(0, 70%, 45%); background: hsla(0, 70%, 45%, 0.10); }
+.strip__cell.key-group-1 { border-color: hsl(24, 75%, 45%); background: hsla(24, 75%, 45%, 0.10); }
+.strip__cell.key-group-2 { border-color: hsl(48, 80%, 40%); background: hsla(48, 80%, 40%, 0.12); }
+.strip__cell.key-group-3 { border-color: hsl(72, 70%, 38%); background: hsla(72, 70%, 38%, 0.12); }
+.strip__cell.key-group-4 { border-color: hsl(96, 60%, 38%); background: hsla(96, 60%, 38%, 0.12); }
+.strip__cell.key-group-5 { border-color: hsl(120, 55%, 35%); background: hsla(120, 55%, 35%, 0.12); }
+.strip__cell.key-group-6 { border-color: hsl(144, 60%, 35%); background: hsla(144, 60%, 35%, 0.12); }
+.strip__cell.key-group-7 { border-color: hsl(168, 65%, 35%); background: hsla(168, 65%, 35%, 0.12); }
+.strip__cell.key-group-8 { border-color: hsl(192, 70%, 38%); background: hsla(192, 70%, 38%, 0.12); }
+.strip__cell.key-group-9 { border-color: hsl(216, 70%, 50%); background: hsla(216, 70%, 50%, 0.10); }
+.strip__cell.key-group-10 { border-color: hsl(240, 60%, 55%); background: hsla(240, 60%, 55%, 0.10); }
+.strip__cell.key-group-11 { border-color: hsl(264, 60%, 55%); background: hsla(264, 60%, 55%, 0.10); }
+.strip__cell.key-group-12 { border-color: hsl(288, 60%, 50%); background: hsla(288, 60%, 50%, 0.10); }
+.strip__cell.key-group-13 { border-color: hsl(312, 65%, 45%); background: hsla(312, 65%, 45%, 0.10); }
+.strip__cell.key-group-14 { border-color: hsl(336, 70%, 48%); background: hsla(336, 70%, 48%, 0.10); }
+
+/* 第 3 关：密文重复片段颜色标注（与上方分组同色系） */
+.frag-0 { background: rgba(13, 110, 253, 0.22); border-radius: 3px; }
+.frag-1 { background: rgba(253, 126, 20, 0.30); border-radius: 3px; }
+.frag-2 { background: rgba(111, 66, 193, 0.24); border-radius: 3px; }
+.frag-3 { background: rgba(32, 201, 151, 0.30); border-radius: 3px; }
+
+/* 当前步的黄色高亮必须优先于密钥分组配色（规则顺序保证覆盖） */
+.strip__cell.is-highlight {
+  background: var(--warning);
+  color: var(--warning-text);
+  border-color: var(--warning);
+}
+
+/* Frequency bars */
+.freq-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.15rem;
+  height: 120px;
+  padding: 0.5rem;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.freq-bar {
+  flex: 1;
+  background: var(--primary);
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+  position: relative;
+}
+
+.freq-bar__label {
+  position: absolute;
+  bottom: -1.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+/* Bit board */
+.bit-board {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 0.4rem;
+  margin: 1rem 0;
+}
+
+.bit-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-family: var(--mono);
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+
+.bit-cell.is-on {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+/* Byte matrix */
+.byte-matrix {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.35rem;
+  max-width: 280px;
+}
+
+.byte-matrix__cell {
+  padding: 0.5rem;
+  text-align: center;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-family: var(--mono);
+}
+
+.byte-matrix__cell.is-diff {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* Tables */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.table th, .table td {
+  border: 1px solid var(--border);
+  padding: 0.45rem 0.6rem;
+  text-align: center;
+}
+
+.table th { background: var(--surface-2); }
+
+/* Takeaway */
+.takeaway {
+  background: linear-gradient(135deg, var(--surface-2), var(--bg));
+  border-left: 5px solid var(--accent-green);
+  padding: 1.25rem;
+  border-radius: var(--radius);
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.takeaway blockquote {
+  margin: 0;
+  font-size: 1.1rem;
+  font-style: italic;
+}
+
+/* Footer */
+.footer {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* Utility */
+.muted { color: var(--text-muted); }
+.hidden { display: none !important; }
+.mt-1 { margin-top: 0.5rem; }
+.mt-2 { margin-top: 1rem; }
+.mb-1 { margin-bottom: 0.5rem; }
+.mb-2 { margin-bottom: 1rem; }
+.flex { display: flex; }
+.gap-1 { gap: 0.5rem; }
+.gap-2 { gap: 1rem; }
+.wrap { flex-wrap: wrap; }
+.items-center { align-items: center; }
+
+.byte-matrix {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (max-width: 640px) {
+  .intro-roles { flex-direction: column; align-items: center; }
+  .two-col { grid-template-columns: 1fr; }
+}
+
+/* ================= 关卡组件样式 ================= */
+
+/* 公共信道 */
+.channel {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  background: var(--surface);
+}
+.channel__title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+.channel__payload {
+  display: block;
+  word-break: break-all;
+  font-family: var(--mono);
+  background: var(--surface-2);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+}
+.channel__note { margin: 0.5rem 0 0; color: var(--text-muted); }
+
+/* 攻击者的还原动作 */
+.attacker-move {
+  border-left: 4px solid var(--danger);
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  margin-top: 0.75rem;
+}
+.attacker-move__result {
+  display: block;
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--danger);
+  word-break: break-all;
+}
+
+.kerckhoffs-inline {
+  background: var(--warning);
+  color: var(--warning-text);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 1rem;
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+
+/* 候选按钮（穷举列表） */
+.candidate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  margin-top: 0.35rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.candidate__text { flex: 1 1 auto; min-width: 0; word-break: break-all; }
+/* 「★ 评分最好」徽章：宽度不足时作为整体换到下一行 */
+.candidate__best { white-space: nowrap; color: var(--accent-green); font-weight: 700; }
+.candidate:hover { background: var(--border); }
+.candidate.is-correct {
+  background: var(--success);
+  color: #fff;
+  border-color: var(--success);
+}
+
+/* 卡片变体 */
+.card--flat { background: var(--surface); border: 1px solid var(--border); }
+.card--warning { border-left: 4px solid var(--warning); }
+.card--danger { border-left: 4px solid var(--danger); background: var(--surface); }
+
+/* 演示行 */
+.demo-line {
+  font-family: var(--mono);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.75rem;
+  margin-top: 0.75rem;
+}
+
+/* 栅栏摆放网格 */
+.fence { overflow-x: auto; margin: 0.75rem 0; }
+.fence__grid { display: grid; gap: 0.2rem; }
+.fence__cell {
+  width: 1.4rem;
+  height: 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: var(--accent-orange);
+  color: #fff;
+  border-radius: 3px;
+}
+.fence__cell--empty { background: transparent; }
+
+.diff-letter { color: var(--danger); font-weight: 700; }
+
+/* 第 2 关：字母扫描行（二元组合命中扫描与篡改演示共用） */
+.letter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.1rem;
+  margin-top: 0.4rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.6rem;
+}
+.letter-row__label { font-size: 0.8rem; color: var(--text-muted); margin-right: 0.4rem; }
+.letter-row__count { margin-left: auto; font-size: 0.85rem; color: var(--accent-green); }
+.letter-ch { padding: 0 0.08rem; border-radius: 3px; }
+.letter-ch.is-scan { outline: 2px solid var(--primary); }
+.letter-ch.is-hit { background: var(--accent-green); color: #fff; }
+.letter-ch.is-changed { background: var(--danger); color: #fff; }
+.letter-ch.is-flash { outline: 2px solid var(--warning); }
+/* 第 5 关改写密文动画：多行字节逐格对齐；以容器宽 500px 为基准（此时字体即 .mono 的 0.95em），
+   容器更窄时字体与方框（内边距、描边）按比例整体缩小，不换行 */
+.channel { container-type: inline-size; }
+.letter-row--align {
+  flex-wrap: nowrap;
+  gap: 0.1em;
+  padding: 0.45em 0.6em;
+  font-size: min(0.95em, 4.00cqi); /* 500px × 4.00% = 20px */
+}
+.letter-row--align .letter-row__label { min-width: 0rem; font-size: 0.8em; margin-right: 0.4em; }
+.letter-row--align .letter-ch { padding: 0 0.08em; border-radius: 0.2em; }
+.letter-row--align .letter-ch.is-scan,
+.letter-row--align .letter-ch.is-flash { outline-width: 0.13em; }
+
+/* 比特结果位 */
+.bit-cell--result { border-width: 2px; border-color: var(--accent-green); cursor: default; }
+
+/* CTR 分块 */
+.ctr-block {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.75rem;
+  margin-top: 0.4rem;
+  background: var(--surface);
+}
+.ctr-block summary { cursor: pointer; }
+
+/* 深入折叠区 */
+.deep-dive {
+  border: 1px dashed var(--accent-purple);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.9rem;
+  background: var(--surface);
+}
+.deep-dive summary { cursor: pointer; font-weight: 600; color: var(--accent-purple); }
+
+/* 仪表盘 */
+.dashboard {
+  font-family: var(--mono);
+  font-weight: 700;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.75rem;
+}
+
+/* 攻击链 */
+.chain { display: flex; flex-direction: column; align-items: center; gap: 0.15rem; margin: 0.5rem 0; }
+.chain__node {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.9rem;
+}
+.chain__arrow { color: var(--text-muted); padding-left: 1rem; }
+
+/* 周期圆盘 */
+.period-disk {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+}
+.period-disk__node {
+  border: 2px solid var(--accent-purple);
+  border-radius: 50%;
+  width: 4rem;
+  height: 4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  background: var(--surface);
+}
+.period-disk__node--back { border-color: var(--success); }
+.period-disk__arrow { color: var(--text-muted); }
+
+/* 条件卡 / 勾选 */
+.condition-card { border-left: 4px solid var(--accent-green); }
+.check-line { display: block; margin: 0.35rem 0; cursor: pointer; }
+
+/* 流程步骤 */
+.flow-step.hidden { display: none; }
+
+/* ================= 主题切换与框架 ================= */
+
+/* 手动选择优先于系统偏好（属性选择器优先级高于 :root） */
+html[data-theme="light"] {
+  --bg: #f8f9fa; --surface: #ffffff; --surface-2: #f1f3f5;
+  --text: #212529; --text-muted: #6c757d; --border: #dee2e6;
+  --primary: #0d6efd; --primary-2: #0b5ed7; --success: #198754;
+  --danger: #dc3545; --warning: #ffc107; --warning-text: #664d03;
+  --info: #0dcaf0; --accent-orange: #fd7e14; --accent-purple: #6f42c1;
+  --accent-green: #20c997; --nibble-high: #2563eb; --nibble-low: #0891b2;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+html[data-theme="dark"] {
+  --bg: #121212; --surface: #1e1e1e; --surface-2: #2a2a2a;
+  --text: #e9ecef; --text-muted: #adb5bd; --border: #495057;
+  --primary: #6ea8fe; --primary-2: #9ec5fe; --success: #75b798;
+  --danger: #ea868f; --warning: #ffda6a; --warning-text: #664d03;
+  --info: #6edff6; --accent-orange: #ffb366; --accent-purple: #c29ffa;
+  --accent-green: #6edfb8; --nibble-high: #5b8cff; --nibble-low: #26b7d9;
+  --shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+
+.theme-toggle {
+  margin-left: auto;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.3rem 0.6rem;
+  font-size: 1rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.theme-toggle:hover { background: var(--border); }
+
+.nav-toggle {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 0.3rem 0.6rem;
+  font-size: 1rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.nav-toggle:hover { background: var(--border); }
+
+.level-map__btn.is-locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.next-level {
+  text-align: center;
+  margin-top: 1.5rem;
+  display: flex;
+  justify-content: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.next-level-btn { font-size: 1.05rem; padding: 0.7rem 1.4rem; }
+
+/* ================= 关卡组件补充 ================= */
+
+/* 评分最好的候选 */
+.candidate.is-best { border-color: var(--accent-green); border-width: 2px; }
+
+/* 第 1 关：slider 与 K 值同一行 */
+.slider-row { justify-content: space-between; gap: 1rem; }
+.slider-row input[type=range] { flex: 1; }
+
+/* 第 2 关：窄长方形栅栏格 + 彩色行边框（覆盖前面定义） */
+.fence__grid { display: grid; gap: 0.15rem; }
+.fence__cell {
+  width: 0.95rem;
+  height: 1.6rem;
+  font-size: 0.7rem;
+  background: var(--surface);
+  color: var(--text);
+  border: 2px solid var(--border);
+  border-radius: 3px;
+}
+.fence__cell--empty { background: transparent; border-color: transparent; }
+.cipher-segment {
+  border: 2px solid var(--border);
+  border-radius: 3px;
+  padding: 0 0.15rem;
+  margin-right: 0.15rem;
+}
+
+/* 第 4 关：正方形比特按钮 */
+.bit-cell { width: 2.2rem; aspect-ratio: 1; }
+
+/* 第 3 关：逐格演示区 */
+.vigenere-step {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  margin-top: 0.75rem;
+  min-height: 2.5rem;
+}
+
+/* 第 5/7 关：图形化加密流程的彩色数值框 */
+.ctr-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+.ctr-flow__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap; /* 不换行：靠盒子和字号收缩来适配窄屏 */
+  gap: 0.4rem;
+  justify-content: center;
+  max-width: 100%;
+}
+.ctr-flow__op { font-weight: 700; color: var(--text-muted); }
+.flow-box {
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.2rem 0.4rem;
+  background: var(--surface);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  width: max-content;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.flow-box__label {
+  /* 窄屏自动缩小（vw 基于布局视口：移动端固定 500px、桌面窄窗口也能跟着缩） */
+  font-size: clamp(0.55rem, 2vw, 0.7rem);
+  color: var(--text-muted);
+  text-align: center;
+  white-space: nowrap;
+}
+.flow-box__hex { word-break: break-all; font-size: clamp(0.65rem, 2.6vw, 0.95rem); }
+
+/* 支线 B / 第 5 关：两个矩阵并排居中，窄屏不换行、随容器等比收缩 */
+.race-mats {
+  display: flex;
+  justify-content: center;
+  gap: clamp(0.6rem, 3vw, 2rem); /* 窄屏自动收小间距 */
+  flex-wrap: nowrap;
+  margin: 1rem 0;
+}
+.race-mats__item { text-align: center; flex: 1 1 0; min-width: 0; }
+.race-mats__item .byte-matrix { margin: 0 auto; width: 100%; }
+.race-mats__item .byte-matrix__cell { min-width: 0; padding: clamp(0.2rem, 1.5vw, 0.5rem); }
+
+/* 支线 C：经典 vs 量子的代价对比条 */
+.bar-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; font-size: 0.85rem; }
+.bar { height: 0.9rem; border-radius: 999px; }
+.bar--slow { width: 100%; background: var(--danger); }
+.bar--fast { width: 12%; background: var(--accent-green); }
+
+/* 第 7 关：通关横幅 */
+.win-banner {
+  display: block;
+  background: var(--accent-green);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  padding: 0.9rem 1.2rem;
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+/* ===== 第二轮评审新增 ===== */
+
+/* 统一过关谜题面板 */
+.puzzle { border: 2px dashed var(--accent); }
+.puzzle__row { align-items: stretch; }
+.puzzle__input { flex: 1; }
+.puzzle__solved { color: var(--accent-green); font-weight: 600; margin: 0.5rem 0 0; }
+.puzzle--solved { border-style: solid; border-color: var(--accent-green); }
+.puzzle__choice.is-correct { border-color: var(--accent-green); background: var(--accent-green); color: #fff; }
+.puzzle__choice.is-wrong { border-color: var(--danger); background: var(--danger); color: #fff; }
+
+/* 支线 A 求解器输出：拼接后的长密文/明文允许在任意字母处换行 */
+#sa-solver-out { word-break: break-all; }
+/* 支线 A 求解器进度条 */
+.solver-progress { height: 8px; background: var(--surface-2); border-radius: var(--radius-sm); overflow: hidden; margin: 0.5rem 0; }
+.solver-progress__bar { height: 100%; width: 0; background: var(--accent); transition: width 0.6s ease; }
+
+/* AES 结构图：密钥框在上，横向数据行在下；仅密钥框与 AES 框等宽，hex 在框内折行 */
+.aes-diagram { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; margin: 1rem 0; }
+.aes-diagram .flow-box {
+  width: fit-content;
+  min-width: 0;
+}
+.aes-diagram .flow-box.aes-diagram__box { width: 7rem; }
+.aes-diagram__row { display: flex; align-items: center; justify-content: center; gap: 0.6rem; flex-wrap: nowrap; max-width: 100%; }
+
+/* 第 4.5 关：混淆与扩散用单行 hex 展示，尽量避免换行（移动端按 500px 参考） */
+.hex-line {
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: clamp(0.6rem, 2.5vw, 0.85rem);
+  margin: 0.2rem 0;
+}
+.hex-line__label {
+  display: inline-block;
+  min-width: 3em;
+  margin-right: 0.6em;
+  font-family: var(--font);
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+/* 变化的字节只改字符颜色，不占用额外区域 */
+.hex-line__byte.is-diff { color: var(--danger); font-weight: 700; }
+
+/* 算式链：横向排列，宽度不足时整框换行 */
+.calc-chain { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin: 0.6rem 0; container-type: inline-size; }
+.calc-box {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.7rem;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+/* 等宽算式框：以算式链宽 500px 为基准（此时字体即 0.9rem），
+   更窄时字体按比例缩小，避免长算式（如 e × d 的完整乘法）溢出；
+   不支持容器查询的浏览器会忽略 cqi 声明，回退到 0.9rem */
+.calc-box.mono { font-size: min(0.9rem, 4cqi); } /* 500px × 4% = 20px */
+/* 纯文字的算式框：允许自动换行，避免长段落溢出 */
+.calc-box--wrap { white-space: normal; }
+
+/* 密钥流复用警示箭头（5.3 上下排列之间） */
+.reuse-arrow { text-align: center; font-size: 1.6rem; color: var(--danger); margin: 0.2rem 0; }
+.reuse-arrow__sub { font-size: 1rem; }
+/* 窄屏（< 500px）自动缩小字号，避免超出移动端宽度 */
+@media (max-width: 500px) {
+  .reuse-arrow { font-size: 1.05rem; }
+  .reuse-arrow__sub { font-size: 0.8rem; }
+}
+
+/* 第 4.5 关字节实验室字段显示 */
+.byte-editor__bits { display: flex; justify-content: center; align-items: center; gap: 0.4rem; }
+/* 高 / 低半字节分色：蓝 = 高半字节，青 = 低半字节 */
+.byte-editor__bits .bit-cell--high.is-on { background: var(--nibble-high); border-color: var(--nibble-high); }
+.byte-editor__bits .bit-cell--low.is-on { background: var(--nibble-low); border-color: var(--nibble-low); }
+.byte-editor__nibble-labels { display: flex; justify-content: center; gap: 0.4rem; margin: 0.3rem 0 0.6rem; }
+.byte-editor__nibble-labels span {
+  width: calc(4 * 2.2rem + 3 * 0.4rem);
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.byte-editor__nibble-label--high { color: var(--nibble-high); }
+.byte-editor__nibble-label--low { color: var(--nibble-low); }
+.byte-editor__fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; max-width: 26rem; margin: 0 auto; align-items: start; }
+.byte-editor__field { display: grid; gap: 0.35rem; min-width: 0; }
+.byte-editor__field-label { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.8rem; }
+.byte-editor__control {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-family: var(--mono);
+  font-size: 1rem;
+  font-weight: 700;
+  text-align: center;
+}
+/* 完整字节 = 高半字节字符 + 低半字节字符，按半字节分色 */
+.byte-editor__combined { letter-spacing: 0.05em; padding: 0.35rem 0.7rem; font-size: 1rem; }
+/* 十进制主框与十六进制组合框同规格，保证下方小框行对齐 */
+.byte-editor__dec { padding: 0.35rem 0.7rem; font-size: 1rem; }
+.byte-editor__hex-high { color: var(--nibble-high); }
+.byte-editor__hex-low { color: var(--nibble-low); }
+.byte-editor__nibbles { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+.byte-editor__nibbles > div { display: grid; gap: 0.25rem; }
+.byte-editor__nibble-label { font-size: 0.8rem; font-weight: 700; text-align: center; }
+/* 半字节小框压缩字号与内边距，与左侧十进制框高度协调 */
+.byte-editor__nibbles .byte-editor__control { padding: 0.3rem 0.5rem; font-size: 0.9rem; }
+/* 十进制下方的字符小框：与半字节小框同规格 */
+.byte-editor__sub { display: grid; gap: 0.25rem; }
+.byte-editor__char { padding: 0.3rem 0.5rem; font-size: 0.9rem; }
+.byte-editor__control--high { color: var(--nibble-high); border-color: var(--nibble-high); }
+.byte-editor__control--low { color: var(--nibble-low); border-color: var(--nibble-low); }
+
+/* 支线 B 逐步演示：中间一列元件名 */
+.step-view { display: flex; align-items: center; justify-content: center; gap: 0.8rem; flex-wrap: wrap; margin: 0.6rem 0; }
+.step-view__mid { text-align: center; font-weight: 600; color: var(--accent); min-width: 6rem; white-space: nowrap; }
+
+/* B.1：字节条与按钮同高、同宽足够时不换行 */
+.b1-controls { align-items: stretch; flex-wrap: wrap; }
+.b1-controls .strip { margin: 0; flex: 1 1 auto; }
+.b1-controls .btn { align-self: stretch; }
+
+/* B.2：上一步/计数/下一步一行，矩阵与步骤名居中 */
+.step-view__nav { justify-content: center; flex-wrap: wrap; }
+.step-view__counter {
+  flex: 1 1 auto;
+  min-width: 8rem;
+  font-size: 0.8rem;
+  text-align: center;
+  font-weight: 600;
+}
+/* B.2：左右并排「变化前 / 变化后」两个矩阵，窄屏自动换行 */
+.step-view--stacked {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 1rem;
+  margin: 0.6rem 0;
+}
+.step-view--stacked .byte-matrix { margin: 0 auto; }
+.step-view__pane { text-align: center; }
+.step-view__pane-label { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem; }
+.byte-matrix--compact { max-width: 220px; gap: 0.25rem; }
+.byte-matrix--compact .byte-matrix__cell { padding: 0.2rem 0.4rem; font-size: clamp(0.6rem, 2.4vw, 0.85rem); }
+
+/* B.2 差分格：底色竖分 8 条，从左到右对应 b7..b0，红条 = 该位不同 */
+.byte-matrix__cell { position: relative; overflow: hidden; }
+.byte-matrix__bitstrip { position: absolute; inset: 0; display: flex; }
+.byte-matrix__bitstrip > span { flex: 1 1 0; }
+.byte-matrix__bitstrip > span.is-on { background: var(--danger); opacity: 0.75; }
+.byte-matrix__val { position: relative; }
+
+/* 窄屏（<= 500px）：紧凑矩阵与并排间距进一步缩小，保证两个矩阵在移动端也能并列 */
+@media (max-width: 501px) {
+  .race-mats { gap: 0.6rem; }
+  .step-view--stacked { gap: 0.5rem; }
+  .byte-matrix--compact { max-width: 150px; gap: 0.15rem; }
+  .byte-matrix--compact .byte-matrix__cell { padding: 0.2rem 0.4rem; width: fit-content; }
+}
+
+/* 字节矩阵空格与当前高亮 */
+.byte-matrix__cell--empty { background: transparent; border-color: transparent; color: var(--text-muted); }
+.byte-matrix__cell.is-highlight { border-color: var(--warning); background: var(--warning); color: var(--warning-text); }
