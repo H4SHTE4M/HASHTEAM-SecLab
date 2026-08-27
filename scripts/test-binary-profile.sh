@@ -536,6 +536,12 @@ HOME="$WORK/home" bash "$BRANCHES_LAB/check.sh" \
     > "$WORK/branches-reversed-relation.txt"
 grep -qx 'asm-branches replay passed' "$WORK/branches-reversed-relation.txt"
 if HOME="$WORK/home" bash "$BRANCHES_LAB/check.sh" \
+    1 1 1 CF SF=OF \
+    > "$WORK/branches-wrong-je-flag.txt" 2>&1; then
+    echo 'non-ZF je condition unexpectedly passed' >&2
+    exit 1
+fi
+if HOME="$WORK/home" bash "$BRANCHES_LAB/check.sh" \
     1 1 0 ZF SF=OF \
     > "$WORK/branches-wrong.txt" 2>&1; then
     echo 'wrong signed branch result unexpectedly passed' >&2
@@ -820,6 +826,11 @@ printf '%s\n' "$COUNTER_OUTPUT" | grep -Fq '挑战二：0xca + 0x80 的 8 位结
 HOME="$WORK/home" bash "$NUM_WRAP_LAB/check.sh" 0x11 0b1001010 \
     > "$WORK/num-wrap-flexible-radix.txt"
 grep -qx 'num-wrap replay passed' "$WORK/num-wrap-flexible-radix.txt"
+if HOME="$WORK/home" bash "$NUM_WRAP_LAB/check.sh" 17 75 \
+    > "$WORK/num-wrap-wrong.txt" 2>&1; then
+    echo 'wrong 8-bit wrap result unexpectedly passed' >&2
+    exit 1
+fi
 echo '  ✓ 两个进制样本哈希与功能重放'
 
 echo '==> 第一批漏洞样本宿主重放'
@@ -861,6 +872,11 @@ printf '1\n' | timeout 2 "$INTEGER_OVERFLOW_ELF" | grep -Fq '余额不足'
 HOME="$WORK/home" bash "$INTEGER_OVERFLOW_LAB/check.sh" 0x100 0b0 \
     > "$WORK/integer-overflow-flexible-radix.txt"
 grep -qx 'vuln-integer-overflow replay passed' "$WORK/integer-overflow-flexible-radix.txt"
+if HOME="$WORK/home" bash "$INTEGER_OVERFLOW_LAB/check.sh" 256 1 \
+    > "$WORK/integer-overflow-wrong.txt" 2>&1; then
+    echo 'wrong wrapped amount unexpectedly passed' >&2
+    exit 1
+fi
 
 OVERWRITE_LAB="$ROOT/vm/labs/pwnhub/vuln-overwrite-variable-01"
 OVERWRITE_ELF="$OVERWRITE_LAB/door"
@@ -870,6 +886,18 @@ chmod +x "$OVERWRITE_ELF"
 printf 'hi\n' | timeout 2 "$OVERWRITE_ELF" | grep -Fq '权限不足，门没有开'
 python3 -c "import sys; sys.stdout.write('A' * 17)" | timeout 2 "$OVERWRITE_ELF" \
     | grep -Fq 'PwnHub_admin_door_open'
+HOME="$WORK/home" bash "$OVERWRITE_LAB/reset.sh"
+printf 'hi\n' > "$WORK/home/vuln-overwrite-variable-01/input.txt"
+if HOME="$WORK/home" bash "$OVERWRITE_LAB/check.sh" \
+    > "$WORK/overwrite-wrong.txt" 2>&1; then
+    echo 'short overwrite payload unexpectedly passed' >&2
+    exit 1
+fi
+python3 -c "import sys; sys.stdout.write('A' * 17)" \
+    > "$WORK/home/vuln-overwrite-variable-01/input.txt"
+HOME="$WORK/home" bash "$OVERWRITE_LAB/check.sh" \
+    > "$WORK/overwrite-check.txt"
+grep -qx 'vuln-overwrite-variable replay passed' "$WORK/overwrite-check.txt"
 
 STRING_OVERFLOW_LAB="$ROOT/vm/labs/pwnhub/vuln-string-overflow-01"
 STRING_OVERFLOW_ELF="$STRING_OVERFLOW_LAB/frame"
@@ -886,6 +914,18 @@ set -e
 [ "$STRING_OVERFLOW_STATUS" -ge 128 ]
 grep -Fq '保存的返回地址现在是: 0x41414141' "$WORK/frame-output.txt"
 grep -Fq '读完后，保存的 EBP 现在是: 0x41414141' "$WORK/frame-output.txt"
+HOME="$WORK/home" bash "$STRING_OVERFLOW_LAB/reset.sh"
+printf 'hi\n' > "$WORK/home/vuln-string-overflow-01/payload.bin"
+if HOME="$WORK/home" bash "$STRING_OVERFLOW_LAB/check.sh" \
+    > "$WORK/string-overflow-wrong.txt" 2>&1; then
+    echo 'short string overflow payload unexpectedly passed' >&2
+    exit 1
+fi
+python3 -c "import sys; sys.stdout.write('A' * 36)" \
+    > "$WORK/home/vuln-string-overflow-01/payload.bin"
+HOME="$WORK/home" bash "$STRING_OVERFLOW_LAB/check.sh" \
+    > "$WORK/string-overflow-check.txt"
+grep -qx 'vuln-string-overflow replay passed' "$WORK/string-overflow-check.txt"
 
 FORMAT_STRING_LAB="$ROOT/vm/labs/pwnhub/vuln-format-string-01"
 FORMAT_STRING_ELF="$FORMAT_STRING_LAB/greeter"
@@ -917,6 +957,11 @@ HOME="$WORK/race-home" timeout 10 "$RACE_CONDITION_ELF" 800 \
     > "$WORK/race-single.txt"
 grep -Fq '取款成功: 800，余额剩余 200' "$WORK/race-single.txt"
 [ "$(cat "$WORK/race-home/vuln-race-condition-01/balance.txt")" = 200 ]
+if HOME="$WORK/race-home" bash "$RACE_CONDITION_LAB/check.sh" \
+    > "$WORK/race-single-check.txt" 2>&1; then
+    echo 'single successful withdrawal unexpectedly passed the race check' >&2
+    exit 1
+fi
 rm -f "$WORK/race-home/vuln-race-condition-01/balance.txt" \
     "$WORK/race-home/vuln-race-condition-01/ledger"
 printf '1000' > "$WORK/race-home/vuln-race-condition-01/balance.txt"
@@ -928,6 +973,9 @@ RACE_LEDGER_LINES=$(wc -l < "$WORK/race-home/vuln-race-condition-01/ledger")
 grep -Fqx '取出 800 成功' "$WORK/race-home/vuln-race-condition-01/ledger"
 [ "$(grep -c '^取出 800 成功$' "$WORK/race-home/vuln-race-condition-01/ledger")" -eq 2 ]
 [ "$(cat "$WORK/race-home/vuln-race-condition-01/balance.txt")" = 200 ]
+HOME="$WORK/race-home" bash "$RACE_CONDITION_LAB/check.sh" \
+    > "$WORK/race-check.txt"
+grep -qx 'vuln-race-condition replay passed' "$WORK/race-check.txt"
 echo '  ✓ 六个 vuln 样本哈希与功能重放'
 
 echo '==> 锁定 i686 工具链逐字节重建比对'

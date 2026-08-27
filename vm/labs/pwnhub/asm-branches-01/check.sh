@@ -25,8 +25,8 @@ greater_taken="$(normalize_taken "$3")" || { echo '跳转结果请填写 1（是
 je_flag="$(printf '%s' "$4" | tr 'a-z' 'A-Z')"
 jg_relation="$(printf '%s' "$5" | tr 'a-z' 'A-Z')"
 
-printf '%s\n' "$je_flag" | grep -Eq '^(ZF|CF|SF|OF)$' || {
-    echo 'je 依据请使用一个界面中的 flag 缩写。' >&2
+printf '%s\n' "$je_flag" | grep -Eq '^ZF$' || {
+    echo 'je 只依据零标志，请填写 ZF。' >&2
     exit 1
 }
 normalize_jg_relation() {
