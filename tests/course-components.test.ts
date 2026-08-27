@@ -358,6 +358,49 @@ describe('chapter-first course components', () => {
     }
   })
 
+  it('生产关卡面板不显示带尖括号占位符的 check 命令', () => {
+    for (const lab of COURSE.labs.filter(({ labId }) => labId !== 'vuln-weak-random-01')) {
+      const panelText = [
+        lab.name,
+        lab.tagline,
+        lab.storySummary,
+        lab.story,
+        ...lab.goals,
+        ...lab.prerequisites,
+        lab.title,
+        lab.summary,
+        ...lab.steps.flatMap((step) => [
+          step.title,
+          step.objective,
+          step.instruction,
+          step.command,
+          step.commandTemplate,
+          step.observation,
+          step.question?.prompt,
+          step.question?.success,
+          ...(step.question?.choices.map((choice) => choice.label) ?? []),
+          ...(step.introduces?.flatMap((concept) => [concept.term, concept.explanation]) ?? []),
+          ...(step.fields?.flatMap((field) => [field.label, field.placeholder]) ?? []),
+          ...(step.commonErrors ?? []),
+          step.reinforcement,
+        ]),
+        ...lab.hints.map((hint) => hint.text),
+        lab.verification.instruction,
+        ...lab.verification.placeholders.map((placeholder) => placeholder.meaning),
+        lab.completionSummary.solved,
+        ...lab.completionSummary.mastered,
+        lab.completionSummary.next,
+      ]
+        .filter((text): text is string => Boolean(text))
+        .join('\n')
+
+      expect({ labId: lab.labId, residue: panelText.match(/check\s*[<＜]/i) }).toEqual({
+        labId: lab.labId,
+        residue: null,
+      })
+    }
+  })
+
   it('debugger-state 关卡显示本关引导与最终验证字段', () => {
     const lab = getCourseLab('asm-registers-01')!
     const wrapper = mount(MissionPanel, {
