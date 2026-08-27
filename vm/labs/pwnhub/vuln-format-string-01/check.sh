@@ -44,11 +44,11 @@ fi
 
 actual="$(LC_ALL=C grep -oE '[0-9a-f]{8}' "$output" | sed -n '11p')"
 printf '%s\n' "$actual" | grep -Eq '^[0-9a-f]{8}$' || {
-    echo '无法从真实样本输出中读取第 11 个十六进制值。' >&2
+    echo '无法从真实样本输出中读取目标十六进制值。' >&2
     exit 1
 }
 [ "$actual" = '0badf00d' ] || {
-    echo '真实重放的第 11 个值不是 0badf00d，样本与课程事实不一致。' >&2
+    echo '真实重放的目标值不是 0badf00d，样本与课程事实不一致。' >&2
     exit 1
 }
 
@@ -61,7 +61,7 @@ expected_digest="$(tr -d '\r\n ' < "$ANSWER_HASH")"
 
 submitted_digest="$(printf 'hashteam-lab answer v1 %s:%s' "$LAB_ID" "$secret" | sha256sum | cut -d ' ' -f 1)"
 [ "$submitted_digest" = "$expected_digest" ] || {
-    echo '提交的秘密值与真实泄漏不一致，请核对第 11 个 %x 读到的格子。' >&2
+    echo '提交的秘密值与真实泄漏不一致，请核对秘密所在栈格。' >&2
     exit 1
 }
 

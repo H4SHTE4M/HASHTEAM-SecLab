@@ -107,10 +107,10 @@
   "verification": {
     "type": "answer",
     "usage": "check <命中函数名> <十进制参数>",
-    "instruction": "填写真实 GDB 断点命中行中的函数名和 input 参数。",
+    "instruction": "依次填写命中函数名和 input 参数；后者为十进制整数。",
     "placeholders": [
-      { "token": "<命中函数名>", "meaning": "Breakpoint 命中行中括号前的函数名称" },
-      { "token": "<十进制参数>", "meaning": "同一行 input= 后的十进制整数" }
+      { "token": "<命中函数名>", "meaning": "函数名称" },
+      { "token": "<十进制参数>", "meaning": "十进制整数" }
     ],
     "feedback": {
       "empty": "还没有提供断点运行时观察值。",

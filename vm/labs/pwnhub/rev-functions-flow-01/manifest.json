@@ -117,12 +117,12 @@
   "verification": {
     "type": "external-observation",
     "usage": "check <入口地址> <原函数名> <比较常量> <条件跳转>",
-    "instruction": "提交锁定 ELF 中可由三条路线共同复核的四个静态事实。",
+    "instruction": "依次填写入口地址、原函数名、比较常量和条件跳转；入口地址以 0x 开头，比较常量可用十进制或 0x 十六进制。",
     "placeholders": [
-      { "token": "<入口地址>", "meaning": "判断函数第一条指令的虚拟地址" },
-      { "token": "<原函数名>", "meaning": "ELF 符号表与函数标签中的原名称" },
-      { "token": "<比较常量>", "meaning": "cmp 指令中的立即数，可用十进制或 0x 十六进制" },
-      { "token": "<条件跳转>", "meaning": "cmp 后第一个 j 开头的条件跳转助记符" }
+      { "token": "<入口地址>", "meaning": "以 0x 开头的十六进制地址" },
+      { "token": "<原函数名>", "meaning": "函数名称" },
+      { "token": "<比较常量>", "meaning": "十进制或 0x 十六进制立即数" },
+      { "token": "<条件跳转>", "meaning": "j 开头的助记符" }
     ],
     "feedback": {
       "empty": "还没有提供完整的函数与控制流观察。",

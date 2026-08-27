@@ -137,7 +137,6 @@ function submit(): void {
     <template v-if="available">
       <p class="verification-instruction">{{ verification.instruction }}</p>
       <p v-if="verification.placeholders.length > 0" class="verification-details">
-        <span class="verification-details-intro">各输入框按顺序填写：</span>
         <span
           v-for="(detail, index) in parameterDetails"
           :key="index"
@@ -188,7 +187,6 @@ function submit(): void {
 .verification-instruction,
 .verification-details { overflow-wrap: anywhere; }
 .verification-details { margin-top: 7px !important; color: var(--text-muted); font-size: 12px !important; line-height: 1.6 !important; }
-.verification-details-intro,
 .verification-detail-line { display: block; }
 .verification-field input { width: 100%; min-width: 0; min-height: 42px; padding: 8px 10px; overflow: hidden; color: var(--text-primary); font: 13px var(--font-mono); white-space: nowrap; background: var(--surface-1); border: var(--hairline) solid var(--border-strong); border-radius: 6px; box-sizing: border-box; }
 .verification-field input::placeholder { color: var(--text-faint); opacity: 1; }

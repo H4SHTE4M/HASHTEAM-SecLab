@@ -174,13 +174,13 @@
     "type": "debugger-state",
     "debuggerCheckpoint": "arithmetic_checkpoint",
     "usage": "check <加减结果> <乘积> <商> <余数> <位运算结果>",
-    "instruction": "依次填入 sub、imul、除法商、除法余数和 xor 行的后值；五项均以 0x 开头。",
+    "instruction": "依次填写加减结果、乘积、商、余数和位运算结果；均为以 0x 开头的十六进制值。",
     "placeholders": [
-      { "token": "<加减结果>", "meaning": "sub eax, 4 行的后值" },
-      { "token": "<乘积>", "meaning": "imul eax, ebx 行的后值" },
-      { "token": "<商>", "meaning": "idiv ebx 行的 EAX 后值" },
-      { "token": "<余数>", "meaning": "idiv 后的 EDX 行的后值" },
-      { "token": "<位运算结果>", "meaning": "xor eax, 0x11 行的后值" }
+      { "token": "<加减结果>", "meaning": "以 0x 开头的十六进制值" },
+      { "token": "<乘积>", "meaning": "以 0x 开头的十六进制值" },
+      { "token": "<商>", "meaning": "以 0x 开头的十六进制值" },
+      { "token": "<余数>", "meaning": "以 0x 开头的十六进制值" },
+      { "token": "<位运算结果>", "meaning": "以 0x 开头的十六进制值" }
     ],
     "feedback": {
       "empty": "还没有提供五项算术观察值。",

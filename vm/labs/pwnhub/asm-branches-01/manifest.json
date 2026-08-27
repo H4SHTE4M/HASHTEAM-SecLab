@@ -160,14 +160,14 @@
   "verification": {
     "type": "debugger-state",
     "debuggerCheckpoint": "branches_checkpoint",
-    "usage": "check <TEST后JE> <CMP后JE> <CMP后JG> <JE依据> <JG符号关系>",
-    "instruction": "依次把三个跳转结果写成 1/0，再填 je 依据和终端中观察到的 jg 符号条件。jg 的完整判断还包含 ZF=0；最后一项只记录终端中显示的符号关系。",
+    "usage": "check <TEST后JE> <CMP后JE> <CMP后JG> <JE依据> <JG条件>",
+    "instruction": "依次填写三个跳转结果、JE 依据和 JG 条件；跳转结果使用 1/0。",
     "placeholders": [
-      { "token": "<TEST后JE>", "meaning": "零值检测行的跳转结果" },
-      { "token": "<CMP后JE>", "meaning": "相等比较行的跳转结果" },
-      { "token": "<CMP后JG>", "meaning": "有符号大于行的跳转结果" },
-      { "token": "<JE依据>", "meaning": "je 读取的结果为零标志" },
-      { "token": "<JG符号关系>", "meaning": "终端输出中 jg 使用的符号 flag 关系" }
+      { "token": "<TEST后JE>", "meaning": "跳转结果，使用 1/0" },
+      { "token": "<CMP后JE>", "meaning": "跳转结果，使用 1/0" },
+      { "token": "<CMP后JG>", "meaning": "跳转结果，使用 1/0" },
+      { "token": "<JE依据>", "meaning": "JE 读取的标志名称" },
+      { "token": "<JG条件>", "meaning": "除了 ZF=0 还需要满足的条件" }
     ],
     "feedback": {
       "empty": "还没有提供五项条件跳转观察值。",

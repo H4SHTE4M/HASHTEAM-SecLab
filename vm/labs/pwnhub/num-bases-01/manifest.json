@@ -170,15 +170,15 @@
   "verification": {
     "type": "answer",
     "usage": "check <挑战一的十六进制写法> <挑战二的十进制值>",
-    "instruction": "把样本留下的两个挑战各自换算成另一种写法后依次填入。",
+    "instruction": "依次填写挑战一的十六进制写法和挑战二的十进制值；前者以 0x 开头。",
     "placeholders": [
       {
         "token": "<挑战一的十六进制写法>",
-        "meaning": "样本挑战一给出的十进制字节的十六进制写法，以 0x 开头"
+        "meaning": "以 0x 开头的十六进制值"
       },
       {
         "token": "<挑战二的十进制值>",
-        "meaning": "样本挑战二给出的 0x 开头字节的十进制值"
+        "meaning": "十进制值"
       }
     ],
     "feedback": {

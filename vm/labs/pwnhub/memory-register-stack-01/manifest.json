@@ -119,12 +119,12 @@
     "type": "debugger-state",
     "debuggerCheckpoint": "stack_checkpoint",
     "usage": "check <第二个值入栈后的栈顶地址> <第一次取出值> <随后栈顶值> <第二次取出值>",
-    "instruction": "依次填入表格中的四个事实：第二个值入栈后的地址、第一次取出的值、第一次出栈后仍在栈顶的值、第二次取出的值；四项均以 0x 开头。失败时无需 reset，重新运行 ./memory-register-stack 再按行核对。",
+    "instruction": "依次填写第二个值入栈后的栈顶地址、第一次取出值、随后栈顶值和第二次取出值；均为以 0x 开头的十六进制值。",
     "placeholders": [
-      { "token": "<第二个值入栈后的栈顶地址>", "meaning": "第二个值入栈后那一行的栈顶地址" },
-      { "token": "<第一次取出值>", "meaning": "第一次出栈后“本次取出”列的值" },
-      { "token": "<随后栈顶值>", "meaning": "第一次出栈后“栈顶值”列的值" },
-      { "token": "<第二次取出值>", "meaning": "第二次出栈后“本次取出”列的值" }
+      { "token": "<第二个值入栈后的栈顶地址>", "meaning": "以 0x 开头的十六进制地址" },
+      { "token": "<第一次取出值>", "meaning": "以 0x 开头的四字节值" },
+      { "token": "<随后栈顶值>", "meaning": "以 0x 开头的四字节值" },
+      { "token": "<第二次取出值>", "meaning": "以 0x 开头的四字节值" }
     ],
     "feedback": {
       "empty": "还没有提供四个栈操作观察值。",

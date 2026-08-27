@@ -116,7 +116,7 @@
   "verification": {
     "type": "terminal-state",
     "usage": "check",
-    "instruction": "按第 4 步完成并发取款后直接运行 check；判题只读取真实账本文件，不接受手填金额。",
+    "instruction": "验证对象为并发取款后的真实账本状态；无需填写参数。",
     "placeholders": [],
     "feedback": {
       "empty": "账本还没有任何成功记录，请先按第 4 步运行并发取款。",

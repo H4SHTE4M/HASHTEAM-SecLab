@@ -110,11 +110,11 @@
   "verification": {
     "type": "answer",
     "usage": "check <信号名> <#0函数> <非法目标地址>",
-    "instruction": "填写固定输入真实重放得到的崩溃信号、#0 函数和 invalid_address。",
+    "instruction": "依次填写崩溃信号、#0 函数和非法目标地址；信号以 SIG 开头，地址以 0x 开头。",
     "placeholders": [
-      { "token": "<信号名>", "meaning": "Program received signal 后的 SIG 开头名称" },
-      { "token": "<#0函数>", "meaning": "backtrace 第 0 帧中的函数名称" },
-      { "token": "<非法目标地址>", "meaning": "frame 0 中 print/x invalid_address 显示的地址" }
+      { "token": "<信号名>", "meaning": "SIG 开头的信号名称" },
+      { "token": "<#0函数>", "meaning": "函数名称" },
+      { "token": "<非法目标地址>", "meaning": "以 0x 开头的十六进制地址" }
     ],
     "feedback": {
       "empty": "还没有提供崩溃定位证据。",

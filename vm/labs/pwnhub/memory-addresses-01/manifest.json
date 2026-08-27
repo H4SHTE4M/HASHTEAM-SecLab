@@ -115,13 +115,13 @@
   "verification": {
     "type": "debugger-state",
     "debuggerCheckpoint": "memory_addresses_checkpoint",
-    "usage": "check <地址> <内存值> <指针值> <有符号值>",
-    "instruction": "把样本输出中的四个事实按顺序填入；前三项使用以 0x 开头的十六进制。验证不通过时无需 reset，重新运行 ./memory-addresses 并逐列核对。",
+    "usage": "check <cell的地址> <cell内存值> <cell_point内存值> <signed_cell数值>",
+    "instruction": "依次填写 cell 的地址、cell 内存值、cell_point 内存值和 signed_cell 数值。",
     "placeholders": [
-      { "token": "<地址>", "meaning": "cell 行第一列的十六进制地址" },
-      { "token": "<内存值>", "meaning": "cell 行第三列的四字节位模式" },
-      { "token": "<指针值>", "meaning": "cell_pointer 行第三列保存的地址" },
-      { "token": "<有符号值>", "meaning": "signed_cell 行第三列的十进制值" }
+      { "token": "<cell的地址>", "meaning": "十六进制地址" },
+      { "token": "<cell内存值>", "meaning": "四字节位模式" },
+      { "token": "<cell_point内存值>", "meaning": "四字节位模式" },
+      { "token": "<signed_cell数值>", "meaning": "十进制值" }
     ],
     "feedback": {
       "empty": "还没有提供四个观察值。",

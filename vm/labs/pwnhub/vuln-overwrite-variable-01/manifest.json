@@ -117,7 +117,7 @@
   "verification": {
     "type": "payload-replay",
     "usage": "check",
-    "instruction": "把能打开门的文件写到 $HOME/vuln-overwrite-variable-01/input.txt 后运行 check。失败时修改长度并重新写入、重放；reset 会删除该文件，普通重试不需要 reset。",
+    "instruction": "验证对象为 $HOME/vuln-overwrite-variable-01/input.txt 中能打开门的 payload；无需填写参数。",
     "placeholders": [],
     "feedback": {
       "empty": "还没有 input.txt。",

@@ -98,13 +98,13 @@
   "verification": {
     "type": "answer",
     "usage": "check <#0函数> <#1函数> <#2函数> <#3函数> <frame2参数>",
-    "instruction": "按 backtrace 顺序填写前四个函数名，再填写 frame 2 的 input 十进制值。",
+    "instruction": "依次填写 #0 到 #3 函数名和 frame 2 参数；参数为十进制整数。",
     "placeholders": [
-      { "token": "<#0函数>", "meaning": "当前暂停的函数名称" },
-      { "token": "<#1函数>", "meaning": "直接调用者函数名称" },
-      { "token": "<#2函数>", "meaning": "backtrace 的 #2 函数名称" },
-      { "token": "<#3函数>", "meaning": "backtrace 的 #3 函数名称" },
-      { "token": "<frame2参数>", "meaning": "选中 frame 2 后 info args 显示的 input 十进制值" }
+      { "token": "<#0函数>", "meaning": "函数名称" },
+      { "token": "<#1函数>", "meaning": "函数名称" },
+      { "token": "<#2函数>", "meaning": "函数名称" },
+      { "token": "<#3函数>", "meaning": "函数名称" },
+      { "token": "<frame2参数>", "meaning": "十进制整数" }
     ],
     "feedback": {
       "empty": "还没有提供调用栈与栈帧观察值。",

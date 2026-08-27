@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { basename, resolve } from 'node:path'
 import { contentAddressedArtifactPath } from '../vite.config'
 import { COURSE, getCourseLab } from '../src/modules/pwnhub/course'
@@ -118,6 +118,80 @@ describe('course manifest v3 compatibility layer', () => {
         hasRecoveryRoute: /重新|再次|重跑|重试|reset|无需重置|不需要重置/i.test(guide),
       }).toEqual({ labId: lab.labId, hasRecoveryRoute: true })
     }
+  })
+
+  it('所有 PwnHub 最终验证只说明验证对象与输入格式', () => {
+    const pwnHubRoot = resolve('vm/labs/pwnhub')
+    const manifestPaths = readdirSync(pwnHubRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => resolve(pwnHubRoot, entry.name, 'manifest.json'))
+
+    for (const manifestPath of manifestPaths) {
+      const raw = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+        labId: string
+        verification: {
+          instruction: string
+          placeholders: Array<{ meaning: string }>
+        }
+      }
+      const prompt = [
+        raw.verification.instruction,
+        ...raw.verification.placeholders.map((placeholder) => placeholder.meaning),
+      ].join('\n')
+
+      expect({
+        labId: raw.labId,
+        operationDetail: prompt.match(/运行|重放|重新|reset|check|输出|表格|行|列|命令/i),
+      }).toEqual({ labId: raw.labId, operationDetail: null })
+    }
+  })
+
+  it('指定关卡的最终验证字段符合文案契约', () => {
+    const memoryStack = getCourseLab('memory-register-stack-01')!
+    expect(memoryStack.verification.placeholders.map((field) => field.token)).toEqual([
+      '<第二个值入栈后的栈顶地址>',
+      '<第一次取出值>',
+      '<随后栈顶值>',
+      '<第二次取出值>',
+    ])
+    expect(readFileSync('vm/labs/pwnhub/memory-register-stack-01/check.sh', 'utf8')).toContain(
+      '第二个值入栈后的栈顶地址、第一次取出值、随后栈顶值和第二次取出值',
+    )
+
+    const formatString = getCourseLab('vuln-format-string-01')!
+    expect(JSON.stringify(formatString.verification)).not.toMatch(/11|十一/)
+
+    const stackOps = getCourseLab('asm-stack-ops-01')!
+    expect(JSON.stringify({
+      instruction: stackOps.verification.instruction,
+      placeholders: stackOps.verification.placeholders,
+    })).not.toMatch(/行|列/)
+
+    const branches = getCourseLab('asm-branches-01')!
+    expect(branches.verification.instruction).not.toContain('ZF=0')
+    expect(branches.verification.placeholders.at(-1)).toEqual({
+      token: '<JG条件>',
+      meaning: '除了 ZF=0 还需要满足的条件',
+    })
+
+    const memoryAddresses = getCourseLab('memory-addresses-01')!
+    expect(memoryAddresses.verification.placeholders).toEqual([
+      { token: '<cell的地址>', meaning: '十六进制地址' },
+      { token: '<cell内存值>', meaning: '四字节位模式' },
+      { token: '<cell_point内存值>', meaning: '四字节位模式' },
+      { token: '<signed_cell数值>', meaning: '十进制值' },
+    ])
+
+    const elfBytes = getCourseLab('elf-bytes-01')!
+    expect(elfBytes.verification.instruction).toBe(
+      '各输入框按顺序填写，按序写入对应十六进制字节，无需空格无需0x开头：',
+    )
+    expect(elfBytes.verification.placeholders).toEqual([
+      { token: '<魔数>', meaning: '字节' },
+      { token: '<位数标记>', meaning: '字节' },
+      { token: '<字节序标记>', meaning: '字节' },
+      { token: '<字符串标记>', meaning: 'PwnHub_ELF_marker 冒号后的标记字符串' },
+    ])
   })
 
   it('两个溢出关把默认长度、成功阈值和真实 payload 路径讲完整', () => {

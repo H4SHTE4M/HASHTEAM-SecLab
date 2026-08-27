@@ -119,12 +119,12 @@
     "type": "debugger-state",
     "debuggerCheckpoint": "layout_checkpoint",
     "usage": "check <代码段权限> <数据段权限> <堆权限> <栈权限>",
-    "instruction": "按表格顺序填入四类区域的三个字符 rwx 权限，缺少的权限用 - 表示。验证不通过时无需 reset，重新运行 ./inspect-memory-layout.sh 逐行核对。",
+    "instruction": "依次填写代码段、数据段、堆和栈的权限；每项为三个字符，缺少权限用 - 表示。",
     "placeholders": [
-      { "token": "<代码段权限>", "meaning": "代码段行的三个字符 rwx" },
-      { "token": "<数据段权限>", "meaning": "数据段行的三个字符 rwx" },
-      { "token": "<堆权限>", "meaning": "堆行的三个字符 rwx" },
-      { "token": "<栈权限>", "meaning": "栈行的三个字符 rwx" }
+      { "token": "<代码段权限>", "meaning": "三个字符的 rwx 权限" },
+      { "token": "<数据段权限>", "meaning": "三个字符的 rwx 权限" },
+      { "token": "<堆权限>", "meaning": "三个字符的 rwx 权限" },
+      { "token": "<栈权限>", "meaning": "三个字符的 rwx 权限" }
     ],
     "feedback": {
       "empty": "还没有提供四类区域的权限观察值。",

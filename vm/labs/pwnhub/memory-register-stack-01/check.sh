@@ -7,7 +7,7 @@ ANSWER_HASH="$LAB_DIR/answer.sha256"
 EXPECTED_SHA256='77fe3707ba4e34a52bbfa297e915a7b66f964bddec40784810428c349b9dc692'
 
 if [ "$#" -ne 4 ]; then
-    echo '需要四个观察值：第二个值入栈后的栈顶地址、两次取出值和随后栈顶值。' >&2
+    echo '需要四个观察值：第二个值入栈后的栈顶地址、第一次取出值、随后栈顶值和第二次取出值。' >&2
     exit 1
 fi
 

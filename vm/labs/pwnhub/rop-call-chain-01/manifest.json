@@ -109,7 +109,7 @@
   "verification": {
     "type": "payload-replay",
     "usage": "check",
-    "instruction": "把三函数链 payload.bin 放入指定目录后运行 check。",
+    "instruction": "验证对象为三函数链 payload.bin；无需填写参数。",
     "placeholders": [],
     "feedback": {
       "empty": "还没有 payload.bin。",

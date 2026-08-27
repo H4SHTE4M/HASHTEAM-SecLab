@@ -29,6 +29,6 @@
     { "id": 4, "type": "terminal", "title": "真实重放 gadget", "objective": "让官方 ELF 验证 gadget 链的寄存器和栈效果", "instruction": "把 payload.bin 写入实验目录后运行 check；判题会重放真实 ELF，不检查链条输入历史。", "completion": "confirm", "allowRun": false, "evidence": "payload-replay", "tool": "shell" }
   ],
   "hints": [{ "level": 1, "kind": "direction", "text": "每个 gadget 都要写出它从栈顶取走的四字节。" }, { "level": 2, "kind": "tool", "text": "用 objdump -d -M intel 和 GDB x/4wx $esp 观察固定地址与栈槽。" }, { "level": 3, "kind": "structure", "text": "payload = padding + p32(pop_eax_ret) + p32(EAX值) + p32(check_eax) + p32(占位返回地址)。" }],
-  "verification": { "type": "payload-replay", "usage": "check", "instruction": "把单 gadget 链 payload.bin 放入指定目录后运行 check。", "placeholders": [], "feedback": { "empty": "还没有 payload.bin。", "incorrect": "gadget 链未达到目标状态，请逐槽检查 pop 值和 ret 地址。", "success": "真实 ELF 重放确认了单 gadget 的寄存器准备和栈消耗。" } },
+  "verification": { "type": "payload-replay", "usage": "check", "instruction": "验证对象为单 gadget 链 payload.bin；无需填写参数。", "placeholders": [], "feedback": { "empty": "还没有 payload.bin。", "incorrect": "gadget 链未达到目标状态，请逐槽检查 pop 值和 ret 地址。", "success": "真实 ELF 重放确认了单 gadget 的寄存器准备和栈消耗。" } },
   "completionSummary": { "solved": "通过真实重放验证了 pop; ret gadget 对 EAX 和 ESP 的影响。", "mastered": ["gadget", "pop/ret 栈消耗", "固定地址短链"], "next": "下一实验会同时准备两个寄存器，再把链条送入带条件检查的目标。" }
 }

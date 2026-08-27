@@ -97,7 +97,7 @@
     { "level": 2, "kind": "tool", "text": "用 StackView、p32 或原生 GDB 的 x/4wx $esp 核对每个四字节槽。" },
     { "level": 3, "kind": "structure", "text": "payload = padding + p32(win) + p32(占位返回地址) + p32(arg1) + p32(arg2)。" }
   ],
-  "verification": { "type": "payload-replay", "usage": "check", "instruction": "把带有两个 cdecl 参数的 payload.bin 放入指定目录后运行 check。", "placeholders": [], "feedback": {
+  "verification": { "type": "payload-replay", "usage": "check", "instruction": "验证对象为带有两个 cdecl 参数的 payload.bin；无需填写参数。", "placeholders": [], "feedback": {
     "empty": "还没有 payload.bin。", "incorrect": "目标函数未看到两个正确参数，请检查地址槽、字节序和参数顺序。", "success": "真实 ELF 重放确认了 i386 cdecl 参数布局。"
   } },
   "completionSummary": { "solved": "通过真实重放验证了 win 的返回地址槽和 ESP+4/ESP+8 两个 cdecl 参数。", "mastered": ["ret 栈消耗", "i386 cdecl 参数", "多段 p32 payload"], "next": "下一章会把固定函数调用拆成短 gadget 链，观察每个 gadget 对栈和寄存器的消耗。" }

@@ -177,7 +177,7 @@
     {
       "level": 2,
       "kind": "tool",
-      "text": "用 hexdump -C -n 16 查看文件头；xxd -g 1 -l 16 和 od -An -tx1 -N16 是等价观察路线。"
+      "text": "验证失败时，重新用 hexdump -C -n 16 查看文件头并用 strings 查找标记；xxd -g 1 -l 16 和 od -An -tx1 -N16 是等价字节观察路线。"
     },
     {
       "level": 3,
@@ -188,12 +188,12 @@
   "verification": {
     "type": "answer",
     "usage": "check <魔数> <位数标记> <字节序标记> <字符串标记>",
-    "instruction": "依次填入前四字节、偏移 4、偏移 5，以及 strings 输出中冒号后的标记。失败时无需 reset，重新运行 hexdump 和 strings 两条观察命令逐项核对。",
+    "instruction": "各输入框按顺序填写，按序写入对应十六进制字节，无需空格无需0x开头：",
     "placeholders": [
-      { "token": "<魔数>", "meaning": "文件偏移 0 开始的四个连续十六进制字节，不含空格" },
-      { "token": "<位数标记>", "meaning": "文件偏移 4 的一个十六进制字节" },
-      { "token": "<字节序标记>", "meaning": "文件偏移 5 的一个十六进制字节" },
-      { "token": "<字符串标记>", "meaning": "PwnHub_ELF_marker 冒号后的标记" }
+      { "token": "<魔数>", "meaning": "字节" },
+      { "token": "<位数标记>", "meaning": "字节" },
+      { "token": "<字节序标记>", "meaning": "字节" },
+      { "token": "<字符串标记>", "meaning": "PwnHub_ELF_marker 冒号后的标记字符串" }
     ],
     "feedback": {
       "empty": "还没有提供四项 ELF 观察值。",

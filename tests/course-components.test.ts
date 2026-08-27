@@ -335,7 +335,7 @@ describe('chapter-first course components', () => {
       '类型',
     ])
     expect(wrapper.get('.verification-details').text()).toContain(
-      '第1项“compute_total地址”：compute_total 行第一列的十六进制地址',
+      '第1项“compute_total地址”：以 0x 开头的十六进制地址',
     )
   })
 
