@@ -15,11 +15,11 @@ fi
 secret="$(printf '%s' "$1" | tr 'A-F' 'a-f')"
 case "$secret" in
     0x*) secret="${secret#0x}" ;;
-    0X*) secret="${secret#0X}" ;;
-    *) echo '秘密值应使用以 0x 开头的十六进制表示。' >&2; exit 1 ;;
+    ????????) ;;
+    *) echo '秘密值应填写完整的 8 位十六进制，或使用 0x 前缀。' >&2; exit 1 ;;
 esac
 case "$secret" in
-    ''|*[!0-9a-f]*) echo '秘密值应使用以 0x 开头的十六进制表示。' >&2; exit 1 ;;
+    ''|*[!0-9a-f]*) echo '秘密值应填写完整的 8 位十六进制，或使用 0x 前缀。' >&2; exit 1 ;;
 esac
 secret="$(printf '%s' "$secret" | sed 's/^0*//')"
 [ -n "$secret" ] || secret=0

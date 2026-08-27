@@ -937,6 +937,9 @@ FORMAT_STRING_ELEVENTH="$(printf '%s' '%x%x%x%x%x%x%x%x%x%x%x' \
     | timeout 2 "$FORMAT_STRING_ELF" \
     | awk '/你好，/ { sub(/^.*你好，[[:space:]]*/, ""); gsub(/[^ 0-9a-f]/, ""); n = split($0, words, /[[:space:]]+/); print words[11] }')"
 [ "$FORMAT_STRING_ELEVENTH" = 0badf00d ]
+HOME="$WORK/home" bash "$FORMAT_STRING_LAB/check.sh" 0badf00d \
+    > "$WORK/format-string-bare-hex.txt"
+grep -qx 'vuln-format-string replay passed' "$WORK/format-string-bare-hex.txt"
 HOME="$WORK/home" bash "$FORMAT_STRING_LAB/check.sh" 0xbadf00d \
     > "$WORK/format-string-prefixed-hex.txt"
 grep -qx 'vuln-format-string replay passed' "$WORK/format-string-prefixed-hex.txt"

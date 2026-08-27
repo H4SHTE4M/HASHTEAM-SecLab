@@ -106,7 +106,7 @@
       "type": "terminal",
       "title": "提交秘密值",
       "objective": "用泄漏出的秘密通过真实重放校验",
-      "instruction": "把第 11 个 %x 读到的十六进制值加上 0x 前缀后提交给 check。",
+      "instruction": "把第 11 个 %x 读到的完整 8 位十六进制值原样提交给 check；也可以在前面加 0x。",
       "completion": "confirm",
       "allowRun": false,
       "uses": ["planted-secret"],
@@ -117,12 +117,12 @@
   "hints": [
     { "level": 1, "kind": "direction", "text": "先看普通名字只是回显；再比较名字含 %x 时，样本的 fmt_print 为什么会多读取并打印一个栈格。" },
     { "level": 2, "kind": "tool", "text": "用 ./greeter 多放几个 %x（中间不用空格），数清楚每多一个 %x 就多读一格。" },
-    { "level": 3, "kind": "structure", "text": "把 %x 重复 11 次，将第 11 个读到的十六进制值加上 0x 前缀后提交。" }
+    { "level": 3, "kind": "structure", "text": "把 %x 重复 11 次，将第 11 个读到的完整 8 位十六进制值原样提交；0x 前缀可加可不加。" }
   ],
   "verification": {
     "type": "answer",
     "usage": "check <秘密值>",
-    "instruction": "提交第 11 个 %x 从真实样本栈上读到的十六进制值，以 0x 开头。验证不通过时无需 reset，重新运行 ./greeter，输入 11 个连续的 %x 并按空格分隔的输出重新计数。",
+    "instruction": "提交第 11 个 %x 从真实样本栈上读到的完整 8 位十六进制值；可以原样提交，也可以加 0x 前缀。验证不通过时无需 reset，重新运行 ./greeter，输入 11 个连续的 %x 并按空格分隔的输出重新计数。",
     "placeholders": [
       { "token": "<秘密值>", "meaning": "第 11 个 %x 读到的十六进制值" }
     ],
