@@ -107,7 +107,7 @@
       "type": "terminal",
       "title": "提交数量与回绕金额",
       "objective": "用两个观察值通过真实重放校验",
-      "instruction": "运行 check <数量> <回绕金额>：依次填入上面的 256 和系统计算行 = 后面的 0。判题会把锁定样本按 256 真实重放，只接受与真实输出一致的一对观察值。",
+      "instruction": "在最终验证区依次填写数量和回绕金额：填入上面的 256 和系统计算行 = 后面的 0。判题会把锁定样本按 256 真实重放，只接受与真实输出一致的一对观察值。",
       "completion": "confirm",
       "allowRun": false,
       "uses": ["check-bypass"],
@@ -118,7 +118,7 @@
   "hints": [
     { "level": 1, "kind": "direction", "text": "先看第 3 步里系统打印的乘积为什么变成 0，再想 0 是怎么通过余额检查的。" },
     { "level": 2, "kind": "tool", "text": "256 = 2^8，单价 16777216 = 2^24；2^8 × 2^24 = 2^32，四字节格存不下就回绕成 0。python 里 (256*16777216) & 0xffffffff 可以直接看到这个回绕。" },
-    { "level": 3, "kind": "structure", "text": "最终结构是 check <数量> <回绕金额>；两个值都来自你亲手运行 ./wallet 触发回绕时的真实输出，不由提示代填。" }
+    { "level": 3, "kind": "structure", "text": "最终验证区共有两项，依次填写数量和回绕金额；两个值都来自你亲手运行 ./wallet 触发回绕时的真实输出，不由提示代填。" }
   ],
   "verification": {
     "type": "answer",

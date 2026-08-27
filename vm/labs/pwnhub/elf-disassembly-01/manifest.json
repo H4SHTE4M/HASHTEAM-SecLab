@@ -174,13 +174,13 @@
     {
       "level": 3,
       "kind": "structure",
-      "text": "最终结构是 check <choose_path地址> <call目标函数> <条件跳转助记符> <cmp立即数>；地址和立即数均以 0x 开头。"
+      "text": "最终验证区共有四项，依次填写 choose_path 地址、call 目标函数、条件跳转助记符和 cmp 立即数；地址和立即数均以 0x 开头。"
     }
   ],
   "verification": {
     "type": "answer",
     "usage": "check <choose_path地址> <call目标函数> <条件跳转助记符> <cmp立即数>",
-    "instruction": "按 objdump 输出依次填写函数地址、调用目标、条件跳转和比较立即数；两个十六进制项均以 0x 开头。",
+    "instruction": "按 objdump 输出依次填写函数地址、调用目标、条件跳转和比较立即数；两个十六进制项均以 0x 开头。失败时无需 reset，重新运行完整反汇编和 choose_path 聚焦命令逐项核对。",
     "placeholders": [
       { "token": "<choose_path地址>", "meaning": "choose_path 函数标签前的十六进制地址" },
       { "token": "<call目标函数>", "meaning": "compute_result 中 call 指令末尾尖括号里的函数名称" },

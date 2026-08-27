@@ -184,13 +184,13 @@
     {
       "level": 3,
       "kind": "structure",
-      "text": "最终结构是 check <入口点> <.text地址> <.bss类型> <.data标志>；地址以 0x 开头，后两项填写对应英文列值。"
+      "text": "最终验证区共有四项，依次填写入口点、.text 地址、.bss 类型和 .data 标志；地址以 0x 开头，后两项填写对应英文列值。"
     }
   ],
   "verification": {
     "type": "answer",
     "usage": "check <入口点> <.text地址> <.bss类型> <.data标志>",
-    "instruction": "按 ELF 头和节表输出依次填写四项真实观察值；入口点和 .text 地址以 0x 开头。",
+    "instruction": "按 ELF 头和节表输出依次填写四项真实观察值；入口点和 .text 地址以 0x 开头。失败时无需 reset，重新运行 readelf -h 和 readelf -SW，并核对 Addr、Type、Flg 三列。",
     "placeholders": [
       { "token": "<入口点>", "meaning": "readelf -h 输出中的 Entry point address" },
       { "token": "<.text地址>", "meaning": ".text 行 Addr 列的十六进制地址" },

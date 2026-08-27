@@ -175,7 +175,7 @@
   "hints": [
     { "level": 1, "kind": "direction", "text": "先看操作表的最后一列，再回到职责表寻找“栈顶”。" },
     { "level": 2, "kind": "tool", "text": "重新输入 ./asm-registers 可再次运行 HOME 中的真实 ELF。" },
-    { "level": 3, "kind": "structure", "text": "最终结构是 check <MOV后EAX> <LEA后ECX> <栈顶寄存器>。" }
+    { "level": 3, "kind": "structure", "text": "最终验证区共有三项，依次填写 MOV 后 EAX、LEA 后 ECX 和栈顶寄存器。" }
   ],
   "verification": {
     "type": "debugger-state",

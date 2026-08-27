@@ -50,7 +50,7 @@
       "type": "prediction",
       "title": "先预测 ret 后 ESP",
       "objective": "区分 ret 弹返回地址和调用方弹参数的两个阶段",
-      "instruction": "调用方在 0x0804c24c 压入一个参数，call 后被调用函数 ret。先选择 ret 刚完成、调用方尚未 add esp,4 时的 ESP。",
+      "instruction": "调用方先把一个参数压入栈；压参完成后的 ESP 是 0x0804c24c。随后 call 压入返回地址并进入被调用函数。先选择 ret 刚完成、调用方尚未执行 add esp,4 时的 ESP。",
       "completion": "answer",
       "allowRun": false,
       "introduces": [
@@ -147,7 +147,7 @@
       "type": "visual-trace",
       "title": "跟随 call、ret 和清理",
       "objective": "把调用轨迹、ESP 清理和 EAX 返回值连接起来",
-      "instruction": "从调用前、被调用函数序言、ret 返回到调用方清理，观察 ESP 依次为 0x0804c24c、0x0804c240、0x0804c24c、0x0804c250；函数计算出的 0x2b 通过 EAX 返回。",
+      "instruction": "按四个阶段读取 ESP：压入参数后是 0x0804c24c；被调用函数建立栈帧后是 0x0804c240；ret 弹出返回地址后回到 0x0804c24c，此时参数仍在栈顶；调用方执行 add esp,4 清理参数后才是 0x0804c250。函数计算出的 0x2b 通过 EAX 返回。",
       "completion": "acknowledge",
       "allowRun": false,
       "uses": ["cdecl-register-contract", "call-stack-effect", "ebp-frame-cleanup"],
@@ -248,7 +248,7 @@
   "hints": [
     { "level": 1, "kind": "direction", "text": "先找栈表中的返回地址和参数，再比较返回、清理阶段与结果行。" },
     { "level": 2, "kind": "tool", "text": "重新输入 ./asm-call-stack 可再次运行 HOME 中的真实 ELF。" },
-    { "level": 3, "kind": "structure", "text": "最终结构是 check <返回地址> <参数值> <局部值> <清理字节数> <EAX返回值>。" }
+    { "level": 3, "kind": "structure", "text": "最终验证区共有五项，依次填写返回地址、参数值、局部值、清理字节数和 EAX 返回值。" }
   ],
   "verification": {
     "type": "debugger-state",

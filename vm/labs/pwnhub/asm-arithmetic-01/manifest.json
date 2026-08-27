@@ -168,7 +168,7 @@
   "hints": [
     { "level": 1, "kind": "direction", "text": "按表格从上到下跟随后值，除法单独记录商与余数。" },
     { "level": 2, "kind": "tool", "text": "重新输入 ./asm-arithmetic 可再次运行 HOME 中的真实 ELF。" },
-    { "level": 3, "kind": "structure", "text": "最终结构是 check <加减结果> <乘积> <商> <余数> <位运算结果>。" }
+    { "level": 3, "kind": "structure", "text": "最终验证区共有五项，依次填写加减结果、乘积、商、余数和位运算结果。" }
   ],
   "verification": {
     "type": "debugger-state",

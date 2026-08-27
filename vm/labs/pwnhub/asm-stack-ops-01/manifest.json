@@ -111,7 +111,7 @@
   "hints": [
     { "level": 1, "kind": "direction", "text": "先读两条 push 行的 ESP，再读两条 pop 行最后一列。" },
     { "level": 2, "kind": "tool", "text": "重新输入 ./asm-stack-ops 可再次运行 HOME 中的真实 ELF。" },
-    { "level": 3, "kind": "structure", "text": "最终结构是 check <第一次PUSH后ESP> <第二次PUSH后ESP> <第一次POP值> <第二次POP值>。" }
+    { "level": 3, "kind": "structure", "text": "最终验证区共有四项，依次填写第一次 PUSH 后 ESP、第二次 PUSH 后 ESP、第一次 POP 值和第二次 POP 值。" }
   ],
   "verification": {
     "type": "debugger-state",

@@ -37,8 +37,8 @@ normalize_uint32() {
     '
 }
 
-first_submitted="$(normalize_uint32 "$1")" || { echo '第一个观察值应是 0 到 255 的非负整数。' >&2; exit 2; }
-second_submitted="$(normalize_uint32 "$2")" || { echo '第二个观察值应是 0 到 255 的非负整数。' >&2; exit 2; }
+first_submitted="$(normalize_uint32 "$1")" || { echo '第一个观察值应是 0 到 255 的非负整数，可带 0x、0b 或 0o 进制前缀。' >&2; exit 2; }
+second_submitted="$(normalize_uint32 "$2")" || { echo '第二个观察值应是 0 到 255 的非负整数，可带 0x、0b 或 0o 进制前缀。' >&2; exit 2; }
 [ "$first_submitted" -le 255 ] && [ "$second_submitted" -le 255 ] || {
     echo '8 位结果只会落在 0 到 255 之间。' >&2
     exit 2

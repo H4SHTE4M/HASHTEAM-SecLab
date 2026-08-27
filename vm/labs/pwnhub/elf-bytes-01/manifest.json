@@ -182,13 +182,13 @@
     {
       "level": 3,
       "kind": "structure",
-      "text": "最终结构是 check <魔数> <位数标记> <字节序标记> <字符串标记>；十六进制字段不带空格。"
+      "text": "最终验证区共有四项，依次填写魔数、位数标记、字节序标记和字符串标记；十六进制字段不带空格。"
     }
   ],
   "verification": {
     "type": "answer",
     "usage": "check <魔数> <位数标记> <字节序标记> <字符串标记>",
-    "instruction": "依次填入前四字节、偏移 4、偏移 5，以及 strings 输出中冒号后的标记。",
+    "instruction": "依次填入前四字节、偏移 4、偏移 5，以及 strings 输出中冒号后的标记。失败时无需 reset，重新运行 hexdump 和 strings 两条观察命令逐项核对。",
     "placeholders": [
       { "token": "<魔数>", "meaning": "文件偏移 0 开始的四个连续十六进制字节，不含空格" },
       { "token": "<位数标记>", "meaning": "文件偏移 4 的一个十六进制字节" },

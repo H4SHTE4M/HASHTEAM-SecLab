@@ -98,26 +98,28 @@
       "type": "terminal",
       "title": "核对两次出栈顺序",
       "objective": "从真实 ELF 的全部表格输出中提取四个观察事实",
-      "instruction": "样本进入实验时已经自动运行。依次核对第二个值入栈后的栈顶地址、第一次取出的值、随后栈顶保留的值和第二次取出的值。",
+      "instruction": "样本进入实验时已经自动运行；如果输出已经滚过，输入 ./memory-register-stack 重新运行。依次核对第二个值入栈后的栈顶地址、第一次取出的值、随后栈顶保留的值和第二次取出的值。",
       "completion": "acknowledge",
       "allowRun": false,
       "autoRun": true,
       "uses": ["stack-top", "stack-lifo", "stack-entry"],
       "evidence": "observation",
       "tool": "shell",
-      "observation": "表格显示 B 先被取出，随后 A 被取出，最后栈顶回到开始地址。"
+      "observation": "表格显示 B 先被取出，随后 A 被取出，最后栈顶回到开始地址。",
+      "commonErrors": ["第一次出栈行要同时读取“本次取出”和操作完成后的“栈顶值”，两列含义不同。", "最终四项不包含开始地址或第一次入栈后的地址。"],
+      "reinforcement": "两次入栈和两次出栈把地址移动与后入先出放在同一条真实轨迹中。"
     }
   ],
   "hints": [
     { "level": 1, "kind": "direction", "text": "先找第二个值入栈后的栈顶，再跟踪两次出栈行。" },
-    { "level": 2, "kind": "tool", "text": "栈视图按地址从低到高排出两个值；终端表格显示每次取出的值。" },
-    { "level": 3, "kind": "structure", "text": "最终结构是 check <第二个值入栈后的栈顶地址> <第一次取出值> <随后栈顶值> <第二次取出值>。" }
+    { "level": 2, "kind": "tool", "text": "栈视图按地址从低到高排出两个值；输入 ./memory-register-stack 可重新打印每次入栈和出栈的完整表格。" },
+    { "level": 3, "kind": "structure", "text": "最终验证区共有四项，依次填写第二个值入栈后的栈顶地址、第一次取出值、随后栈顶值和第二次取出值。" }
   ],
   "verification": {
     "type": "debugger-state",
     "debuggerCheckpoint": "stack_checkpoint",
     "usage": "check <第二个值入栈后的栈顶地址> <第一次取出值> <随后栈顶值> <第二次取出值>",
-    "instruction": "依次填入表格中的四个事实：第二个值入栈后的地址、第一次取出的值、第一次出栈后仍在栈顶的值、第二次取出的值；四项均以 0x 开头。",
+    "instruction": "依次填入表格中的四个事实：第二个值入栈后的地址、第一次取出的值、第一次出栈后仍在栈顶的值、第二次取出的值；四项均以 0x 开头。失败时无需 reset，重新运行 ./memory-register-stack 再按行核对。",
     "placeholders": [
       { "token": "<第二个值入栈后的栈顶地址>", "meaning": "第二个值入栈后那一行的栈顶地址" },
       { "token": "<第一次取出值>", "meaning": "第一次出栈后“本次取出”列的值" },

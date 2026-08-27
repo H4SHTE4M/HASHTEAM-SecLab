@@ -5,9 +5,9 @@
   "chapterId": "vuln-memory",
   "labId": "vuln-format-string-01",
   "title": "用 %x 读出栈上的秘密",
-  "summary": "把名字写成格式串，让 printf 把 %x 当成指令逐格读取调用者栈，泄漏栈上遗留的秘密值。",
+  "summary": "把名字写成格式串，让样本自带的 fmt_print 教学解释器按 %x 逐格读取调用者栈，泄漏栈上遗留的秘密值。",
   "goals": [
-    "说明 %x 在 printf 里是一条读取栈格的指令",
+    "说明样本的 fmt_print 怎样把 %x 解释成读取栈格的指令",
     "用多个 %x 逐格泄漏调用者栈上的值",
     "把泄漏出的固定格子还原成要提交的秘密值"
   ],
@@ -24,7 +24,7 @@
     "downloadable": true
   }],
   "concepts": [
-    { "id": "format-specifier-as-instruction", "term": "格式说明符即指令", "explanation": "printf 把格式串里的 %x 当成指令：每遇到一个 %x 就从调用者栈上顺次取一个格子并按十六进制打印。" },
+    { "id": "format-specifier-as-instruction", "term": "格式说明符即指令", "explanation": "本关的 fmt_print 是只实现普通字符和 %x 的教学解释器；它模拟不安全格式串的取数方式，每遇到一个 %x 就从调用者栈上顺次取一个格子并按十六进制打印。" },
     { "id": "stack-leak", "term": "栈格泄漏", "explanation": "格式串不限定取数的来源；只要多放 %x 就能越界读出调用者栈上原本不可见的局部值，造成信息泄漏。" },
     { "id": "planted-secret", "term": "栈上遗留的秘密", "explanation": "调用前留在栈格里的固定值会按 %x 的顺序被逐格打印出来；找到对应格子就还原了秘密。" }
   ],
@@ -38,7 +38,7 @@
       "completion": "acknowledge",
       "allowRun": true,
       "introduces": [
-        { "id": "format-specifier-as-instruction", "term": "格式说明符即指令", "explanation": "printf 把格式串里的 %x 当成指令：每遇到一个 %x 就从调用者栈上顺次取一个格子并按十六进制打印。" }
+        { "id": "format-specifier-as-instruction", "term": "格式说明符即指令", "explanation": "本关的 fmt_print 是只实现普通字符和 %x 的教学解释器；它模拟不安全格式串的取数方式，每遇到一个 %x 就从调用者栈上顺次取一个格子并按十六进制打印。" }
       ],
       "uses": ["format-specifier-as-instruction"],
       "evidence": "observation",
@@ -49,7 +49,7 @@
       "type": "terminal",
       "title": "名字里的 %x 冒出一个数",
       "objective": "看到 %x 把栈格读出来",
-      "instruction": "运行 ./greeter，这次把名字输入成 %x（百分号 x，中间不要空格）。回显里多出了一个十六进制数，而不是字面的 %x——这说明 printf 把名字当成了格式串，%x 指示它从栈上读一格并打印。",
+      "instruction": "运行 ./greeter，这次把名字输入成 %x（百分号 x，中间不要空格）。回显里多出了一个十六进制数，而不是字面的 %x——这说明样本把名字交给 fmt_print 当作格式串解释，%x 指示它从栈上读一格并打印。fmt_print 不是 C 标准库格式化函数；它是锁定样本中只实现本关所需 %x 行为的最小教学函数。",
       "completion": "acknowledge",
       "allowRun": true,
       "introduces": [
@@ -64,7 +64,7 @@
       "type": "visual-trace",
       "title": "把 %x 想象成栈格指针",
       "objective": "看清 %x 怎样逐格读调用者栈",
-      "instruction": "printf 处理格式串时，每遇到一个 %x 就从调用者栈上顺次取下一个格子并按十六进制打印。前几个格子是 name 缓冲区自身的字节，再往后是上一函数留在栈上的局部；调用前故意留下的固定值排在更靠后的格子里。下图用示意地址讲清取格顺序，实际地址以运行时为准。",
+      "instruction": "fmt_print 从保存格式串参数的栈格开始，每遇到一个 %x 就继续向后取一个四字节格并按十六进制打印。前几个格子是 name 缓冲区自身的字节，再往后是 chat 留在栈上的 cells 局部数组；其中固定秘密位于第 11 格。下图用示意地址讲清取格顺序，实际地址以运行时为准。真实程序中把用户输入直接交给格式化输出函数会造成同类越界读取，本样本用最小解释器保证教学序列固定可复现。",
       "completion": "acknowledge",
       "allowRun": false,
       "introduces": [
@@ -115,14 +115,14 @@
     }
   ],
   "hints": [
-    { "level": 1, "kind": "direction", "text": "先看普通名字只是回显；再想名字里带 %x 时，printf 为什么会多打印一个数。" },
+    { "level": 1, "kind": "direction", "text": "先看普通名字只是回显；再比较名字含 %x 时，样本的 fmt_print 为什么会多读取并打印一个栈格。" },
     { "level": 2, "kind": "tool", "text": "用 ./greeter 多放几个 %x（中间不用空格），数清楚每多一个 %x 就多读一格。" },
     { "level": 3, "kind": "structure", "text": "把 %x 重复 11 次，将第 11 个读到的十六进制值加上 0x 前缀后提交。" }
   ],
   "verification": {
     "type": "answer",
     "usage": "check <秘密值>",
-    "instruction": "提交第 11 个 %x 从真实样本栈上读到的十六进制值，以 0x 开头。",
+    "instruction": "提交第 11 个 %x 从真实样本栈上读到的十六进制值，以 0x 开头。验证不通过时无需 reset，重新运行 ./greeter，输入 11 个连续的 %x 并按空格分隔的输出重新计数。",
     "placeholders": [
       { "token": "<秘密值>", "meaning": "第 11 个 %x 读到的十六进制值" }
     ],

@@ -155,7 +155,7 @@
   "hints": [
     { "level": 1, "kind": "direction", "text": "先看三行最后的跳转列，再分别核对 ZF 和 SF/OF。" },
     { "level": 2, "kind": "tool", "text": "重新输入 ./asm-branches 可再次运行 HOME 中的真实 ELF。" },
-    { "level": 3, "kind": "structure", "text": "最终结构是 check <TEST后JE> <CMP后JE> <CMP后JG> <JE依据> <JG符号关系>；跳转填 1/0，最后一项按终端中显示的 jg 符号条件填写。" }
+    { "level": 3, "kind": "structure", "text": "最终验证区共有五项，依次填写 TEST 后 JE、CMP 后 JE、CMP 后 JG、JE 依据和 JG 符号关系；跳转填 1/0，最后一项按终端中显示的 jg 符号条件填写。" }
   ],
   "verification": {
     "type": "debugger-state",

@@ -179,13 +179,13 @@
     {
       "level": 3,
       "kind": "structure",
-      "text": "最终结构是 check <compute_total地址> <compute_total类型> <mix_value类型> <pending_total类型>；类型字母必须保留大小写。"
+      "text": "最终验证区共有四项，依次填写 compute_total 地址、compute_total 类型、mix_value 类型和 pending_total 类型；类型字母必须保留大小写。"
     }
   ],
   "verification": {
     "type": "answer",
     "usage": "check <compute_total地址> <compute_total类型> <mix_value类型> <pending_total类型>",
-    "instruction": "按 nm 输出依次填写函数地址和三个类型字母；地址以 0x 开头。",
+    "instruction": "按 nm 输出依次填写函数地址和三个类型字母；地址以 0x 开头。失败时无需 reset，重新运行 nm -n 并核对目标符号每行的第一、二列及字母大小写。",
     "placeholders": [
       { "token": "<compute_total地址>", "meaning": "compute_total 行第一列的十六进制地址" },
       { "token": "<compute_total类型>", "meaning": "compute_total 行第二列的单个类型字母" },

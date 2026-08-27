@@ -97,6 +97,106 @@ describe('course manifest v3 compatibility layer', () => {
       unlockAfter: ['elf-symbols-01'],
     })
   })
+
+  it('可修改的生产关卡指引都提供失败后的重跑或重置路线', () => {
+    for (const lab of COURSE.labs.filter(({ labId }) => labId !== 'vuln-weak-random-01')) {
+      const guide = [
+        ...lab.steps.flatMap((step) => [
+          step.instruction,
+          step.observation,
+          ...(step.commonErrors ?? []),
+        ]),
+        ...lab.hints.map((hint) => hint.text),
+        lab.verification.instruction,
+        lab.verification.feedback.incorrect,
+      ]
+        .filter((text): text is string => Boolean(text))
+        .join('\n')
+
+      expect({
+        labId: lab.labId,
+        hasRecoveryRoute: /重新|再次|重跑|重试|reset|无需重置|不需要重置/i.test(guide),
+      }).toEqual({ labId: lab.labId, hasRecoveryRoute: true })
+    }
+  })
+
+  it('两个溢出关把默认长度、成功阈值和真实 payload 路径讲完整', () => {
+    const cases = [
+      {
+        labId: 'vuln-overwrite-variable-01',
+        outputPath: 'vuln-overwrite-variable-01/input.txt',
+        requiredBytes: 17,
+        replayEvidence: 'PwnHub_admin_door_open',
+      },
+      {
+        labId: 'vuln-string-overflow-01',
+        outputPath: 'vuln-string-overflow-01/payload.bin',
+        requiredBytes: 32,
+        replayEvidence: 'echo $?',
+      },
+    ] as const
+
+    for (const expected of cases) {
+      const lab = getCourseLab(expected.labId)!
+      const builder = lab.steps.find((step) => step.type === 'payload-builder')
+      const replay = lab.steps.find(
+        (step) => step.type === 'terminal' && step.instruction.includes(expected.outputPath),
+      )
+      expect(builder?.type).toBe('payload-builder')
+      expect(replay).toBeDefined()
+      if (builder?.type !== 'payload-builder' || !replay) continue
+
+      expect(builder.payload).toMatchObject({
+        outputPath: expected.outputPath,
+        segments: [expect.objectContaining({ kind: 'padding', length: 16 })],
+      })
+      expect(builder.instruction).toContain('默认')
+      expect(builder.instruction).toContain(`${expected.requiredBytes}`)
+      expect(builder.instruction).toContain('写入终端')
+      expect(replay.instruction).toContain(expected.outputPath)
+      expect(replay.instruction).toContain(expected.replayEvidence)
+      expect(lab.verification.instruction).toContain(`$HOME/${expected.outputPath}`)
+    }
+  })
+
+  it('格式串关准确说明锁定样本使用最小 fmt_print 教学解释器', () => {
+    const lab = getCourseLab('vuln-format-string-01')!
+    const visibleGuide = JSON.stringify({
+      summary: lab.summary,
+      goals: lab.goals,
+      concepts: lab.concepts,
+      steps: lab.steps,
+      hints: lab.hints,
+      verificationInstruction: lab.verification.instruction,
+    })
+    const source = readFileSync('vm/binary-profile/vuln-format-string-01/greeter.c', 'utf8')
+    const initGuide = readFileSync('vm/labs/pwnhub/vuln-format-string-01/init.sh', 'utf8')
+
+    expect(source).toContain('static void fmt_print(const char *f)')
+    expect(visibleGuide).toContain('fmt_print')
+    expect(visibleGuide).not.toMatch(/\bprintf\b/)
+    expect(initGuide).toContain('fmt_print 教学解释器')
+  })
+
+  it('竞态关失败反馈指向当前并发步骤并要求先重置状态', () => {
+    const checker = readFileSync('vm/labs/pwnhub/vuln-race-condition-01/check.sh', 'utf8')
+
+    expect(checker).toContain('请先运行 reset')
+    expect(checker).toContain('重新运行第 4 步的并发命令')
+    expect(checker).not.toContain('重新运行第 3 步的并发命令')
+  })
+
+  it('call-stack 指引把栈地址、参数值和四个 ESP 阶段分开说明', () => {
+    const lab = getCourseLab('asm-call-stack-01')!
+    const prediction = lab.steps.find((step) => step.id === 2)
+    const trace = lab.steps.find((step) => step.id === 4)
+
+    expect(prediction?.instruction).toContain('压参完成后的 ESP 是 0x0804c24c')
+    expect(trace?.instruction).toContain('按四个阶段读取 ESP')
+    expect(trace?.instruction).toContain('参数仍在栈顶')
+    expect(trace?.instruction).toContain('add esp,4 清理参数后才是 0x0804c250')
+  })
+
   it('实验数字身份与 VM 终端横幅一致：从 1 开始连续编号', () => {
     // 终端横幅第 N 关 = course-order 行序（hashteamctl course_number），
     // 头部 TopBar 第 N 关 = availableLabs 下标 + 1；二者都以 id 字段为唯一来源
