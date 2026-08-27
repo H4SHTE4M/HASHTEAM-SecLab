@@ -220,3 +220,7 @@ export function buildPayloadWriteCommand(bytes: Uint8Array, outputPath: string):
   const base64 = bytesToBase64(bytes)
   return `python -c "import binascii; open('${path}','wb').write(binascii.a2b_base64('${base64}'))"`
 }
+
+export function buildPayloadWriteThenCheckCommand(bytes: Uint8Array, outputPath: string): string {
+  return `${buildPayloadWriteCommand(bytes, outputPath)}; check`
+}

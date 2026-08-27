@@ -5,7 +5,7 @@ import BinaryWorkbench from '../src/components/BinaryWorkbench.vue'
 import ByteView from '../src/components/ByteView.vue'
 import PayloadWorkbench from '../src/components/PayloadWorkbench.vue'
 import StepRenderer from '../src/components/StepRenderer.vue'
-import { buildPayloadWriteCommand, composePayload } from '../src/services/payload'
+import { buildPayloadWriteCommand, buildPayloadWriteThenCheckCommand, composePayload } from '../src/services/payload'
 import type { PayloadWorkbenchPreset } from '../src/types/binary'
 
 const preset: PayloadWorkbenchPreset = {
@@ -205,6 +205,16 @@ describe('binary learning workbench', () => {
     const bytes = composePayload(preset.segments, preset.maxBytes).bytes
     expect(wrapper.emitted('write-command')?.[0]).toEqual([
       buildPayloadWriteCommand(bytes, preset.outputPath),
+    ])
+  })
+
+  it('PayloadWorkbench 可按实验配置写入后立即 check', async () => {
+    const writeThenCheckPreset: PayloadWorkbenchPreset = { ...preset, writeThenCheck: true }
+    const wrapper = mount(PayloadWorkbench, { props: { preset: writeThenCheckPreset } })
+    await wrapper.get('.payload-output button').trigger('click')
+    const bytes = composePayload(preset.segments, preset.maxBytes).bytes
+    expect(wrapper.emitted('write-command')?.[0]).toEqual([
+      buildPayloadWriteThenCheckCommand(bytes, preset.outputPath),
     ])
   })
 

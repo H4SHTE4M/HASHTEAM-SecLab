@@ -417,7 +417,15 @@ function readPayloadPreset(value: unknown, source: string): PayloadWorkbenchPres
   try { composePayload(segments, maxBytes) } catch (error) {
     fail(source, error instanceof Error ? error.message : 'payload 分段无效')
   }
-  return { outputPath, maxBytes, segments }
+  if (item.writeThenCheck !== undefined && typeof item.writeThenCheck !== 'boolean') {
+    fail(source, 'payload.writeThenCheck 必须是布尔值')
+  }
+  return {
+    outputPath,
+    maxBytes,
+    segments,
+    ...(item.writeThenCheck === true ? { writeThenCheck: true } : {}),
+  }
 }
 
 function readSteps(value: unknown, source: string, labId: string): CourseStep[] {

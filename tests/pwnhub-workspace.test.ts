@@ -39,6 +39,7 @@ import { useAnomalyCenter } from '../src/services/anomaly-center'
 import type { BlockingAnomaly } from '../src/services/progress-anomaly'
 import PwnHubWorkspace from '../src/views/PwnHubWorkspace.vue'
 import CourseRail from '../src/components/CourseRail.vue'
+import MissionPanel from '../src/components/PwnHubMissionPanel.vue'
 import { COURSE, getCourseLab } from '../src/modules/pwnhub/course'
 
 beforeEach(() => {
@@ -151,6 +152,32 @@ describe('PwnHub workspace integration', () => {
     await wrapper.get('.btn-primary').trigger('click')
     expect(vmMock.resetCurrentLevel).toHaveBeenCalledOnce()
     expect(useAnomalyCenter().pendingFor('pwnhub')).toBeNull()
+    wrapper.unmount()
+  })
+
+  it('重置本关会同时重挂右侧任务面板', async () => {
+    const testRouter = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/labs/pwnhub', component: { template: '<div />' } }],
+    })
+    await testRouter.push('/labs/pwnhub')
+    await testRouter.isReady()
+    vmMock.stage.value = 'ready'
+
+    const progress = useLabProgress()
+    progress.completeLabStep('num-bases-01', 1)
+    progress.advanceLabGuide('num-bases-01', getCourseLab('num-bases-01')!.steps.length)
+    const wrapper = mount(PwnHubWorkspace, { global: { plugins: [testRouter] } })
+    await nextTick()
+    const oldPanelElement = wrapper.findComponent(MissionPanel).element
+
+    await wrapper.get('button[aria-label="重置本关"]').trigger('click')
+    await wrapper.get('button[aria-label="再次点击以确认重置本关"]').trigger('click')
+    await nextTick()
+
+    expect(vmMock.resetCurrentLevel).toHaveBeenCalledOnce()
+    expect(wrapper.findComponent(MissionPanel).element).not.toBe(oldPanelElement)
+    expect(progress.completedLabStepsFor('num-bases-01')).toEqual([])
     wrapper.unmount()
   })
 

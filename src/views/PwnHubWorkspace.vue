@@ -70,6 +70,7 @@ const progress = useLabProgress()
 const preferences = useLabPreferences()
 const anomalyCenter = useAnomalyCenter()
 const bugReportDownloaded = ref(false)
+const missionPanelResetEpoch = ref(0)
 const availableLabIds = COURSE.chapters
   .filter((chapter) => chapter.status === 'available')
   .flatMap((chapter) => chapter.labIds)
@@ -619,6 +620,7 @@ function handleResetLevel(): void {
     progress.markLabGuided(progress.state.currentLabId)
   }
   vm.resetCurrentLevel()
+  missionPanelResetEpoch.value += 1
 }
 
 function handleResetAll(): void {
@@ -887,6 +889,7 @@ async function handleBugReportDownload(): Promise<void> {
             :aria-hidden="isMissionPanelVisuallyCollapsed ? 'true' : undefined"
           >
             <MissionPanel
+              :key="`${currentLevelDef.labId}-${missionPanelResetEpoch}`"
               :level="currentLevelDef"
               :completed="currentCompleted"
               :hints-used="currentHintsUsed"

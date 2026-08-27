@@ -507,7 +507,15 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
         getTelemetry().trackActivityCheck(message.labId, true)
         const mode = getMode()
         const completedSteps = new Set(progress.completedLabStepsFor(message.labId))
-        if (mode === 'challenge' || lab.steps.every((step) => completedSteps.has(step.id))) {
+        const guidedStepsComplete = lab.steps
+          .slice(
+            0,
+            lab.steps.at(-1)?.completion === 'confirm'
+              ? Math.max(lab.steps.length - 1, 0)
+              : lab.steps.length,
+          )
+          .every((step) => completedSteps.has(step.id))
+        if (mode === 'challenge' || guidedStepsComplete) {
           const path =
             mode === 'guided'
               ? 'guided'

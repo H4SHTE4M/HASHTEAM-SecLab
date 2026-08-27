@@ -423,6 +423,46 @@ describe('chapter-first course components', () => {
     wrapper.unmount()
   })
 
+  it('尾部 confirm 步骤不会锁住 num-bases、num-wrap 和 integer-overflow 的最终验证', () => {
+    for (const labId of ['num-bases-01', 'num-wrap-01', 'vuln-integer-overflow-01']) {
+      const lab = getCourseLab(labId)!
+      const wrapper = mount(MissionPanel, {
+        props: {
+          level: lab,
+          completed: false,
+          hintsUsed: 0,
+          isLast: false,
+          mode: 'guided',
+          guideStep: lab.steps.length - 1,
+          completedSteps: lab.steps.slice(0, -1).map((step) => step.id),
+        },
+      })
+
+      expect(wrapper.get('.verification').classes()).not.toContain('locked')
+      wrapper.unmount()
+    }
+  })
+
+  it('整数回绕第二步改为概念说明，不再渲染内存工作台', () => {
+    const lab = getCourseLab('vuln-integer-overflow-01')!
+    expect(lab.steps[1]?.type).toBe('concept')
+    const wrapper = mount(MissionPanel, {
+      props: {
+        level: lab,
+        completed: false,
+        hintsUsed: 0,
+        isLast: false,
+        mode: 'guided',
+        guideStep: 1,
+        completedSteps: [1],
+      },
+    })
+
+    expect(wrapper.find('.binary-workbench').exists()).toBe(false)
+    expect(wrapper.text()).toContain('2^32')
+    wrapper.unmount()
+  })
+
   it('引导步骤可返回，进入内存步骤后仍可查看已经解锁的字节快照', async () => {
     const memoryLab = getCourseLab('memory-addresses-01')!
     const wrapper = mount(MissionPanel, {

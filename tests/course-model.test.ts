@@ -149,10 +149,11 @@ describe('course manifest v3 compatibility layer', () => {
       expect(builder.payload).toMatchObject({
         outputPath: expected.outputPath,
         segments: [expect.objectContaining({ kind: 'padding', length: 16 })],
+        writeThenCheck: true,
       })
       expect(builder.instruction).toContain('默认')
       expect(builder.instruction).toContain(`${expected.requiredBytes}`)
-      expect(builder.instruction).toContain('写入终端')
+      expect(builder.instruction).toContain('写入并验证')
       expect(replay.instruction).toContain(expected.outputPath)
       expect(replay.instruction).toContain(expected.replayEvidence)
       expect(lab.verification.instruction).toContain(`$HOME/${expected.outputPath}`)
