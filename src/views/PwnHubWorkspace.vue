@@ -531,16 +531,6 @@ function handleRunCommand(command: string): void {
   terminalRef.value?.focus()
 }
 
-function handleDebuggerLaunch(): void {
-  vm.runCommand('debugger')
-  terminalRef.value?.focus()
-}
-
-function handleDebuggerCommand(command: string): void {
-  vm.runCommand(command)
-  terminalRef.value?.focus()
-}
-
 function handleRunDemo(): void {
   handleRunCommand('echo "hello, HASHTEAM"')
 }
@@ -898,15 +888,12 @@ async function handleBugReportDownload(): Promise<void> {
               :guide-step="currentGuideStep"
               :completed-steps="currentCompletedSteps"
               :completion-record="currentCompletionRecord"
-              :debugger-state="vm.debuggerState.value"
               @next="handleNextLevel"
               @use-hint="progress.useLabHint"
               @run-command="handleRunCommand"
               @advance-guide="progress.advanceLabGuide"
               @complete-step="progress.completeLabStep"
               @change-mode="handleChangeMode"
-              @debugger-launch="handleDebuggerLaunch"
-              @debugger-command="handleDebuggerCommand"
             />
           </div>
         </main>

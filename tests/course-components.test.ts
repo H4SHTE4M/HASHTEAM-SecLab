@@ -401,7 +401,7 @@ describe('chapter-first course components', () => {
     }
   })
 
-  it('debugger-state 关卡显示本关引导与最终验证字段', () => {
+  it('debugger-state 关卡移除 Debugger 栏但保留最终验证字段', () => {
     const lab = getCourseLab('asm-registers-01')!
     const wrapper = mount(MissionPanel, {
       props: {
@@ -412,12 +412,11 @@ describe('chapter-first course components', () => {
         mode: 'guided',
         guideStep: lab.steps.length - 1,
         completedSteps: lab.steps.map((step) => step.id),
-        debuggerState: 'idle',
       },
     })
 
-    expect(wrapper.get('.debugger-guide').text()).toContain('启动 debugger')
-    expect(wrapper.get('.debugger-guide').text()).toContain('registers_checkpoint')
+    expect(wrapper.find('.debugger-controls').exists()).toBe(false)
+    expect(wrapper.find('.debugger-guide').exists()).toBe(false)
     expect(wrapper.get('.verification').text()).toContain('最终验证')
     expect(wrapper.findAll('.verification-field')).toHaveLength(3)
     wrapper.unmount()

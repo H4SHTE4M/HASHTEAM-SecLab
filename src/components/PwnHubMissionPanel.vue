@@ -4,7 +4,6 @@ import { normalizeAnswer } from '../services/answer-normalize'
 import LabBrief from './LabBrief.vue'
 import HintStack from './HintStack.vue'
 import EvidenceForm from './EvidenceForm.vue'
-import DebuggerControls from './DebuggerControls.vue'
 import StepRenderer from './StepRenderer.vue'
 import type {
   CourseLabDef,
@@ -24,7 +23,6 @@ const props = defineProps<{
   guideStep: number
   completedSteps: number[]
   completionRecord?: LevelCompletionRecord
-  debuggerState?: 'idle' | 'ready' | 'stopped' | 'running' | 'exited'
 }>()
 
 const emit = defineEmits<{
@@ -34,8 +32,6 @@ const emit = defineEmits<{
   (e: 'advance-guide', labId: string, totalSteps: number): void
   (e: 'complete-step', labId: string, stepId: number): void
   (e: 'change-mode', mode: LabMode): void
-  (e: 'debugger-launch'): void
-  (e: 'debugger-command', command: string): void
 }>()
 
 const panelScrollRef = ref<HTMLElement | null>(null)
@@ -547,14 +543,6 @@ function showNextRevealedStep(): void {
           <span v-for="concept in completedConcepts" :key="concept.id">{{ concept.term }}</span>
         </section>
 
-        <DebuggerControls
-          v-if="level.verificationType === 'debugger-state'"
-          :state="debuggerState ?? 'idle'"
-          :checkpoint="level.verification.debuggerCheckpoint"
-          :verification="level.verification"
-          @launch="emit('debugger-launch')"
-          @command="emit('debugger-command', $event)"
-        />
         <EvidenceForm
           :verification="level.verification"
           :available="verificationAvailable"
