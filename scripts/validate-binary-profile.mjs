@@ -47,6 +47,16 @@ function sha256(buffer) {
   return createHash('sha256').update(buffer).digest('hex')
 }
 
+// Git may check text resources out with CRLF on Windows. The profile locks the
+// canonical LF representation so text hashes and sizes stay identical across hosts.
+function canonicalTextBuffer(buffer) {
+  return Buffer.from(buffer.toString('utf8').replace(/\r\n/g, '\n'), 'utf8')
+}
+
+function sourceSha256(buffer) {
+  return sha256(canonicalTextBuffer(buffer))
+}
+
 function inspectElf(artifact, binary, field) {
   const bytes = readFileSync(binary.absolute)
   if (bytes.length < 52 || bytes.subarray(0, 4).toString('hex') !== '7f454c46') fail(`${field} is not an ELF`)
@@ -105,7 +115,7 @@ function validateArtifact(artifact, index) {
   if (!/^[a-f0-9]{64}$/.test(artifact.sha256 ?? '')) fail(`${field} sha256 is not locked`)
   if (!/^[a-f0-9]{64}$/.test(artifact.sourceSha256 ?? '')) fail(`${field} source sha256 is not locked`)
   if (sha256(readFileSync(binary.absolute)) !== artifact.sha256) fail(`${field} sha256 mismatch`)
-  if (sha256(readFileSync(source.absolute)) !== artifact.sourceSha256) fail(`${field} source sha256 mismatch`)
+  if (sourceSha256(readFileSync(source.absolute)) !== artifact.sourceSha256) fail(`${field} source sha256 mismatch`)
   if (artifact.profile !== profile.profileId) fail(`${field} profile does not match profileId`)
   requireString(artifact.license, `${field}.license`)
   requireString(artifact.purpose, `${field}.purpose`)
@@ -206,7 +216,7 @@ function validateTool(tool, index) {
   if (tool.projectSource === true) {
     const source = requireFile(tool.source, `${field}.source`)
     if (!/^[a-f0-9]{64}$/.test(tool.sourceSha256 ?? '') ||
-        sha256(readFileSync(source.absolute)) !== tool.sourceSha256) {
+        sourceSha256(readFileSync(source.absolute)) !== tool.sourceSha256) {
       fail(`${field} project source hash mismatch`)
     }
     if (lockValue('output_sha256') !== tool.sha256) fail(`${field} output hash does not match toolchain lock`)
@@ -245,8 +255,9 @@ function validateLockedAsset(raw, expectedPath, field) {
   requireExactKeys(raw, ['path', 'size', 'sha256'], field)
   if (raw.path !== expectedPath) fail(`${field}.path must be ${expectedPath}`)
   const file = requireFile(raw.path, `${field}.path`)
-  if (!Number.isInteger(raw.size) || raw.size !== file.info.size) fail(`${field}.size mismatch`)
-  if (!/^[a-f0-9]{64}$/.test(raw.sha256 ?? '') || sha256(readFileSync(file.absolute)) !== raw.sha256) {
+  const canonical = canonicalTextBuffer(readFileSync(file.absolute))
+  if (!Number.isInteger(raw.size) || raw.size !== canonical.length) fail(`${field}.size mismatch`)
+  if (!/^[a-f0-9]{64}$/.test(raw.sha256 ?? '') || sha256(canonical) !== raw.sha256) {
     fail(`${field}.sha256 mismatch`)
   }
   return file
@@ -486,7 +497,8 @@ function validateLabPackage(artifact, kind, label) {
 
 function validateAnswerHash(labId, label) {
   const answer = requireFile(`vm/labs/pwnhub/${labId}/answer.sha256`, `${label} answer hash`)
-  if (!/^[a-f0-9]{64}\n?$/.test(readFileSync(answer.absolute, 'utf8'))) fail(`${label} answer hash is invalid`)
+  const text = canonicalTextBuffer(readFileSync(answer.absolute)).toString('utf8')
+  if (!/^[a-f0-9]{64}\n?$/.test(text)) fail(`${label} answer hash is invalid`)
 }
 
 if (profile.version !== 1) fail('version must be 1')
@@ -1017,7 +1029,7 @@ for (const definition of gdbLabDefinitions) {
     `vm/labs/pwnhub/${definition.id}/gdb-runtime.c`,
     `${definition.id} HOME source`,
   )
-  if (sha256(readFileSync(homeSource.absolute)) !== artifact.sourceSha256) {
+  if (sourceSha256(readFileSync(homeSource.absolute)) !== artifact.sourceSha256) {
     fail(`${definition.id} HOME source does not match the audited source`)
   }
   gdbSampleHashes.add(artifact.sha256)
@@ -1088,8 +1100,9 @@ function validateScriptTool(tool, index) {
     fail(`${field}.installPath must install the command in /usr/local/bin`)
   }
   const script = requireFile(tool.path, `${field}.path`)
-  if (!Number.isInteger(tool.size) || tool.size !== script.info.size) fail(`${field} size mismatch`)
-  if (!/^[a-f0-9]{64}$/.test(tool.sha256 ?? '') || sha256(readFileSync(script.absolute)) !== tool.sha256) {
+  const scriptBytes = canonicalTextBuffer(readFileSync(script.absolute))
+  if (!Number.isInteger(tool.size) || tool.size !== scriptBytes.length) fail(`${field} size mismatch`)
+  if (!/^[a-f0-9]{64}$/.test(tool.sha256 ?? '') || sha256(scriptBytes) !== tool.sha256) {
     fail(`${field} sha256 mismatch`)
   }
   if (tool.size > 65536) fail(`${field} must stay below 64 KiB`)
@@ -1097,7 +1110,7 @@ function validateScriptTool(tool, index) {
   requireString(tool.license, `${field}.license`)
   requireString(tool.purpose, `${field}.purpose`)
   if ((script.info.mode & 0o6000) !== 0) fail(`${field} must not be setuid/setgid`)
-  const text = readFileSync(script.absolute, 'utf8')
+  const text = scriptBytes.toString('utf8')
   if (!text.startsWith(tool.interpreter)) fail(`${field} interpreter shebang mismatch`)
   for (const forbidden of ['curl', 'wget', 'nc ', 'telnet', 'socket', '/dev/tcp']) {
     if (text.includes(forbidden)) fail(`${field} must not use network primitives: ${forbidden}`)
