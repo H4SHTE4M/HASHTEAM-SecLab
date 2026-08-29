@@ -168,19 +168,19 @@
   "hints": [
     { "level": 1, "kind": "direction", "text": "按表格从上到下跟随后值，除法单独记录商与余数。" },
     { "level": 2, "kind": "tool", "text": "重新输入 ./asm-arithmetic 可再次运行 HOME 中的真实 ELF。" },
-    { "level": 3, "kind": "structure", "text": "最终结构是 check <加减结果> <乘积> <商> <余数> <位运算结果>。" }
+    { "level": 3, "kind": "structure", "text": "最终验证区共有五项，依次填写加减结果、乘积、商、余数和位运算结果。" }
   ],
   "verification": {
     "type": "debugger-state",
     "debuggerCheckpoint": "arithmetic_checkpoint",
     "usage": "check <加减结果> <乘积> <商> <余数> <位运算结果>",
-    "instruction": "依次填入 sub、imul、除法商、除法余数和 xor 行的后值。",
+    "instruction": "依次填写加减结果、乘积、商、余数和位运算结果；均为以 0x 开头的十六进制值。",
     "placeholders": [
-      { "token": "<加减结果>", "meaning": "sub eax, 4 行的后值" },
-      { "token": "<乘积>", "meaning": "imul eax, ebx 行的后值" },
-      { "token": "<商>", "meaning": "idiv ebx 行的 EAX 后值" },
-      { "token": "<余数>", "meaning": "idiv 后的 EDX 行的后值" },
-      { "token": "<位运算结果>", "meaning": "xor eax, 0x11 行的后值" }
+      { "token": "<加减结果>", "meaning": "以 0x 开头的十六进制值" },
+      { "token": "<乘积>", "meaning": "以 0x 开头的十六进制值" },
+      { "token": "<商>", "meaning": "以 0x 开头的十六进制值" },
+      { "token": "<余数>", "meaning": "以 0x 开头的十六进制值" },
+      { "token": "<位运算结果>", "meaning": "以 0x 开头的十六进制值" }
     ],
     "feedback": {
       "empty": "还没有提供五项算术观察值。",

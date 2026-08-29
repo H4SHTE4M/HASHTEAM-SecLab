@@ -81,7 +81,9 @@
       "uses": ["process-regions", "memory-permissions"],
       "evidence": "observation",
       "tool": "shell",
-      "observation": "代码段包含 x，数据段、堆和栈包含 w；四行都来自当前进程的 /proc 映射。"
+      "observation": "代码段包含 x，数据段、堆和栈包含 w；四行都来自当前进程的 /proc 映射。",
+      "commonErrors": ["最终填写的是 rwx 三字符列，不是会随本次进程变化的地址范围。", "缺少某项权限时保留 -，不要把 r-x 写成 rx。"],
+      "reinforcement": "地址每次可能变化，区域用途和本次表格中的三字符权限才是要提取的事实。"
     },
     {
       "id": 4,
@@ -111,18 +113,18 @@
   "hints": [
     { "level": 1, "kind": "direction", "text": "先逐行看区域名称与 rwx，不需要记住每次启动得到的具体地址。" },
     { "level": 2, "kind": "tool", "text": "输入 ./inspect-memory-layout.sh 可以重新读取当前 Shell 的 /proc 映射。" },
-    { "level": 3, "kind": "structure", "text": "最终结构是 check <代码段权限> <数据段权限> <堆权限> <栈权限>，每项使用三个字符。" }
+    { "level": 3, "kind": "structure", "text": "最终验证区共有四项，依次填写代码段、数据段、堆和栈的权限；每项使用三个字符。" }
   ],
   "verification": {
     "type": "debugger-state",
     "debuggerCheckpoint": "layout_checkpoint",
     "usage": "check <代码段权限> <数据段权限> <堆权限> <栈权限>",
-    "instruction": "按表格顺序填入四类区域的三个字符 rwx 权限，缺少的权限用 - 表示。",
+    "instruction": "依次填写代码段、数据段、堆和栈的权限；每项为三个字符，缺少权限用 - 表示。",
     "placeholders": [
-      { "token": "<代码段权限>", "meaning": "代码段行的三个字符 rwx" },
-      { "token": "<数据段权限>", "meaning": "数据段行的三个字符 rwx" },
-      { "token": "<堆权限>", "meaning": "堆行的三个字符 rwx" },
-      { "token": "<栈权限>", "meaning": "栈行的三个字符 rwx" }
+      { "token": "<代码段权限>", "meaning": "三个字符的 rwx 权限" },
+      { "token": "<数据段权限>", "meaning": "三个字符的 rwx 权限" },
+      { "token": "<堆权限>", "meaning": "三个字符的 rwx 权限" },
+      { "token": "<栈权限>", "meaning": "三个字符的 rwx 权限" }
     ],
     "feedback": {
       "empty": "还没有提供四类区域的权限观察值。",

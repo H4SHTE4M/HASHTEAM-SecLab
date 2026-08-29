@@ -156,4 +156,5 @@ export interface PayloadWorkbenchPreset {
   outputPath: string
   maxBytes: number
   segments: PayloadSegmentDefinition[]
+  writeThenCheck?: boolean
 }

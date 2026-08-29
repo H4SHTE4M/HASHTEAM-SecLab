@@ -7,6 +7,7 @@ import type {
 import {
   DEFAULT_PAYLOAD_LIMIT,
   buildPayloadWriteCommand,
+  buildPayloadWriteThenCheckCommand,
   bytesToHex,
   composePayload,
   cyclicFind,
@@ -94,7 +95,10 @@ function writePayload(): void {
   const payload = composition.value.value
   if (payload === null || payload.bytes.length === 0) return
   try {
-    emit('write-command', buildPayloadWriteCommand(payload.bytes, outputPath.value))
+    const command = props.preset?.writeThenCheck
+      ? buildPayloadWriteThenCheckCommand(payload.bytes, outputPath.value)
+      : buildPayloadWriteCommand(payload.bytes, outputPath.value)
+    emit('write-command', command)
     outputError.value = ''
   } catch (error) {
     outputError.value = error instanceof Error ? error.message : '文件名无效'
@@ -217,7 +221,7 @@ function findCyclicOffset(): void {
       <label for="payload-output-path">VM 相对路径</label>
       <input id="payload-output-path" v-model="outputPath" autocomplete="off" spellcheck="false" />
       <button type="button" :disabled="!composition.value || composition.value.bytes.length === 0" @click="writePayload">
-        <AppIcon name="save" :size="15" />写入终端
+        <AppIcon name="save" :size="15" />{{ preset?.writeThenCheck ? '写入并验证' : '写入终端' }}
       </button>
       <button type="button" :disabled="!composition.value || composition.value.bytes.length === 0" @click="downloadPayload">
         <AppIcon name="download" :size="15" />下载文件

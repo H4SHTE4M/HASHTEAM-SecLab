@@ -25,3 +25,6 @@ printf '字段     | 偏移 | 原始字节\n'
 printf '魔数     | 0x00 | %s\n' "$magic"
 printf '位数标记 | 0x04 | %s\n' "$class"
 printf '字节序   | 0x05 | %s\n' "$endian"
+
+printf '\n字符串标记（strings ... | grep PwnHub_ELF_marker）\n'
+strings "$PROGRAM" | grep '^PwnHub_ELF_marker:'

@@ -27,15 +27,13 @@ describe('chapter-first course components', () => {
     )
     await wrapper.get('.chapter-button').trigger('click')
     const chapters = wrapper.findAll('.chapter-menu > button')
-    expect(chapters).toHaveLength(10)
+    expect(chapters).toHaveLength(6)
     expect(chapters[0].attributes('aria-disabled')).toBeUndefined()
     for (const index of [1, 2, 3, 4, 5]) {
       expect(chapters[index].attributes('disabled')).toBeUndefined()
       expect(chapters[index].attributes('aria-disabled')).toBe('true')
     }
-    for (const index of [6, 7, 8, 9]) {
-      expect(chapters[index].attributes('disabled')).toBeDefined()
-    }
+    expect(chapters.every((chapter) => chapter.attributes('disabled') === undefined)).toBe(true)
 
     await wrapper.get('[data-lab-id="num-bases-01"]').trigger('click')
     expect(wrapper.emitted('select')?.[0]).toEqual(['num-bases-01'])
@@ -222,6 +220,246 @@ describe('chapter-first course components', () => {
     await wrapper.get('input').setValue('　check 0x10　')
     await wrapper.get('form').trigger('submit')
     expect(wrapper.emitted('run-command')?.[0]).toEqual(['check 0x10'])
+  })
+
+  it('EvidenceForm 将多个验证参数按 usage 顺序组合，并把参数放在按钮上方', async () => {
+    const wrapper = mount(EvidenceForm, {
+      props: {
+        verification: {
+          usage: 'check <地址> <数量> <寄存器>',
+          instruction: '填写三项观察值。',
+          placeholders: [
+            { token: '<地址>', meaning: '十六进制地址' },
+            { token: '<数量>', meaning: '十进制数量' },
+            { token: '<寄存器>', meaning: '寄存器名称' },
+          ],
+          feedback: { empty: '空', incorrect: '错', success: '对' },
+        },
+        available: true,
+        totalSteps: 1,
+        labId: 'multi-parameter-lab',
+      },
+    })
+
+    const inputs = wrapper.findAll<HTMLInputElement>('[data-verification-parameter]')
+    expect(inputs).toHaveLength(3)
+    expect(inputs.map((input) => input.attributes('placeholder'))).toEqual([
+      '地址',
+      '数量',
+      '寄存器',
+    ])
+    expect(inputs[0].attributes('title')).toBe('十六进制地址')
+    expect(wrapper.get('.verification-details').text()).toContain('第1项“地址”：十六进制地址')
+    expect(wrapper.findAll('.verification-detail-line').map((line) => line.text())).toEqual([
+      '第1项“地址”：十六进制地址；',
+      '第2项“数量”：十进制数量；',
+      '第3项“寄存器”：寄存器名称。',
+    ])
+    expect(wrapper.text()).not.toContain('check <地址>')
+    expect(wrapper.find('.verification-token').exists()).toBe(false)
+    expect(wrapper.get('.verification-form').element.lastElementChild?.tagName).toBe('BUTTON')
+
+    await inputs[0].setValue('0x1000')
+    await inputs[1].setValue('7')
+    await inputs[2].setValue('ESP')
+    await wrapper.get('.verification-form').trigger('submit')
+    expect(wrapper.emitted('run-command')?.[0]).toEqual(['check 0x1000 7 ESP'])
+  })
+
+  it('EvidenceForm 将超长参数提示压缩到输入框可用的短文本', () => {
+    const wrapper = mount(EvidenceForm, {
+      props: {
+        verification: {
+          usage: 'check <第二个值入栈后的栈顶地址>',
+          instruction: '填写观察值。',
+          placeholders: [{
+            token: '<第二个值入栈后的栈顶地址>',
+            meaning: '第二个值入栈后那一行的栈顶地址（八位十六进制）',
+          }],
+          feedback: { empty: '空', incorrect: '错', success: '对' },
+        },
+        available: true,
+        totalSteps: 1,
+        labId: 'long-parameter-lab',
+      },
+    })
+
+    const input = wrapper.get<HTMLInputElement>('[data-verification-parameter]')
+    expect(input.attributes('placeholder')).toBe('栈顶地址')
+    expect(input.attributes('title')).toContain('八位十六进制')
+    expect(wrapper.get('.verification-details').text()).toContain('第二个值入栈后的栈顶地址')
+    expect(input.attributes('placeholder')).not.toContain('…')
+    expect(wrapper.text()).not.toContain('check <第二个值入栈后的栈顶地址>')
+  })
+
+  it('EvidenceForm 无参数时不显示输入框，并直接发送 check', async () => {
+    for (const labId of [
+      'vuln-race-condition-01',
+      'vuln-overwrite-variable-01',
+      'vuln-string-overflow-01',
+    ]) {
+      const lab = getCourseLab(labId)!
+      const wrapper = mount(EvidenceForm, {
+        props: {
+          verification: lab.verification,
+          available: true,
+          totalSteps: lab.steps.length,
+          labId: lab.labId,
+        },
+      })
+
+      expect(wrapper.find('input').exists()).toBe(false)
+      expect(wrapper.get('button').text()).toBe('在终端验证')
+      await wrapper.get('button').trigger('click')
+      expect(wrapper.emitted('run-command')?.[0]).toEqual(['check'])
+      wrapper.unmount()
+    }
+  })
+
+  it('第 19 关使用简短字段提示，并保留完整参数说明', () => {
+    const lab = getCourseLab('elf-symbols-01')!
+    const wrapper = mount(EvidenceForm, {
+      props: {
+        verification: lab.verification,
+        available: true,
+        totalSteps: lab.steps.length,
+        labId: lab.labId,
+      },
+    })
+
+    const inputs = wrapper.findAll<HTMLInputElement>('[data-verification-parameter]')
+    expect(inputs.map((input) => input.attributes('placeholder'))).toEqual([
+      '地址',
+      '类型',
+      '类型',
+      '类型',
+    ])
+    expect(wrapper.get('.verification-details').text()).toContain(
+      '第1项“compute_total地址”：以 0x 开头的十六进制地址',
+    )
+  })
+
+  it('所有已发布参数提示都保持简短且不含填写前缀', () => {
+    for (const lab of COURSE.labs) {
+      const wrapper = mount(EvidenceForm, {
+        props: {
+          verification: lab.verification,
+          available: true,
+          totalSteps: lab.steps.length,
+          labId: lab.labId,
+        },
+      })
+      for (const input of wrapper.findAll<HTMLInputElement>('[data-verification-parameter]')) {
+        const prompt = input.attributes('placeholder') ?? ''
+        expect(prompt).not.toContain('填写')
+        expect(prompt.length).toBeLessThanOrEqual(4)
+      }
+      wrapper.unmount()
+    }
+  })
+
+  it('生产关卡面板不显示带尖括号占位符的 check 命令', () => {
+    for (const lab of COURSE.labs.filter(({ labId }) => labId !== 'vuln-weak-random-01')) {
+      const panelText = [
+        lab.name,
+        lab.tagline,
+        lab.storySummary,
+        lab.story,
+        ...lab.goals,
+        ...lab.prerequisites,
+        lab.title,
+        lab.summary,
+        ...lab.steps.flatMap((step) => [
+          step.title,
+          step.objective,
+          step.instruction,
+          step.command,
+          step.commandTemplate,
+          step.observation,
+          step.question?.prompt,
+          step.question?.success,
+          ...(step.question?.choices.map((choice) => choice.label) ?? []),
+          ...(step.introduces?.flatMap((concept) => [concept.term, concept.explanation]) ?? []),
+          ...(step.fields?.flatMap((field) => [field.label, field.placeholder]) ?? []),
+          ...(step.commonErrors ?? []),
+          step.reinforcement,
+        ]),
+        ...lab.hints.map((hint) => hint.text),
+        lab.verification.instruction,
+        ...lab.verification.placeholders.map((placeholder) => placeholder.meaning),
+        lab.completionSummary.solved,
+        ...lab.completionSummary.mastered,
+        lab.completionSummary.next,
+      ]
+        .filter((text): text is string => Boolean(text))
+        .join('\n')
+
+      expect({ labId: lab.labId, residue: panelText.match(/check\s*[<＜]/i) }).toEqual({
+        labId: lab.labId,
+        residue: null,
+      })
+    }
+  })
+
+  it('debugger-state 关卡移除 Debugger 栏但保留最终验证字段', () => {
+    const lab = getCourseLab('asm-registers-01')!
+    const wrapper = mount(MissionPanel, {
+      props: {
+        level: lab,
+        completed: false,
+        hintsUsed: 0,
+        isLast: false,
+        mode: 'guided',
+        guideStep: lab.steps.length - 1,
+        completedSteps: lab.steps.map((step) => step.id),
+      },
+    })
+
+    expect(wrapper.find('.debugger-controls').exists()).toBe(false)
+    expect(wrapper.find('.debugger-guide').exists()).toBe(false)
+    expect(wrapper.get('.verification').text()).toContain('最终验证')
+    expect(wrapper.findAll('.verification-field')).toHaveLength(3)
+    wrapper.unmount()
+  })
+
+  it('尾部 confirm 步骤不会锁住 num-bases、num-wrap 和 integer-overflow 的最终验证', () => {
+    for (const labId of ['num-bases-01', 'num-wrap-01', 'vuln-integer-overflow-01']) {
+      const lab = getCourseLab(labId)!
+      const wrapper = mount(MissionPanel, {
+        props: {
+          level: lab,
+          completed: false,
+          hintsUsed: 0,
+          isLast: false,
+          mode: 'guided',
+          guideStep: lab.steps.length - 1,
+          completedSteps: lab.steps.slice(0, -1).map((step) => step.id),
+        },
+      })
+
+      expect(wrapper.get('.verification').classes()).not.toContain('locked')
+      wrapper.unmount()
+    }
+  })
+
+  it('整数回绕第二步改为概念说明，不再渲染内存工作台', () => {
+    const lab = getCourseLab('vuln-integer-overflow-01')!
+    expect(lab.steps[1]?.type).toBe('concept')
+    const wrapper = mount(MissionPanel, {
+      props: {
+        level: lab,
+        completed: false,
+        hintsUsed: 0,
+        isLast: false,
+        mode: 'guided',
+        guideStep: 1,
+        completedSteps: [1],
+      },
+    })
+
+    expect(wrapper.find('.binary-workbench').exists()).toBe(false)
+    expect(wrapper.text()).toContain('2^32')
+    wrapper.unmount()
   })
 
   it('引导步骤可返回，进入内存步骤后仍可查看已经解锁的字节快照', async () => {

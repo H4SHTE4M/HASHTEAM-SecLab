@@ -94,7 +94,7 @@
       "type": "terminal",
       "title": "两笔取款挤进同一窗口",
       "objective": "用并发运行取出超过余额的钱",
-      "instruction": "reset 后运行 ./bank 800 & ./bank 800 & wait：& 让两个 ./bank 800 同时启动，wait 等它们都结束。两次取款都停在 余额检查通过、3 秒后扣款 这一行的窗口里读余额，于是都读到 1000 并都通过检查；最后账本里出现两行 取出 800 成功，总共取出 1600 超过初始余额。结束后运行 check，让判题读取真实账本。",
+      "instruction": "reset 后运行 ./bank 800 & ./bank 800 & wait：& 让两个 ./bank 800 同时启动，wait 等它们都结束。两次取款都停在 余额检查通过、3 秒后扣款 这一行的窗口里读余额，于是都读到 1000 并都通过检查；最后账本里出现两行 取出 800 成功，总共取出 1600 超过初始余额。结束后运行 check，让判题读取真实账本；若只出现一条成功记录，必须先 reset，再重跑整条并发命令。",
       "completion": "confirm",
       "allowRun": false,
       "uses": ["check-then-act", "race-window", "concurrent-run"],
@@ -116,11 +116,11 @@
   "verification": {
     "type": "terminal-state",
     "usage": "check",
-    "instruction": "按第 4 步完成并发取款后直接运行 check；判题只读取真实账本文件，不接受手填金额。",
+    "instruction": "验证对象为并发取款后的真实账本状态；无需填写参数。",
     "placeholders": [],
     "feedback": {
       "empty": "账本还没有任何成功记录，请先按第 4 步运行并发取款。",
-      "incorrect": "只成功取出一次：请用 & 让两次取款同时处在检查与扣款之间的 3 秒窗口里，重新运行第 4 步的并发命令。",
+      "incorrect": "只成功取出一次：先运行 reset 恢复余额并清空账本，再用 & 重新运行第 4 步的整条并发命令。",
       "success": "真实账本确认两笔并发取款都成功，合计超过初始余额 1000。"
     }
   },

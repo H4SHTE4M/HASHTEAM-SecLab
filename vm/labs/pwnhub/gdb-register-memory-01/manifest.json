@@ -88,11 +88,11 @@
   "verification": {
     "type": "answer",
     "usage": "check <EAX> <变量地址> <内存值>",
-    "instruction": "填写同一次 gdb_after_update 停靠时观察到的三个十六进制事实。",
+    "instruction": "依次填写 EAX、变量地址和内存值；均为以 0x 开头的十六进制值。",
     "placeholders": [
-      { "token": "<EAX>", "meaning": "info registers eax 显示的值" },
-      { "token": "<变量地址>", "meaning": "print/x &observed_value 得到的地址" },
-      { "token": "<内存值>", "meaning": "x/wx &observed_value 右侧的四字节值" }
+      { "token": "<EAX>", "meaning": "以 0x 开头的四字节值" },
+      { "token": "<变量地址>", "meaning": "以 0x 开头的十六进制地址" },
+      { "token": "<内存值>", "meaning": "以 0x 开头的四字节值" }
     ],
     "feedback": {
       "empty": "还没有提供寄存器与内存观察值。",

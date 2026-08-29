@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
+import communityQrUrl from '../assets/community-qr.png'
 import { useLabPreferences } from '../composables/useLabPreferences'
 import { useLabProgress } from '../composables/useLabProgress'
 import { loadCryptoLabProgress } from '../services/crypto-lab-progress'
@@ -24,6 +25,17 @@ const appearanceStorage = createSafeStorage()
 const preferences = useLabPreferences()
 const publishedPwnHubIds = new Set<string>(PUBLISHED_PWNHUB_LAB_IDS)
 const cryptoLabCompleted = ref(loadCryptoLabProgress(appearanceStorage).completedCount)
+const communityQrLoaded = ref(false)
+const communityGroupName = 'SDUCTF 新手村'
+const communityGroupNumber = '985019477'
+
+function markCommunityQrLoaded(): void {
+  communityQrLoaded.value = true
+}
+
+function markCommunityQrUnavailable(): void {
+  communityQrLoaded.value = false
+}
 
 function applyAppearance(): void {
   document.documentElement.dataset.theme =
@@ -175,13 +187,34 @@ function enterModule(module: ModuleSummary): void {
 
         <button type="button" class="enter-button" @click="enterModule(module)">
           <span>{{ completedByModule[module.moduleId] > 0 ? '继续学习' : '进入实验' }}</span>
-          <AppIcon
-            :name="module.entry.kind === 'document' ? 'external-link' : 'chevron-right'"
-            :size="17"
-          />
+          <AppIcon name="chevron-right" :size="17" />
         </button>
       </article>
     </section>
+
+    <aside class="community-panel" aria-labelledby="community-title">
+      <div class="community-copy">
+        <p class="community-kicker">QQ群</p>
+        <h2 id="community-title">{{ communityGroupName }}</h2>
+        <p class="community-group-number">群号 {{ communityGroupNumber }}</p>
+        <p class="community-description">和其他学习者交流实验思路、提问与反馈。</p>
+      </div>
+      <div
+        class="qr-placeholder"
+        :class="{ 'has-image': communityQrLoaded }"
+        role="img"
+        aria-label="QQ群二维码"
+      >
+        <img
+          class="qr-image"
+          :src="communityQrUrl"
+          :alt="communityQrLoaded ? 'QQ群二维码' : ''"
+          @load="markCommunityQrLoaded"
+          @error="markCommunityQrUnavailable"
+        />
+        <AppIcon v-if="!communityQrLoaded" name="hash" :size="24" />
+      </div>
+    </aside>
   </main>
 </template>
 
@@ -449,6 +482,82 @@ h2 {
   outline-offset: 3px;
 }
 
+.community-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  margin-top: 24px;
+  padding: 18px 24px;
+  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+  border: 1px solid var(--border-subtle);
+  border-radius: 18px;
+  box-shadow: var(--shadow-panel);
+}
+
+.community-copy {
+  min-width: 0;
+}
+
+.community-kicker {
+  margin: 0 0 6px;
+  color: var(--accent-cyan);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.community-panel h2 {
+  margin-bottom: 7px;
+  font-size: 26px;
+  letter-spacing: 0;
+}
+
+.community-group-number {
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+  font: 600 14px/1.4 var(--font-mono);
+}
+
+.community-description {
+  max-width: 42rem;
+  margin-bottom: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.qr-placeholder {
+  position: relative;
+  display: grid;
+  flex: 0 0 auto;
+  width: 148px;
+  aspect-ratio: 1 / 1;
+  place-items: center;
+  color: var(--text-faint);
+  border: 1px dashed var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.qr-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-fast) ease;
+}
+
+.qr-placeholder.has-image .qr-image {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 @media (max-width: 980px) {
   .module-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -466,6 +575,23 @@ h2 {
 
   .module-card {
     min-height: 380px;
+  }
+
+  .community-panel {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 520px) {
+  .community-panel {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .qr-placeholder {
+    align-self: center;
+    width: 148px;
   }
 }
 </style>

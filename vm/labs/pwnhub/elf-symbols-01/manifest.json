@@ -174,23 +174,23 @@
     {
       "level": 2,
       "kind": "tool",
-      "text": "nm -n 按地址排列全部符号；grep -E 可以筛出几个目标名称。"
+      "text": "验证失败时，重新用 nm -n 按地址排列全部符号；grep -E 可以筛出几个目标名称。"
     },
     {
       "level": 3,
       "kind": "structure",
-      "text": "最终结构是 check <compute_total地址> <compute_total类型> <mix_value类型> <pending_total类型>；类型字母必须保留大小写。"
+      "text": "最终验证区共有四项，依次填写 compute_total 地址、compute_total 类型、mix_value 类型和 pending_total 类型；类型字母必须保留大小写。"
     }
   ],
   "verification": {
     "type": "answer",
     "usage": "check <compute_total地址> <compute_total类型> <mix_value类型> <pending_total类型>",
-    "instruction": "按 nm 输出依次填写函数地址和三个类型字母。",
+    "instruction": "依次填写 compute_total 地址、compute_total 类型、mix_value 类型和 pending_total 类型；地址以 0x 开头，类型为保留大小写的单个字母。",
     "placeholders": [
-      { "token": "<compute_total地址>", "meaning": "compute_total 行第一列的八位十六进制地址" },
-      { "token": "<compute_total类型>", "meaning": "compute_total 行第二列的单个类型字母" },
-      { "token": "<mix_value类型>", "meaning": "mix_value 行第二列的单个类型字母" },
-      { "token": "<pending_total类型>", "meaning": "pending_total 行第二列的单个类型字母" }
+      { "token": "<compute_total地址>", "meaning": "以 0x 开头的十六进制地址" },
+      { "token": "<compute_total类型>", "meaning": "保留大小写的单个类型字母" },
+      { "token": "<mix_value类型>", "meaning": "保留大小写的单个类型字母" },
+      { "token": "<pending_total类型>", "meaning": "保留大小写的单个类型字母" }
     ],
     "feedback": {
       "empty": "还没有提供函数地址和三个符号类型字母。",

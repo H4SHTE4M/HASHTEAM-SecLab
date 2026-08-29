@@ -11,21 +11,74 @@ if [ "$#" -ne 5 ]; then
     exit 1
 fi
 
-return_address="$(printf '%s' "$1" | tr 'A-F' 'a-f')"
-argument_value="$(printf '%s' "$2" | tr 'A-F' 'a-f')"
-local_value="$(printf '%s' "$3" | tr 'A-F' 'a-f')"
-cleanup_bytes="$4"
-return_value="$(printf '%s' "$5" | tr 'A-F' 'a-f')"
+normalize_hex32() {
+    value="$(printf '%s' "$1" | tr 'A-F' 'a-f')"
+    case "$value" in
+        0x*) value="${value#0x}" ;;
+        0X*) value="${value#0X}" ;;
+        *) return 1 ;;
+    esac
+    case "$value" in
+        ''|*[!0-9a-f]*) return 1 ;;
+    esac
+    value="$(printf '%s' "$value" | sed 's/^0*//')"
+    [ -n "$value" ] || value=0
+    [ "${#value}" -le 8 ] || return 1
+    printf '0x%08s' "$value" | tr ' ' '0'
+}
 
-for item in "$return_address" "$argument_value" "$local_value" "$return_value"; do
-    printf '%s\n' "$item" | grep -Eq '^0x[0-9a-f]{8}$' || {
-        echo '地址和值必须是 0x 加八位十六进制。' >&2
-        exit 1
-    }
-done
-case "$cleanup_bytes" in
-    ''|*[!0-9]*) echo '清理字节数必须是非负十进制整数。' >&2; exit 1 ;;
-esac
+# The cleanup distance is a size, not a representation exercise. Accept the
+# common integer forms and reduce them to one decimal value before hashing.
+normalize_integer() {
+    raw="$1"
+    case "$raw" in
+        0x*|0X*)
+            base=16
+            digits="${raw#0x}"
+            [ "$digits" != "$raw" ] || digits="${raw#0X}"
+            digits="$(printf '%s' "$digits" | tr 'A-F' 'a-f')"
+            pattern='[!0-9a-f]'
+            ;;
+        0b*|0B*)
+            base=2
+            digits="${raw#0b}"
+            [ "$digits" != "$raw" ] || digits="${raw#0B}"
+            pattern='[!01]'
+            ;;
+        0o*|0O*)
+            base=8
+            digits="${raw#0o}"
+            [ "$digits" != "$raw" ] || digits="${raw#0O}"
+            pattern='[!0-7]'
+            ;;
+        *)
+            base=10
+            digits="$raw"
+            pattern='[!0-9]'
+            ;;
+    esac
+    case "$digits" in
+        ''|*${pattern}*) return 1 ;;
+    esac
+    awk -v digits="$digits" -v base="$base" '
+        BEGIN {
+            value = 0
+            for (i = 1; i <= length(digits); i++) {
+                digit = index("0123456789abcdef", substr(digits, i, 1)) - 1
+                if (digit < 0 || digit >= base) exit 1
+                value = value * base + digit
+                if (value > 4294967295) exit 1
+            }
+            printf "%.0f\n", value
+        }
+    '
+}
+
+return_address="$(normalize_hex32 "$1")" || { echo '返回地址应以 0x 开头。' >&2; exit 1; }
+argument_value="$(normalize_hex32 "$2")" || { echo '参数值应以 0x 开头。' >&2; exit 1; }
+local_value="$(normalize_hex32 "$3")" || { echo '局部值应以 0x 开头。' >&2; exit 1; }
+cleanup_bytes="$(normalize_integer "$4")" || { echo '清理字节数应是非负整数，不限定进制。' >&2; exit 1; }
+return_value="$(normalize_hex32 "$5")" || { echo 'EAX 返回值应以 0x 开头。' >&2; exit 1; }
 
 [ -f "$PROGRAM" ] && [ ! -L "$PROGRAM" ] || { echo 'call/ret 栈样本缺失。' >&2; exit 1; }
 [ "$(sha256sum "$PROGRAM" | cut -d ' ' -f 1)" = "$EXPECTED_SHA256" ] || {

@@ -4,7 +4,6 @@ import { normalizeAnswer } from '../services/answer-normalize'
 import LabBrief from './LabBrief.vue'
 import HintStack from './HintStack.vue'
 import EvidenceForm from './EvidenceForm.vue'
-import DebuggerControls from './DebuggerControls.vue'
 import StepRenderer from './StepRenderer.vue'
 import type {
   CourseLabDef,
@@ -24,7 +23,6 @@ const props = defineProps<{
   guideStep: number
   completedSteps: number[]
   completionRecord?: LevelCompletionRecord
-  debuggerState?: 'idle' | 'ready' | 'stopped' | 'running' | 'exited'
 }>()
 
 const emit = defineEmits<{
@@ -34,8 +32,6 @@ const emit = defineEmits<{
   (e: 'advance-guide', labId: string, totalSteps: number): void
   (e: 'complete-step', labId: string, stepId: number): void
   (e: 'change-mode', mode: LabMode): void
-  (e: 'debugger-launch'): void
-  (e: 'debugger-command', command: string): void
 }>()
 
 const panelScrollRef = ref<HTMLElement | null>(null)
@@ -78,9 +74,13 @@ const cumulativeWorkbench = computed<BinaryWorkbenchSnapshot | undefined>(() => 
   }
   return hasSnapshot ? snapshot : undefined
 })
-const learningPathComplete = computed(() =>
-  props.level.steps.every((step) => allCompletedIds.value.has(step.id)),
-)
+const learningPathComplete = computed(() => {
+  const steps = props.level.steps
+  const lastIsVerification = steps.at(-1)?.completion === 'confirm'
+  return steps
+    .slice(0, lastIsVerification ? Math.max(steps.length - 1, 0) : steps.length)
+    .every((step) => allCompletedIds.value.has(step.id))
+})
 const verificationAvailable = computed(
   () => props.mode === 'challenge' || learningPathComplete.value,
 )
@@ -275,6 +275,11 @@ function confirmCheckpoint(): void {
   rememberStepCompletion()
 }
 
+function handleWorkbenchCommand(command: string): void {
+  actionPerformed.value = true
+  emit('run-command', command)
+}
+
 function advanceStep(): void {
   if (!currentStepResolved.value || !hasNextStep.value) return
   emit('advance-guide', props.level.labId, props.level.steps.length)
@@ -327,7 +332,7 @@ function showNextRevealedStep(): void {
             :total-steps="level.steps.length"
             :completed-step-ids="[...allCompletedIds]"
             :workbench-snapshot="cumulativeWorkbench"
-            @write-command="emit('run-command', $event)"
+            @write-command="handleWorkbenchCommand"
             @external-complete="rememberStepCompletion"
           />
 
@@ -460,6 +465,15 @@ function showNextRevealedStep(): void {
             }}
           </button>
 
+          <button
+            v-if="currentStep.completion === 'confirm' && hasNextStep && actionPerformed && !currentStepResolved"
+            type="button"
+            class="btn-evidence"
+            @click="rememberStepCompletion"
+          >
+            我已完成本步操作，继续实践
+          </button>
+
           <p v-if="commandError || answerError" class="inline-error" role="alert">
             {{ commandError || answerError }}
           </p>
@@ -529,15 +543,7 @@ function showNextRevealedStep(): void {
           <span v-for="concept in completedConcepts" :key="concept.id">{{ concept.term }}</span>
         </section>
 
-        <DebuggerControls
-          v-if="level.verificationType === 'debugger-state'"
-          :state="debuggerState ?? 'idle'"
-          :checkpoint="level.verification.debuggerCheckpoint"
-          @launch="emit('debugger-launch')"
-          @command="emit('debugger-command', $event)"
-        />
         <EvidenceForm
-          v-else
           :verification="level.verification"
           :available="verificationAvailable"
           :total-steps="level.steps.length"
@@ -1246,34 +1252,6 @@ input[type='text'],
   margin: 0 0 8px;
   font-size: 14px;
   line-height: 1.6;
-}
-
-.verification > code {
-  display: block;
-  overflow-x: auto;
-  color: var(--accent-green);
-  font-size: 14px;
-  white-space: nowrap;
-}
-
-.verification dl {
-  margin: 9px 0;
-}
-
-.verification dl div {
-  margin-top: 6px;
-}
-
-.verification dt {
-  color: var(--accent-amber);
-  font-family: var(--font-mono);
-  font-size: 13px;
-}
-
-.verification dd {
-  margin: 2px 0 0;
-  color: var(--text-muted);
-  font-size: 13px;
 }
 
 .verification-form {

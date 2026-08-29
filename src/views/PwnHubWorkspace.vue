@@ -70,6 +70,7 @@ const progress = useLabProgress()
 const preferences = useLabPreferences()
 const anomalyCenter = useAnomalyCenter()
 const bugReportDownloaded = ref(false)
+const missionPanelResetEpoch = ref(0)
 const availableLabIds = COURSE.chapters
   .filter((chapter) => chapter.status === 'available')
   .flatMap((chapter) => chapter.labIds)
@@ -119,7 +120,6 @@ const resumedHasProgress =
     progress.state.completedLabIds.length > 0)
 const welcomeBackDismissed = ref(false)
 const mobileBannerDismissed = ref(false)
-const constructionBannerDismissed = ref(false)
 const debugUnlockedLabIds = ref<string[]>([])
 const debugUnlockedChapterIds = ref<string[]>([])
 let resizeStartX = 0
@@ -245,10 +245,6 @@ const showWelcomeBack = computed(
 const showMobileBanner = computed(
   () => !mobileBannerDismissed.value && !showCompletion.value && viewportWidth.value <= 900,
 )
-const showConstructionBanner = computed(
-  () => !constructionBannerDismissed.value && !showCompletion.value,
-)
-
 let unsubscribeDisplay: (() => void) | null = null
 
 function clearBootOverlayTimer(): void {
@@ -535,16 +531,6 @@ function handleRunCommand(command: string): void {
   terminalRef.value?.focus()
 }
 
-function handleDebuggerLaunch(): void {
-  vm.runCommand('debugger')
-  terminalRef.value?.focus()
-}
-
-function handleDebuggerCommand(command: string): void {
-  vm.runCommand(command)
-  terminalRef.value?.focus()
-}
-
 function handleRunDemo(): void {
   handleRunCommand('echo "hello, HASHTEAM"')
 }
@@ -624,6 +610,7 @@ function handleResetLevel(): void {
     progress.markLabGuided(progress.state.currentLabId)
   }
   vm.resetCurrentLevel()
+  missionPanelResetEpoch.value += 1
 }
 
 function handleResetAll(): void {
@@ -718,10 +705,6 @@ async function handleBugReportDownload(): Promise<void> {
     <div v-if="showMobileBanner" class="mobile-banner" role="status">
       <span>建议用电脑打开以获得完整终端体验</span>
       <button type="button" aria-label="关闭提示" @click="mobileBannerDismissed = true">×</button>
-    </div>
-    <div v-if="showConstructionBanner" class="construction-banner" role="status">
-      <span>PwnHub 正在建设中：引导和关卡内容会持续更新，你的学习进度会保留。</span>
-      <button type="button" aria-label="关闭提示" @click="constructionBannerDismissed = true">×</button>
     </div>
     <Transition name="overlay-fade">
       <div v-if="showWelcomeBack" class="welcome-back" role="status">
@@ -896,6 +879,7 @@ async function handleBugReportDownload(): Promise<void> {
             :aria-hidden="isMissionPanelVisuallyCollapsed ? 'true' : undefined"
           >
             <MissionPanel
+              :key="`${currentLevelDef.labId}-${missionPanelResetEpoch}`"
               :level="currentLevelDef"
               :completed="currentCompleted"
               :hints-used="currentHintsUsed"
@@ -904,15 +888,12 @@ async function handleBugReportDownload(): Promise<void> {
               :guide-step="currentGuideStep"
               :completed-steps="currentCompletedSteps"
               :completion-record="currentCompletionRecord"
-              :debugger-state="vm.debuggerState.value"
               @next="handleNextLevel"
               @use-hint="progress.useLabHint"
               @run-command="handleRunCommand"
               @advance-guide="progress.advanceLabGuide"
               @complete-step="progress.completeLabStep"
               @change-mode="handleChangeMode"
-              @debugger-launch="handleDebuggerLaunch"
-              @debugger-command="handleDebuggerCommand"
             />
           </div>
         </main>
@@ -1023,19 +1004,6 @@ async function handleBugReportDownload(): Promise<void> {
   border-bottom: var(--hairline) solid var(--accent-amber-border);
 }
 
-.construction-banner {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 7px calc(12px + var(--safe-right)) 7px calc(12px + var(--safe-left));
-  color: var(--accent-violet);
-  font-size: 12px;
-  background: var(--accent-violet-soft);
-  border-bottom: var(--hairline) solid var(--accent-violet-border);
-}
-
 .welcome-back {
   position: fixed;
   top: calc(10px + var(--safe-top));
@@ -1057,7 +1025,6 @@ async function handleBugReportDownload(): Promise<void> {
 }
 
 .mobile-banner button,
-.construction-banner button,
 .welcome-back button {
   flex: 0 0 auto;
   padding: 0 4px;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildPayloadWriteCommand,
+  buildPayloadWriteThenCheckCommand,
   bytesToBase64,
   composePayload,
   cyclicFind,
@@ -59,5 +60,8 @@ describe('deterministic payload helpers', () => {
     expect(() => buildPayloadWriteCommand(bytes, '../payload.bin')).toThrow('安全相对路径')
     expect(() => buildPayloadWriteCommand(bytes, 'payload;id')).toThrow('安全相对路径')
     expect(() => buildPayloadWriteCommand(bytes, 'work/')).toThrow('安全相对路径')
+    expect(buildPayloadWriteThenCheckCommand(bytes, 'work/payload.bin')).toBe(
+      `python -c "import binascii; open('work/payload.bin','wb').write(binascii.a2b_base64('QQD/'))"; check`,
+    )
   })
 })

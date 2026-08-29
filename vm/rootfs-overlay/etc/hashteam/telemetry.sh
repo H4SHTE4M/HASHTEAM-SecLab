@@ -49,3 +49,7 @@ help()     { /usr/local/bin/help "$@";  local rc=$?; _ht_telemetry_emit help;  r
 # su：BusyBox su applet 会命中 command su，而非 SUID helper /bin/su。
 # 必须用完整路径，与原 alias su='/bin/su' 行为一致。
 su()       { /bin/su "$@";              local rc=$?; _ht_telemetry_emit su;    return $rc; }
+
+# BusyBox ash 不允许定义名为 reset 的函数；用 alias 固定转发到
+# PwnHub reset 包装器，避免 reset applet 清屏而不恢复实验状态。
+alias reset='/usr/local/bin/reset'

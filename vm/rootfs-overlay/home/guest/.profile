@@ -7,3 +7,5 @@ ht_render_motd /etc/hashteam/motd
 # Frontend navigation sends `quit` to leave GDB/debugger first. In an ordinary
 # shell the same command is intentionally a no-op before the goto command.
 quit() { :; }
+# PwnHub reset 只恢复当前实验文件状态，不触发 reset-level 或教学面板协议。
+alias reset='/usr/local/bin/reset'

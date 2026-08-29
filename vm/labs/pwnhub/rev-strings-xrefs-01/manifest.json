@@ -125,10 +125,10 @@
   "verification": {
     "type": "external-observation",
     "usage": "check <字符串虚拟地址> <引用函数名>",
-    "instruction": "伴侣表单会归一化并发送这两个静态事实，也可以在终端手工填写。",
+    "instruction": "依次填写字符串虚拟地址和引用函数名；地址以 0x 开头。",
     "placeholders": [
-      { "token": "<字符串虚拟地址>", "meaning": "加载后成功字符串所在的虚拟地址，不是文件偏移" },
-      { "token": "<引用函数名>", "meaning": "数据交叉引用落入的函数标签" }
+      { "token": "<字符串虚拟地址>", "meaning": "以 0x 开头的加载后虚拟地址" },
+      { "token": "<引用函数名>", "meaning": "函数名称" }
     ],
     "feedback": {
       "empty": "还没有提供字符串地址和引用函数。",

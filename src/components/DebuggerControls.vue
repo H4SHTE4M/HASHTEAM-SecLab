@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import AppIcon from './AppIcon.vue'
+import type { VerificationDef } from '../types/lab'
 
 type DebuggerState = 'idle' | 'ready' | 'stopped' | 'running' | 'exited'
 
 const props = defineProps<{
   state: DebuggerState
   checkpoint?: string
+  verification?: VerificationDef
 }>()
 
 const emit = defineEmits<{
@@ -49,6 +51,16 @@ function runToCheckpoint(): void {
       </div>
       <span class="debugger-state" :data-state="state">{{ state }}</span>
     </div>
+    <section v-if="verification" class="debugger-guide" aria-label="debugger 引导">
+      <span class="debugger-guide-label">本关 debugger 引导</span>
+      <p>{{ verification.instruction }}</p>
+      <ol>
+        <li>点击“启动 debugger”，等待状态变为 ready。</li>
+        <li v-if="checkpoint">点击“运行到本关检查点”，让进程停在 <code>{{ checkpoint }}</code>。</li>
+        <li>核对寄存器、内存或栈的观察结果，再点击“检查状态”运行动态检查。</li>
+        <li>完成教学步骤后，也可在下方“最终验证”填写观察参数并点击“在终端验证”。</li>
+      </ol>
+    </section>
     <template>
       <button v-if="state === 'idle' || state === 'exited'" type="button" class="debugger-launch" @click="emit('launch')">
         <AppIcon name="play" :size="14" />
@@ -122,6 +134,11 @@ function runToCheckpoint(): void {
 .debugger-controls p { margin: 3px 0 0; color: var(--text-muted); font-size: 12px; }
 .debugger-state { color: var(--accent-cyan); font: 11px var(--font-mono); text-transform: uppercase; }
 .debugger-state[data-state="exited"] { color: var(--accent-amber); }
+.debugger-guide { margin-top: 11px; padding: 10px; color: var(--text-secondary); background: var(--surface-1); border: var(--hairline) solid var(--border-subtle); border-radius: 6px; }
+.debugger-guide-label { color: var(--accent-cyan); font-size: 11px; font-weight: 750; }
+.debugger-guide p { margin-top: 5px; color: var(--text-secondary); font-size: 12px; line-height: 1.6; }
+.debugger-guide ol { margin: 7px 0 0; padding-left: 18px; color: var(--text-muted); font-size: 12px; line-height: 1.6; }
+.debugger-guide code { color: var(--accent-cyan); font: 11px var(--font-mono); overflow-wrap: anywhere; }
 .debugger-launch, .debugger-checkpoint, .debugger-command-grid button, .debugger-command-form button { min-height: 36px; color: var(--text-primary); background: var(--surface-1); border: var(--hairline) solid var(--border-strong); border-radius: 6px; cursor: pointer; }
 .debugger-launch { display: inline-flex; align-items: center; gap: 6px; width: 100%; justify-content: center; margin-top: 11px; color: var(--bg-canvas); background: var(--accent-cyan); border: 0; font-weight: 700; }
 .debugger-checkpoint { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: 7px; width: 100%; margin-top: 8px; padding: 7px 10px; text-align: left; }

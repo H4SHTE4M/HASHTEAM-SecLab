@@ -788,10 +788,10 @@ else
     RC=$?
 fi
 expect_eq "符号实验在节表实验完成前保持锁定" "$RC" "3"
-if OUT=$(run_check "$PWN_SB" 0x8049033 08049000 NOBITS WA); then RC=0; else RC=$?; fi
+if OUT=$(run_check "$PWN_SB" 0x8049033 0x08049000 NOBITS WA); then RC=0; else RC=$?; fi
 expect_eq "节表实验调用锁定 readelf 后通过" "$RC" "0"
 expect_contains "$OUT" "节表实验发出签名结果" '"type":"lab-result","labId":"elf-sections-01"'
-OUT=$(run_check "$PWN_SB" 0x8049033 08049000 PROGBITS WA) && RC=0 || RC=$?
+OUT=$(run_check "$PWN_SB" 0x8049033 0x08049000 PROGBITS WA) && RC=0 || RC=$?
 expect_eq "节表实验错误 .bss 类型失败" "$RC" "1"
 expect_not_contains "$OUT" "节表失败反馈不泄露正确类型" "必须是 NOBITS"
 if OUT=$(HOME="$PWN_SB/home/guest" PATH="$STUB:$PATH" \
@@ -829,10 +829,10 @@ else
 fi
 expect_eq "符号实验完成后可进入反汇编实验" "$RC" "0"
 expect_contains "$OUT" "反汇编实验发出稳定 ready" '"type":"lab-ready","labId":"elf-disassembly-01"'
-if OUT=$(run_check "$PWN_SB" 08049020 choose_path jne 7); then RC=0; else RC=$?; fi
+if OUT=$(run_check "$PWN_SB" 0x08049020 choose_path jne 0x7); then RC=0; else RC=$?; fi
 expect_eq "反汇编实验调用锁定 objdump 后通过" "$RC" "0"
 expect_contains "$OUT" "反汇编实验发出签名结果" '"type":"lab-result","labId":"elf-disassembly-01"'
-OUT=$(run_check "$PWN_SB" 08049020 call jne 7) && RC=0 || RC=$?
+OUT=$(run_check "$PWN_SB" 0x08049020 call jne 0x7) && RC=0 || RC=$?
 expect_eq "反汇编实验错误调用目标失败" "$RC" "1"
 expect_not_contains "$OUT" "反汇编失败反馈不泄露正确目标" "choose_path"
 

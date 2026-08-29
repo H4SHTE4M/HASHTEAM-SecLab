@@ -7,22 +7,38 @@ ANSWER_HASH="$LAB_DIR/answer.sha256"
 EXPECTED_SHA256='d5f8ad8aa9cc71a765431acfc59bda6890fdda90162ac002e048fa036c914564'
 
 if [ "$#" -ne 2 ]; then
-    echo '用法：check <数量> <回绕金额>，两个都是十进制数。' >&2
+    echo '用法：check <数量> <回绕金额>，两个都按实际数值判断。' >&2
     exit 2
 fi
 
-case "$1" in
-    *[!0-9]* | '')
-        echo '购买数量应是非负十进制整数。' >&2
-        exit 2
-        ;;
-esac
-case "$2" in
-    *[!0-9]* | '')
-        echo '回绕金额应是非负十进制整数。' >&2
-        exit 2
-        ;;
-esac
+normalize_uint32() {
+    raw="$1"
+    case "$raw" in
+        0x*|0X*) base=16; digits="${raw#0x}"; [ "$digits" != "$raw" ] || digits="${raw#0X}" ;;
+        0b*|0B*) base=2; digits="${raw#0b}"; [ "$digits" != "$raw" ] || digits="${raw#0B}" ;;
+        0o*|0O*) base=8; digits="${raw#0o}"; [ "$digits" != "$raw" ] || digits="${raw#0O}" ;;
+        *) base=10; digits="$raw" ;;
+    esac
+    digits="$(printf '%s' "$digits" | tr 'A-F' 'a-f')"
+    case "$digits" in
+        ''|*[!0-9a-f]*) return 1 ;;
+    esac
+    awk -v digits="$digits" -v base="$base" '
+        BEGIN {
+            value = 0
+            for (i = 1; i <= length(digits); i++) {
+                digit = index("0123456789abcdef", substr(digits, i, 1)) - 1
+                if (digit < 0 || digit >= base) exit 1
+                value = value * base + digit
+                if (value > 4294967295) exit 1
+            }
+            printf "%.0f\n", value
+        }
+    '
+}
+
+quantity="$(normalize_uint32 "$1")" || { echo '购买数量应是非负整数，可使用常见进制表示。' >&2; exit 2; }
+wrapped_amount="$(normalize_uint32 "$2")" || { echo '回绕金额应是非负整数，可使用常见进制表示。' >&2; exit 2; }
 
 [ -f "$PROGRAM" ] && [ ! -L "$PROGRAM" ] || { echo '钱包样本缺失或不是普通文件。' >&2; exit 2; }
 [ "$(sha256sum "$PROGRAM" | cut -d ' ' -f 1)" = "$EXPECTED_SHA256" ] || {
@@ -57,7 +73,7 @@ actual_digest="$(printf 'hashteam-lab answer v1 vuln-integer-overflow-01:%s' "$c
     exit 2
 }
 
-submitted="$1,$2"
+submitted="$quantity,$wrapped_amount"
 submitted_digest="$(printf 'hashteam-lab answer v1 vuln-integer-overflow-01:%s' "$submitted" | sha256sum | cut -d ' ' -f 1)"
 [ "$submitted_digest" = "$expected_digest" ] || {
     cat >&2 <<'TEXT'

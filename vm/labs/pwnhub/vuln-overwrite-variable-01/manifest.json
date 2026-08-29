@@ -78,7 +78,7 @@
       "type": "payload-builder",
       "title": "拼出能越界的超长名字",
       "objective": "把填充长度从 16 加到 17 以上越过缓冲区",
-      "instruction": "默认填 16 字节正好填满缓冲区、不越界。按上一步看到的布局，把 padding 长度加到 17（或更多），让第 17 个字节落进 is_admin。生成的 input.txt 会保存到 $HOME/vuln-overwrite-variable-01/。",
+      "instruction": "Payload 组装器默认显示 16 字节，这只是不会越界的起点，不能直接用于通关。把 padding 的长度改成 17（或更多），确认预览总长度已经超过 16B，再点击“写入并验证”；文件会写到 $HOME/vuln-overwrite-variable-01/input.txt，并立即运行 check，第 17 个字节才会落进 is_admin。",
       "completion": "confirm",
       "allowRun": false,
       "uses": ["off-by-one-overflow", "adjacent-variable"],
@@ -87,6 +87,7 @@
       "payload": {
         "outputPath": "vuln-overwrite-variable-01/input.txt",
         "maxBytes": 64,
+        "writeThenCheck": true,
         "segments": [
           { "id": "flood", "label": "超长名字", "kind": "padding", "byte": 65, "length": 16 }
         ]
@@ -97,23 +98,26 @@
       "type": "terminal",
       "title": "重放超长名字并提交",
       "objective": "用真实重放证明门被打开",
-      "instruction": "运行 ./door < input.txt，观察到 is_admin 的值变成非 0、并打印 PwnHub_admin_door_open，然后运行 check。",
+      "instruction": "运行 ./door < vuln-overwrite-variable-01/input.txt，观察 is_admin 变成非 0 并出现 PwnHub_admin_door_open；组装器写入时已经自动运行 check，也可以在这里再次验证。若门没有开，返回上一步增加长度、再次点击“写入并验证”，然后重放同一条命令；无需 reset，除非你想删除 payload 从头开始。",
       "completion": "confirm",
       "allowRun": false,
       "uses": ["hidden-trust-flag", "off-by-one-overflow"],
       "evidence": "payload-replay",
-      "tool": "shell"
+      "tool": "shell",
+      "observation": "is_admin 由 0 变成非 0，并出现 PwnHub_admin_door_open；随后 check 会重放同一份 input.txt。",
+      "commonErrors": ["input.txt 位于 vuln-overwrite-variable-01 子目录，不在 HOME 根目录。", "只预览 17B 还不会创建文件，修改长度后必须点击“写入并验证”。"],
+      "reinforcement": "门是否打开由真实重放决定；越过边界的第 17 个字节才是改变权限标志的证据。"
     }
   ],
   "hints": [
     { "level": 1, "kind": "direction", "text": "先用短名字看到门不开，再看清 name 和 is_admin 的地址相差几个字节。" },
-    { "level": 2, "kind": "tool", "text": "在 PayloadWorkbench 把 padding 字节数加到比 16 多，或用 python 生成：python -c \"open('input.txt','wb').write(b'A' * 17)\" 把 17 个 A 写进 input.txt。" },
+    { "level": 2, "kind": "tool", "text": "在 Payload 组装器把 padding 改成 17B 后点击“写入并验证”；也可运行 python -c \"open('vuln-overwrite-variable-01/input.txt','wb').write(b'A' * 17)\" 生成同一路径的文件，再运行 check。" },
     { "level": 3, "kind": "structure", "text": "name 占 0x0804b0c4..0x0804b0d3 共 16 字节，is_admin 在 0x0804b0d4；多写一字节就盖到 is_admin。" }
   ],
   "verification": {
     "type": "payload-replay",
     "usage": "check",
-    "instruction": "把能打开门的 input.txt 放入 $HOME/vuln-overwrite-variable-01/ 后运行 check。",
+    "instruction": "验证对象为 $HOME/vuln-overwrite-variable-01/input.txt 中能打开门的 payload；无需填写参数。",
     "placeholders": [],
     "feedback": {
       "empty": "还没有 input.txt。",

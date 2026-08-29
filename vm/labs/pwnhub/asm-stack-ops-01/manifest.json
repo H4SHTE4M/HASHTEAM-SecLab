@@ -111,22 +111,22 @@
   "hints": [
     { "level": 1, "kind": "direction", "text": "先读两条 push 行的 ESP，再读两条 pop 行最后一列。" },
     { "level": 2, "kind": "tool", "text": "重新输入 ./asm-stack-ops 可再次运行 HOME 中的真实 ELF。" },
-    { "level": 3, "kind": "structure", "text": "最终结构是 check <第一次PUSH后ESP> <第二次PUSH后ESP> <第一次POP值> <第二次POP值>。" }
+    { "level": 3, "kind": "structure", "text": "最终验证区共有四项，依次填写第一次 PUSH 后 ESP、第二次 PUSH 后 ESP、第一次 POP 值和第二次 POP 值。" }
   ],
   "verification": {
     "type": "debugger-state",
     "debuggerCheckpoint": "stack_ops_checkpoint",
     "usage": "check <第一次PUSH后ESP> <第二次PUSH后ESP> <第一次POP值> <第二次POP值>",
-    "instruction": "依次填入两条 push 行的 ESP，以及 pop eax、pop ebx 行的取出值。",
+    "instruction": "依次填写第一次 PUSH 后 ESP、第二次 PUSH 后 ESP、第一次 POP 值和第二次 POP 值；均为以 0x 开头的十六进制值。",
     "placeholders": [
-      { "token": "<第一次PUSH后ESP>", "meaning": "push 0x11111111 行的 ESP" },
-      { "token": "<第二次PUSH后ESP>", "meaning": "push 0x22222222 行的 ESP" },
-      { "token": "<第一次POP值>", "meaning": "pop eax 行最后一列的值" },
-      { "token": "<第二次POP值>", "meaning": "pop ebx 行最后一列的值" }
+      { "token": "<第一次PUSH后ESP>", "meaning": "以 0x 开头的十六进制地址" },
+      { "token": "<第二次PUSH后ESP>", "meaning": "以 0x 开头的十六进制地址" },
+      { "token": "<第一次POP值>", "meaning": "以 0x 开头的四字节值" },
+      { "token": "<第二次POP值>", "meaning": "以 0x 开头的四字节值" }
     ],
     "feedback": {
       "empty": "还没有提供四项 push/pop 观察值。",
-      "incorrect": "回到真实输出，按指令顺序核对 ESP 与取出值两列。",
+      "incorrect": "请核对两次 PUSH 后的 ESP 与两次 POP 取出值。",
       "success": "真实 ELF 重放确认了 push、pop、ESP 和寄存器传值。"
     }
   },

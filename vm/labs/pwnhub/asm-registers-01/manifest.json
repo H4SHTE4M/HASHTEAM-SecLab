@@ -175,17 +175,17 @@
   "hints": [
     { "level": 1, "kind": "direction", "text": "先看操作表的最后一列，再回到职责表寻找“栈顶”。" },
     { "level": 2, "kind": "tool", "text": "重新输入 ./asm-registers 可再次运行 HOME 中的真实 ELF。" },
-    { "level": 3, "kind": "structure", "text": "最终结构是 check <MOV后EAX> <LEA后ECX> <栈顶寄存器>。" }
+    { "level": 3, "kind": "structure", "text": "最终验证区共有三项，依次填写 MOV 后 EAX、LEA 后 ECX 和栈顶寄存器。" }
   ],
   "verification": {
     "type": "debugger-state",
     "debuggerCheckpoint": "registers_checkpoint",
     "usage": "check <MOV后EAX> <LEA后ECX> <栈顶寄存器>",
-    "instruction": "依次填入两条操作行的后值，以及职责表中指向栈顶的寄存器。",
+    "instruction": "依次填写 MOV 后 EAX、LEA 后 ECX 和栈顶寄存器；前两项为以 0x 开头的十六进制值，第三项为寄存器缩写。",
     "placeholders": [
-      { "token": "<MOV后EAX>", "meaning": "mov 操作行最后一列的八位十六进制值" },
-      { "token": "<LEA后ECX>", "meaning": "lea 操作行最后一列的八位十六进制值" },
-      { "token": "<栈顶寄存器>", "meaning": "职责表中指向当前栈顶的寄存器缩写" }
+      { "token": "<MOV后EAX>", "meaning": "以 0x 开头的十六进制值" },
+      { "token": "<LEA后ECX>", "meaning": "以 0x 开头的十六进制值" },
+      { "token": "<栈顶寄存器>", "meaning": "寄存器缩写" }
     ],
     "feedback": {
       "empty": "还没有提供三项寄存器观察值。",

@@ -8,16 +8,26 @@ EXPECTED_SHA256='6d844f137c037eaa56736e7640048c04b21e69805abc645abb4ecf2d801da71
 LAB_ID='vuln-format-string-01'
 
 if [ "$#" -ne 1 ]; then
-    echo '需要提交一个 8 位十六进制秘密值。' >&2
+    echo '需要提交一个十六进制秘密值。' >&2
     exit 1
 fi
 
 secret="$(printf '%s' "$1" | tr 'A-F' 'a-f')"
-secret="${secret#0x}"
-printf '%s\n' "$secret" | grep -Eq '^[0-9a-f]{8}$' || {
-    echo '秘密值应写成 8 位小写十六进制（例如 0badf00d）。' >&2
+case "$secret" in
+    0x*) secret="${secret#0x}" ;;
+    ????????) ;;
+    *) echo '秘密值应填写完整的 8 位十六进制，或使用 0x 前缀。' >&2; exit 1 ;;
+esac
+case "$secret" in
+    ''|*[!0-9a-f]*) echo '秘密值应填写完整的 8 位十六进制，或使用 0x 前缀。' >&2; exit 1 ;;
+esac
+secret="$(printf '%s' "$secret" | sed 's/^0*//')"
+[ -n "$secret" ] || secret=0
+[ "${#secret}" -le 8 ] || {
+    echo '秘密值超出 32 位范围。' >&2
     exit 1
 }
+secret="$(printf '%08s' "$secret" | tr ' ' '0')"
 
 [ -f "$PROGRAM" ] && [ ! -L "$PROGRAM" ] || { echo '样本缺失。' >&2; exit 2; }
 [ "$(sha256sum "$PROGRAM" | cut -d ' ' -f 1)" = "$EXPECTED_SHA256" ] || {
@@ -34,11 +44,11 @@ fi
 
 actual="$(LC_ALL=C grep -oE '[0-9a-f]{8}' "$output" | sed -n '11p')"
 printf '%s\n' "$actual" | grep -Eq '^[0-9a-f]{8}$' || {
-    echo '无法从真实样本输出中读取第 11 个十六进制值。' >&2
+    echo '无法从真实样本输出中读取目标十六进制值。' >&2
     exit 1
 }
 [ "$actual" = '0badf00d' ] || {
-    echo '真实重放的第 11 个值不是 0badf00d，样本与课程事实不一致。' >&2
+    echo '真实重放的目标值不是 0badf00d，样本与课程事实不一致。' >&2
     exit 1
 }
 
@@ -51,7 +61,7 @@ expected_digest="$(tr -d '\r\n ' < "$ANSWER_HASH")"
 
 submitted_digest="$(printf 'hashteam-lab answer v1 %s:%s' "$LAB_ID" "$secret" | sha256sum | cut -d ' ' -f 1)"
 [ "$submitted_digest" = "$expected_digest" ] || {
-    echo '提交的秘密值与真实泄漏不一致，请核对第 11 个 %x 读到的格子。' >&2
+    echo '提交的秘密值与真实泄漏不一致，请核对秘密所在栈格。' >&2
     exit 1
 }
 

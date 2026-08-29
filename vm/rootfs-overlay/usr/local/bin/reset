@@ -1,0 +1,29 @@
+#!/bin/sh
+set -eu
+
+LABS_DIR="${PWNHUB_LABS_DIR:-/opt/pwnhub/labs}"
+STATE_DIR="${HASHTEAM_STATE_DIR:-$HOME/.hashteam}"
+. "${HASHTEAM_LIB_DIR:-/etc/hashteam}/lab.sh"
+
+# 当前实验 ID 只从 hashteam 状态目录读取；显式状态目录与其他命令保持一致。
+lab_id=$(cat "$STATE_DIR/lab" 2>/dev/null || true)
+case "$lab_id" in
+    '')
+        echo '当前没有可重置的 PwnHub 实验。' >&2
+        exit 2
+        ;;
+    *[!a-z0-9-]*)
+        echo '当前 PwnHub 实验状态无效，无法重置。' >&2
+        exit 2
+        ;;
+esac
+
+reset_script="$LABS_DIR/$lab_id/reset.sh"
+if [ ! -f "$reset_script" ]; then
+    echo "当前实验没有可用的 reset.sh：$lab_id" >&2
+    exit 2
+fi
+
+# 只恢复实验在 HOME 中的运行状态；不重放 init、不发 lab-ready，
+# 因此终端 reset 不会改变右侧教学步骤或验证表单。
+exec sh "$reset_script"

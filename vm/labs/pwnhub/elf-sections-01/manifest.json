@@ -179,23 +179,23 @@
     {
       "level": 2,
       "kind": "tool",
-      "text": "readelf -h 查看 ELF 头；readelf -SW 使用不折行的宽格式显示节表。"
+      "text": "验证失败时，重新用 readelf -h 查看 ELF 头，并用 readelf -SW 以不折行的宽格式显示节表。"
     },
     {
       "level": 3,
       "kind": "structure",
-      "text": "最终结构是 check <入口点> <.text地址> <.bss类型> <.data标志>；地址可带 0x，后两项填写对应英文列值。"
+      "text": "最终验证区共有四项，依次填写入口点、.text 地址、.bss 类型和 .data 标志；地址以 0x 开头，后两项填写对应英文列值。"
     }
   ],
   "verification": {
     "type": "answer",
     "usage": "check <入口点> <.text地址> <.bss类型> <.data标志>",
-    "instruction": "按 ELF 头和节表输出依次填写四项真实观察值。",
+    "instruction": "依次填写入口点、.text 地址、.bss 类型和 .data 标志；前两项以 0x 开头，后两项保留英文大小写。",
     "placeholders": [
-      { "token": "<入口点>", "meaning": "readelf -h 输出中的 Entry point address" },
-      { "token": "<.text地址>", "meaning": ".text 行 Addr 列的八位十六进制地址" },
-      { "token": "<.bss类型>", "meaning": ".bss 行 Type 列的英文类型" },
-      { "token": "<.data标志>", "meaning": ".data 行 Flg 列的字母组合" }
+      { "token": "<入口点>", "meaning": "以 0x 开头的十六进制地址" },
+      { "token": "<.text地址>", "meaning": "以 0x 开头的十六进制地址" },
+      { "token": "<.bss类型>", "meaning": "保留大小写的英文类型" },
+      { "token": "<.data标志>", "meaning": "保留大小写的字母组合" }
     ],
     "feedback": {
       "empty": "还没有提供入口点和三项节表观察值。",

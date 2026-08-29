@@ -13,16 +13,27 @@ if [ "$#" -ne 4 ]; then
     exit 1
 fi
 
-compute_address="$(printf '%s' "$1" | tr 'A-F' 'a-f')"
-compute_address="${compute_address#0x}"
 compute_type="$2"
 mix_type="$3"
 pending_type="$4"
 
-printf '%s\n' "$compute_address" | grep -Eq '^[0-9a-f]{8}$' || {
-    echo '函数地址应写成八位十六进制地址，可带 0x 前缀。' >&2
-    exit 1
+normalize_hex32_raw() {
+    value="$(printf '%s' "$1" | tr 'A-F' 'a-f')"
+    case "$value" in
+        0x*) value="${value#0x}" ;;
+        0X*) value="${value#0X}" ;;
+    esac
+    case "$value" in
+        ''|*[!0-9a-f]*) return 1 ;;
+    esac
+    value="$(printf '%s' "$value" | sed 's/^0*//')"
+    [ -n "$value" ] || value=0
+    [ "${#value}" -le 8 ] || return 1
+    printf '%08s' "$value" | tr ' ' '0'
 }
+
+case "$1" in 0x*|0X*) ;; *) echo '函数地址应是以 0x 开头的十六进制值。' >&2; exit 1 ;; esac
+compute_address="$(normalize_hex32_raw "$1")" || { echo '函数地址应是以 0x 开头的十六进制值。' >&2; exit 1; }
 for type_value in "$compute_type" "$mix_type" "$pending_type"; do
     printf '%s\n' "$type_value" | grep -Eq '^[A-Za-z?]$' || {
         echo '符号类型应填写 nm 第二列的单个字母，并保留大小写。' >&2
@@ -51,6 +62,7 @@ actual_pending_type="$(printf '%s\n' "$symbols" | awk '$3 == "pending_total" { p
     echo '无法从真实 ELF 提取锁定的符号事实。' >&2
     exit 1
 }
+actual_address="$(normalize_hex32_raw "$actual_address")"
 
 actual="$actual_address,$actual_compute_type,$actual_mix_type,$actual_pending_type"
 actual_digest="$(printf 'hashteam-lab answer v1 elf-symbols-01:%s' "$actual" | sha256sum | cut -d ' ' -f 1)"

@@ -169,23 +169,23 @@
     {
       "level": 2,
       "kind": "tool",
-      "text": "objdump -d -M intel 显示全部代码；--disassemble=<函数名> 可以只看一个函数。"
+      "text": "验证失败时，重新用 objdump -d -M intel 显示全部代码；--disassemble=<函数名> 可以只看一个函数。"
     },
     {
       "level": 3,
       "kind": "structure",
-      "text": "最终结构是 check <choose_path地址> <call目标函数> <条件跳转助记符> <cmp立即数>；地址和立即数可带 0x。"
+      "text": "最终验证区共有四项，依次填写 choose_path 地址、call 目标函数、条件跳转助记符和 cmp 立即数；地址和立即数均以 0x 开头。"
     }
   ],
   "verification": {
     "type": "answer",
     "usage": "check <choose_path地址> <call目标函数> <条件跳转助记符> <cmp立即数>",
-    "instruction": "按 objdump 输出依次填写函数地址、调用目标、条件跳转和比较立即数。",
+    "instruction": "依次填写 choose_path 地址、call 目标函数、条件跳转助记符和 cmp 立即数；地址和立即数均以 0x 开头。",
     "placeholders": [
-      { "token": "<choose_path地址>", "meaning": "choose_path 函数标签前的八位十六进制地址" },
-      { "token": "<call目标函数>", "meaning": "compute_result 中 call 指令末尾尖括号里的函数名称" },
-      { "token": "<条件跳转助记符>", "meaning": "choose_path 中 cmp 后的 j 开头助记符" },
-      { "token": "<cmp立即数>", "meaning": "choose_path 中 cmp 操作数里的十六进制立即数" }
+      { "token": "<choose_path地址>", "meaning": "以 0x 开头的十六进制地址" },
+      { "token": "<call目标函数>", "meaning": "函数名称" },
+      { "token": "<条件跳转助记符>", "meaning": "j 开头的助记符" },
+      { "token": "<cmp立即数>", "meaning": "以 0x 开头的十六进制立即数" }
     ],
     "feedback": {
       "empty": "还没有提供函数地址、调用目标、条件跳转和比较立即数。",

@@ -111,9 +111,9 @@
   "verification": {
     "type": "answer",
     "usage": "check <昨天的口令>",
-    "instruction": "提交你由今天日数推出昨天种子、用 --seed 重放得到的 6 位十进制数字口令。",
+    "instruction": "填写昨天的口令；格式为 6 位十进制数字。",
     "placeholders": [
-      { "token": "<昨天的口令>", "meaning": "用昨天（或更早）的日数种子重放时样本打印的 6 位十进制数字；今天的口令会被拒收" }
+      { "token": "<昨天的口令>", "meaning": "6 位十进制数字" }
     ],
     "feedback": {
       "empty": "还没有提供口令。",

@@ -75,7 +75,7 @@
       "type": "payload-builder",
       "title": "拼出能盖到返回地址的输入",
       "objective": "把填充长度加到 32 以上覆盖保存返回地址",
-      "instruction": "默认填 16 字节只够填满 buf，盖不到保存的 EBP。按上一步的相对距离，把 padding 长度加到 32（或更多），让 'A' 蔓延过 24 字节、把保存返回地址也写成 0x41414141。生成的 payload.bin 会保存到 $HOME/vuln-string-overflow-01/。",
+      "instruction": "Payload 组装器默认显示 16 字节，这只够填满 buf，不能直接用于通关。把 padding 长度改成 32（或更多），确认预览总长度至少为 32B，再点击“写入并验证”；文件会写到 $HOME/vuln-string-overflow-01/payload.bin 并立即运行 check，最后四个 'A' 才能完整覆盖保存返回地址。",
       "completion": "confirm",
       "allowRun": false,
       "introduces": [
@@ -87,6 +87,7 @@
       "payload": {
         "outputPath": "vuln-string-overflow-01/payload.bin",
         "maxBytes": 48,
+        "writeThenCheck": true,
         "segments": [
           { "id": "flood", "label": "超长输入", "kind": "padding", "byte": 65, "length": 16 }
         ]
@@ -97,23 +98,26 @@
       "type": "terminal",
       "title": "重放并提交",
       "objective": "亲眼看到返回地址被改写并崩溃",
-      "instruction": "运行 ./frame < payload.bin，观察到保存的 EBP 和返回地址都变成 0x41414141、程序在返回时崩溃（退出码 139），然后运行 check。",
+      "instruction": "运行 ./frame < vuln-string-overflow-01/payload.bin; echo $?，先观察保存的 EBP 和返回地址都变成 0x41414141，再由 echo 看到崩溃退出码 139；组装器写入时已经自动运行 check，也可以在这里再次验证。若仍正常结束或返回地址不是 0x41414141，返回上一步增加长度、再次点击“写入并验证”后重放；普通重试无需 reset。",
       "completion": "confirm",
       "allowRun": false,
       "uses": ["saved-eip-overwrite", "crash-as-evidence"],
       "evidence": "payload-replay",
-      "tool": "shell"
+      "tool": "shell",
+      "observation": "读完后保存的 EBP 与返回地址均为 0x41414141，ret 触发 SIGSEGV，echo 打印退出码 139。",
+      "commonErrors": ["payload.bin 位于 vuln-string-overflow-01 子目录，不在 HOME 根目录。", "崩溃消息不一定直接显示数字 139，要用分号后的 echo $? 读取上一条命令的退出码。", "只预览 32B 还不会创建文件，修改长度后必须点击“写入并验证”。"],
+      "reinforcement": "返回地址的四个字节全部变成 0x41 且 ret 崩溃，才构成控制流被覆盖的完整证据。"
     }
   ],
   "hints": [
     { "level": 1, "kind": "direction", "text": "先用短输入记下 buf、保存的 EBP、返回地址三个地址，算出 buf 到返回地址差多少字节。" },
-    { "level": 2, "kind": "tool", "text": "在 PayloadWorkbench 把 padding 加到 32 以上，或用 python 生成：python -c \"open('payload.bin','wb').write(b'A' * 33)\" 把 33 个 A 写进 payload.bin。" },
+    { "level": 2, "kind": "tool", "text": "在 Payload 组装器把 padding 改成至少 32B 后点击“写入并验证”；也可运行 python -c \"open('vuln-string-overflow-01/payload.bin','wb').write(b'A' * 32)\" 生成同一路径的文件，再运行 check。" },
     { "level": 3, "kind": "structure", "text": "buf 到保存的 EBP 差 24 字节，再 +4 到返回地址；要盖到返回地址至少写 32 个 'A'，0x41414141 就是四个 'A'。" }
   ],
   "verification": {
     "type": "payload-replay",
     "usage": "check",
-    "instruction": "把能让样本崩溃的 payload.bin 放入 $HOME/vuln-string-overflow-01/ 后运行 check。",
+    "instruction": "验证对象为 $HOME/vuln-string-overflow-01/payload.bin 中能覆盖返回地址的 payload；无需填写参数。",
     "placeholders": [],
     "feedback": {
       "empty": "还没有 payload.bin。",

@@ -86,7 +86,7 @@
   "verification": {
     "type": "payload-replay",
     "usage": "check",
-    "instruction": "把能证明偏移的 payload.bin 放入 $HOME/pwn-overflow-offset-01/ 后运行 check。",
+    "instruction": "验证对象为 $HOME/pwn-overflow-offset-01/payload.bin 中能证明溢出偏移的 payload；无需填写参数。",
     "placeholders": [],
     "feedback": {
       "empty": "还没有 payload.bin。",
