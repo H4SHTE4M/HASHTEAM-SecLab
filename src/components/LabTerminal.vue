@@ -8,15 +8,19 @@ import { loadTerminalFonts, remeasureTerminal, watchFontLoads } from '../composa
 
 const emit = defineEmits<{
   (e: 'input', data: string): void
+  (e: 'resize', size: { cols: number; rows: number }): void
   (e: 'font-size-delta', delta: number): void
 }>()
 
 const props = withDefaults(defineProps<{
   fontSize?: number
   autoFocus?: boolean
+  /** 拖拽分栏期间挂起 guest 尺寸同步：本地照常 fit，结束后补发最终尺寸。 */
+  suspendResizeSync?: boolean
 }>(), {
   fontSize: 14,
   autoFocus: true,
+  suspendResizeSync: false,
 })
 
 const containerRef = ref<HTMLElement | null>(null)
@@ -26,6 +30,7 @@ let fitAddon: FitAddon | null = null
 let resizeObserver: ResizeObserver | null = null
 let resizeFrame: number | null = null
 let stopFontWatch: (() => void) | null = null
+let lastEmittedSize: { cols: number; rows: number } | null = null
 
 const {
   isSearchOpen,
@@ -50,6 +55,18 @@ function scheduleFit(): void {
     resizeFrame = null
     try {
       fitAddon?.fit()
+      if (terminal !== null && terminal.cols > 0 && terminal.rows > 0) {
+        const size = { cols: terminal.cols, rows: terminal.rows }
+        // 拖拽期间不下发中间尺寸：guest 的 shell 每收一次 stty 都会把当前
+        // 输入行重绘一遍，连续变更会在屏幕上留下多份残影；结束后补发一次。
+        if (
+          !props.suspendResizeSync &&
+          (lastEmittedSize?.cols !== size.cols || lastEmittedSize.rows !== size.rows)
+        ) {
+          lastEmittedSize = size
+          emit('resize', size)
+        }
+      }
       if (terminal !== null && terminal.rows > 0) terminal.refresh(0, terminal.rows - 1)
     } catch {
       // 容器隐藏或可视视口切换中时，下一次观察会重新测量。
@@ -71,6 +88,15 @@ watch(
     if (terminal === null) return
     terminal.options.fontSize = fontSize
     scheduleFit()
+  },
+)
+
+// 拖拽结束恢复同步时补发一次最终尺寸（容器此时一般已不再变化，
+// ResizeObserver 不一定再触发，必须主动 fit 一次）。
+watch(
+  () => props.suspendResizeSync,
+  (suspend) => {
+    if (!suspend) scheduleFit()
   },
 )
 
@@ -182,6 +208,7 @@ onBeforeUnmount(() => {
   terminal?.dispose()
   terminal = null
   fitAddon = null
+  lastEmittedSize = null
 })
 
 defineExpose({ write, focus })

@@ -185,6 +185,9 @@ export function useTerminalShortcuts(options: TerminalShortcutOptions) {
       return false
     }
     if (isPasteShortcut(event)) {
+      // 非安全上下文（如 http 局域网访问）没有 Clipboard API：不能消费按键，
+      // 放行后浏览器会执行原生“粘贴为纯文本”，xterm 的 paste 监听会接管。
+      if (navigator.clipboard === undefined) return true
       event.preventDefault()
       event.stopPropagation()
       void pasteFromClipboard()

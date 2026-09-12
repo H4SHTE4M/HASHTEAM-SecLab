@@ -182,6 +182,47 @@ describe('responsive layout contract', () => {
     expect(controller).not.toMatch(/runCommand\([^)]*stty/)
   })
 
+  it('reports SecLab terminal dimensions to the guest tty', () => {
+    const terminal = source('src/components/LabTerminal.vue')
+    const app = source('src/views/SecLabWorkspace.vue')
+
+    // SecLab 与 PwnHub 共用同一台 VM 的 ttyS0；缺了这条链路，guest 会一直停在
+    // .profile 的 80x24 兜底值，shell 行编辑器按错误宽度硬断行。
+    expect(terminal).toContain("(e: 'resize', size: { cols: number; rows: number }): void")
+    expect(terminal).toContain("emit('resize', size)")
+    expect(app).toContain('@resize="handleTerminalResize"')
+    expect(app).toContain('vm.setTerminalSize(size.cols, size.rows)')
+  })
+
+  it('re-sends the terminal size after the login shell resets tty geometry', () => {
+    const controller = source('src/services/vm-controller.ts')
+    const vm = source('src/composables/useVirtualMachine.ts')
+
+    // .profile 的 `stty cols 80 rows 24` 在 PwnHubSizeReady 同步之后才执行，
+    // 会把真实尺寸覆盖回兜底值；首个 shell 提示符是 .profile 跑完的标志，
+    // 必须在那一刻强制重发一次。
+    expect(controller).toContain('resendTerminalSize(): void')
+    expect(vm).toContain('nextController.resendTerminalSize?.()')
+  })
+
+  it('suspends guest resize sync while the panel divider is being dragged', () => {
+    // guest 的 shell 每收一次 stty 都会把当前输入行重绘一遍；拖拽分栏会连续
+    // 改尺寸，残影在屏幕上叠成"复制"效果。拖拽期间只本地 fit，结束补发一次。
+    for (const terminal of [
+      source('src/components/LabTerminal.vue'),
+      source('src/components/PwnHubLabTerminal.vue'),
+    ]) {
+      expect(terminal).toContain('suspendResizeSync?: boolean')
+      expect(terminal).toContain('!props.suspendResizeSync &&')
+    }
+    expect(source('src/views/SecLabWorkspace.vue')).toContain(
+      ':suspend-resize-sync="isPanelResizing"',
+    )
+    expect(source('src/views/PwnHubWorkspace.vue')).toContain(
+      ':suspend-resize-sync="isPanelResizing"',
+    )
+  })
+
   it('offers persisted, bounded terminal font controls', () => {
     const app = source('src/views/SecLabWorkspace.vue')
     const terminal = source('src/components/LabTerminal.vue')

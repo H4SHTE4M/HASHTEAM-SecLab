@@ -612,6 +612,10 @@ export function createVirtualMachine(options: VirtualMachineOptions = {}) {
         if (SHELL_PROMPT_PATTERN.test(promptTail)) {
           bootRestorePending = false
           promptTail = ''
+          // 登录 shell 的 .profile 会把 ttyS0 重置为 80x24 兜底值，覆盖
+          // PwnHubSizeReady 时同步的尺寸；提示符出现说明 .profile 已跑完，
+          // 必须重发一次，否则 shell 行编辑器按错误宽度硬断行。
+          nextController.resendTerminalSize?.()
           runBootRestore()
         }
       }
