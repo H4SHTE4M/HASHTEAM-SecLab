@@ -822,6 +822,7 @@ async function handleBugReportDownload(): Promise<void> {
                 ref="terminalRef"
                 :font-size="preferences.state.terminalFontSize"
                 :auto-focus="!backgroundInert"
+                :suspend-resize-sync="isPanelResizing"
                 @input="handleTerminalInput"
                 @resize="handleTerminalResize"
                 @font-size-delta="handleFontSizeDelta"

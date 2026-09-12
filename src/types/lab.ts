@@ -408,6 +408,8 @@ export interface VirtualMachineController {
   runCommand?(command: string): void
   /** 将浏览器终端测得的尺寸传给 guest；无独立通道的旧控制器可忽略。 */
   setTerminalSize?(cols: number, rows: number): void
+  /** 强制重发当前尺寸；用于 guest 登录初始化（stty 兜底值）覆盖已同步尺寸之后。 */
+  resendTerminalSize?(): void
   sendSerial(input: string): void
   onSerialOutput(callback: (data: string) => void): () => void
 }

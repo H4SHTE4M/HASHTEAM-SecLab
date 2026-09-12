@@ -114,4 +114,20 @@ describe('useTerminalShortcuts', () => {
     expect(shortcuts.handleTerminalKey(event)).toBe(false)
     await vi.waitFor(() => expect(onPaste).toHaveBeenCalledWith('echo hi\n'))
   })
+
+  it('无 Clipboard API（http 非安全上下文）时 Ctrl+Shift+V 放行给浏览器原生粘贴', () => {
+    Object.assign(navigator, { clipboard: undefined })
+    const onPaste = vi.fn()
+    const shortcuts = useTerminalShortcuts({
+      getTerminal: () => makeTerminal() as never,
+      getContainer: () => null,
+      onPaste,
+      onFontSizeDelta: vi.fn(),
+    })
+
+    const event = makeEvent('V', { ctrl: true, shift: true })
+    expect(shortcuts.handleTerminalKey(event)).toBe(true)
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(onPaste).not.toHaveBeenCalled()
+  })
 })

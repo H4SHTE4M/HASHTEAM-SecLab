@@ -396,6 +396,10 @@ function handleTerminalInput(data: string): void {
   vm.sendSerial(data)
 }
 
+function handleTerminalResize(size: { cols: number; rows: number }): void {
+  vm.setTerminalSize(size.cols, size.rows)
+}
+
 function adjustTerminalFontSize(delta: number): void {
   preferences.setTerminalFontSize(preferences.state.terminalFontSize + delta)
 }
@@ -667,7 +671,9 @@ async function handleBugReportDownload(): Promise<void> {
                 ref="terminalRef"
                 :font-size="preferences.state.terminalFontSize"
                 :auto-focus="!backgroundInert"
+                :suspend-resize-sync="isPanelResizing"
                 @input="handleTerminalInput"
+                @resize="handleTerminalResize"
                 @font-size-delta="handleFontSizeDelta"
               />
             </div>

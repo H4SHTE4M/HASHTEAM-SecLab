@@ -523,6 +523,11 @@ export class V86Controller implements VirtualMachineController {
       this.lastSentTerminalSize = { ...this.terminalSize }
     }
   }
+
+  resendTerminalSize(): void {
+    this.lastSentTerminalSize = null
+    this.sendTerminalSize()
+  }
   onSerialOutput(callback: (data: string) => void): () => void {
     this.serialCallbacks.add(callback)
     return () => {
