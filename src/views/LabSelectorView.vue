@@ -119,6 +119,20 @@ function enterModule(module: ModuleSummary): void {
   }
   window.location.assign(href)
 }
+
+/** WebLab 外链地址：实时读取项目根目录 .env 的 WEBLAB_HOST（vite envPrefix 注入）。 */
+const weblabHost = (import.meta.env.WEBLAB_HOST ?? '').trim()
+const weblabUrl =
+  weblabHost === ''
+    ? ''
+    : /^https?:\/\//i.test(weblabHost)
+      ? weblabHost
+      : `http://${weblabHost}`
+
+function enterWebLab(): void {
+  if (weblabUrl === '') return
+  window.location.assign(weblabUrl)
+}
 </script>
 
 <template>
@@ -188,6 +202,48 @@ function enterModule(module: ModuleSummary): void {
         <button type="button" class="enter-button" @click="enterModule(module)">
           <span>{{ completedByModule[module.moduleId] > 0 ? '继续学习' : '进入实验' }}</span>
           <AppIcon name="chevron-right" :size="17" />
+        </button>
+      </article>
+
+      <article class="weblab-card" data-module-id="weblab">
+        <div class="card-heading">
+          <span class="module-icon" aria-hidden="true">
+            <AppIcon name="external-link" :size="22" />
+          </span>
+          <div>
+            <p class="module-kicker">WebLab</p>
+            <h2>Web 安全实验</h2>
+          </div>
+          <span class="module-badge">外部链接</span>
+        </div>
+
+        <p class="module-description">
+          独立部署的 Web 安全靶场：源码与 JS 信息泄露、GET / POST 传参、
+          请求头伪造与 JWT 弱密钥共 9 个关卡。
+        </p>
+
+        <div class="module-progress">
+          <div class="progress-copy">
+            <span>访问地址</span>
+            <strong class="weblab-host-value">{{ weblabUrl || '未配置' }}</strong>
+          </div>
+          <p class="release-note">
+            {{
+              weblabUrl
+                ? '地址实时读取自项目根目录 .env 的 WEBLAB_HOST。'
+                : '在项目根目录 .env 中设置 WEBLAB_HOST 后即可进入。'
+            }}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          class="enter-button"
+          :disabled="!weblabUrl"
+          @click="enterWebLab"
+        >
+          <span>{{ weblabUrl ? '进入 WebLab' : '未配置 WEBLAB_HOST' }}</span>
+          <AppIcon name="external-link" :size="17" />
         </button>
       </article>
     </section>
@@ -302,7 +358,7 @@ h1 {
 
 .module-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 22px;
 }
 
@@ -336,6 +392,43 @@ h1 {
 .module-accent-violet,
 .module-accent-amber {
   border-color: color-mix(in srgb, var(--module-accent) 32%, var(--border-subtle));
+}
+
+/* WebLab 外链卡片：独立类名避免计入 .module-card（测试断言内置模块数量）。 */
+.weblab-card {
+  --module-accent: var(--accent-green);
+  --module-accent-soft: var(--accent-green-soft);
+  --module-accent-border: var(--accent-green-border);
+
+  display: flex;
+  min-height: 410px;
+  flex-direction: column;
+  padding: clamp(24px, 4vw, 34px);
+  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+  border: 1px solid color-mix(in srgb, var(--module-accent) 32%, var(--border-subtle));
+  border-radius: 24px;
+  box-shadow: var(--shadow-panel);
+}
+
+.weblab-host-value {
+  max-width: 60%;
+  overflow: hidden;
+  font-size: 12px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.enter-button:disabled {
+  color: var(--text-faint);
+  background: var(--surface-3);
+  cursor: not-allowed;
+  transform: none;
+}
+
+.enter-button:disabled:hover {
+  background: var(--surface-3);
+  transform: none;
 }
 
 .card-heading {
@@ -558,12 +651,6 @@ h2 {
   pointer-events: auto;
 }
 
-@media (max-width: 980px) {
-  .module-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 720px) {
   .selector-shell {
     padding-top: 28px;
@@ -573,7 +660,8 @@ h2 {
     grid-template-columns: 1fr;
   }
 
-  .module-card {
+  .module-card,
+  .weblab-card {
     min-height: 380px;
   }
 
