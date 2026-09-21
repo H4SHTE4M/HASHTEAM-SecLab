@@ -9,7 +9,7 @@ SecLab 与 PwnHub 共用真实的 32 位 Linux 虚拟机和引导/挑战模式�
 SecLab 与 PwnHub 基于 WebAssembly 在本地虚拟化运行，Crypto Lab 是不联网、
 不启动虚拟机的静态子站。整个平台**不依赖任何后端容器**。
 
----
+***
 
 ## 1. 项目简介
 
@@ -19,6 +19,7 @@ SecLab 与 PwnHub 基于 WebAssembly 在本地虚拟化运行，Crypto Lab 是�
 - PwnHub：六章 20 个实验按严格串行链解锁——数字与进制 2 个（三种写法、8 位计数器回绕）→ 逻辑漏洞 3 个（弱随机、整数回绕、条件竞争）→ 内存模型 3 个 → 内存漏洞 3 个（越界覆盖、栈溢出、格式化字符串）→ 汇编读写 5 个 → ELF 静态分析 4 个。
 - Crypto Lab：11 个依赖原生浏览器 API 的离线实验，覆盖古典密码、频率分析、
   AES-CTR、RSA 和组合挑战；算法、判题与进度存档都在页面内完成。
+- WebLab: 9个web http相关基础知识挑战·，目标在外部连接
 - 首次进入可明确选择**引导模式**或**挑战模式**：引导模式逐步讲解并要求留下
   教学证据；挑战模式只展示目标、按需提示和最终验证，允许在真实终端自由探索。
   两种模式共用同一套环境与最终状态判题，并可随时无损切换。
@@ -149,17 +150,17 @@ pnpm --dir backend install --frozen-lockfile
 
 ### 实际采用的方案
 
-| 组件 | 来源 | 许可证 | 体积 |
-| --- | --- | --- | --- |
-| 内核 bzImage | 自构建：kernel.org `linux-6.12.98`，`tinyconfig` + 最小特性集（串口控制台 / initramfs / tmpfs / IPv4 回环 / **无网卡驱动**） | GPLv2 | ≈ 1.3 MB |
-| 用户态 busybox | Debian `busybox-static` 1.38.0-3（i386，静态链接 Debian glibc 2.42-17） | GPLv2 / LGPLv2.1+ | ≈ 1.0 MB（打进 initramfs） |
-| SUID helper | 源码构建 BusyBox 1.38.0（i386，静态链接 AOSC glibc 2.42，严格仅含 `su`，口令数据库保持锁定） | GPLv2 / LGPLv2.1+ | ≈ 1.0 MB（打进 initramfs） |
-| PwnHub debugger | 项目源码构建的静态、剥离 i386 `ptrace` 调试器 | 项目源码 / LGPLv2.1+（静态 glibc） | ≈ 0.8 MB（打进 initramfs） |
-| initramfs | 本项目 `vm/rootfs-overlay/` + 两个 busybox，`scripts/pack-initramfs.py` 打包（确定性、显式权限） | 本项目 | ≈ 1.6 MB（gzip） |
-| v86 运行时 | npm `v86` 包（libv86.js / v86.wasm） | BSD-2-Clause | ≈ 2.5 MB |
-| SeaBIOS | Debian `seabios` 包（bios-256k.bin） | LGPLv3 | 256 KB |
+| 组件              | 来源                                                                                                   | 许可证                        | 体积                     |
+| --------------- | ---------------------------------------------------------------------------------------------------- | -------------------------- | ---------------------- |
+| 内核 bzImage      | 自构建：kernel.org `linux-6.12.98`，`tinyconfig` + 最小特性集（串口控制台 / initramfs / tmpfs / IPv4 回环 / **无网卡驱动**） | GPLv2                      | ≈ 1.3 MB               |
+| 用户态 busybox     | Debian `busybox-static` 1.38.0-3（i386，静态链接 Debian glibc 2.42-17）                                     | GPLv2 / LGPLv2.1+          | ≈ 1.0 MB（打进 initramfs） |
+| SUID helper     | 源码构建 BusyBox 1.38.0（i386，静态链接 AOSC glibc 2.42，严格仅含 `su`，口令数据库保持锁定）                                   | GPLv2 / LGPLv2.1+          | ≈ 1.0 MB（打进 initramfs） |
+| PwnHub debugger | 项目源码构建的静态、剥离 i386 `ptrace` 调试器                                                                       | 项目源码 / LGPLv2.1+（静态 glibc） | ≈ 0.8 MB（打进 initramfs） |
+| initramfs       | 本项目 `vm/rootfs-overlay/` + 两个 busybox，`scripts/pack-initramfs.py` 打包（确定性、显式权限）                       | 本项目                        | ≈ 1.6 MB（gzip）         |
+| v86 运行时         | npm `v86` 包（libv86.js / v86.wasm）                                                                    | BSD-2-Clause               | ≈ 2.5 MB               |
+| SeaBIOS         | Debian `seabios` 包（bios-256k.bin）                                                                    | LGPLv3                     | 256 KB                 |
 
-浏览器端总下载量约 **7 MB**（gzip 传输更小），首次启动 ~5–15 秒。
+浏览器端总下载量约 **7 MB**（gzip 传输更小），首次启动 \~5–15 秒。
 构建命令：
 
 ```bash
@@ -225,16 +226,16 @@ initramfs、下载产物和 telemetry backend activity 白名单的唯一发布�
 
 已定义的消息类型：
 
-| type | 字段 | 含义 |
-| --- | --- | --- |
-| `ready` | `version`, `key` | Linux 启动，提供本次 VM 的临时验签材料 |
-| `level-ready` | `level`, `sig` | 关卡环境初始化完成（进入/重置某关后发出） |
-| `level-result` | `level`, `status`, `sig` | 关卡验证结果（`passed`） |
-| `lab-ready` | `labId`, `sig` | 稳定标识实验初始化完成 |
-| `lab-result` | `labId`, `status`, `sig` | 稳定标识实验验证结果 |
-| `hint-request` | `level` | 用户在终端输入了 `hint`，请求前端显示提示 |
-| `progress` | `level`, `value` | （预留）细粒度进度 |
-| `error` | `message` | 检查失败等错误信息 |
+| type           | 字段                       | 含义                       |
+| -------------- | ------------------------ | ------------------------ |
+| `ready`        | `version`, `key`         | Linux 启动，提供本次 VM 的临时验签材料 |
+| `level-ready`  | `level`, `sig`           | 关卡环境初始化完成（进入/重置某关后发出）    |
+| `level-result` | `level`, `status`, `sig` | 关卡验证结果（`passed`）         |
+| `lab-ready`    | `labId`, `sig`           | 稳定标识实验初始化完成              |
+| `lab-result`   | `labId`, `status`, `sig` | 稳定标识实验验证结果               |
+| `hint-request` | `level`                  | 用户在终端输入了 `hint`，请求前端显示提示 |
+| `progress`     | `level`, `value`         | （预留）细粒度进度                |
+| `error`        | `message`                | 检查失败等错误信息                |
 
 前端行为（`src/services/protocol-parser.ts`）：
 
@@ -352,7 +353,29 @@ GitHub Environment、密钥轮换和故障恢复见
 
 注意：启动日志里可能包含你的终端回显内容，日志文件请只发给开发者，不要公开粘贴。
 
----
+## 16. WebLab 外链实验
+
+主页 Lab 选择器在三个内置模块之外提供一张 **WebLab** 入口卡片，点击
+「进入 WebLab」即可跳转到独立部署的 Web 安全靶场（源码与 JS 信息泄露、
+GET / POST 传参、请求头伪造、JWT 弱密钥共 9 关；独立应用，随平台单独部署）。
+
+跳转地址不在代码中写死，而是实时读取项目根目录 `.env` 中的 `WEBLAB_HOST`：
+
+```bash
+# .env
+WEBLAB_HOST=http://localhost:5001
+```
+
+- 值未带 `http://` / `https://` 前缀时自动按 `http://` 补全，
+  填 `127.0.0.1:5001` 与 `http://127.0.0.1:5001` 效果相同。
+- `vite.config.ts` 通过 `envPrefix: ['VITE_', 'WEBLAB_']` 把该变量注入
+  `import.meta.env.WEBLAB_HOST`；开发模式（`pnpm dev`）下修改 `.env` 会触发
+  Vite 自动重启并刷新页面，跳转地址随之实时更新，无需改动任何代码。
+- `WEBLAB_HOST` 留空时卡片展示「未配置」并禁用按钮，配置后即可进入。
+- 生产构建（`pnpm build`）会在构建时固化当前 `.env` 的值，
+  变更地址后需重新构建发布。
+
+***
 
 ### 附：目录结构
 
@@ -399,3 +422,4 @@ hashteam-web-lab/
     ├── prepare-vm-assets.sh # vm/build.sh 的便捷入口
     └── verify-build.sh      # 一键验证：资源 + 测试 + 构建
 ```
+
