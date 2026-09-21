@@ -335,6 +335,10 @@ export default defineConfig(({ command }) => {
   return {
     // 使用相对路径，构建产物可部署在任意子目录。
     base: './',
+    // 除 VITE_ 外，额外把 .env 中 WEBLAB_ 前缀的变量暴露给客户端；
+    // 主页 WebLab 卡片通过 import.meta.env.WEBLAB_HOST 实时读取外链地址，
+    // 开发模式下修改 .env 会触发 Vite 自动重启并刷新页面。
+    envPrefix: ['VITE_', 'WEBLAB_'],
     plugins: [vue(), vmAssetsPlugin(vmBundle, sourceId, publishedArtifacts)],
     define: {
       __VM_ASSET_BASE__: JSON.stringify(vmAssetBase),
